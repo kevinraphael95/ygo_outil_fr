@@ -1,4 +1,4 @@
-# Yu-Gi-Oh-Traducteur-et-g-n-rateur-de-json-en-VF
+https://kevinraphael95.github.io/ygo_outil_fr/
 
 https://kevinraphael95.github.io/Yu-Gi-Oh-outil-traduction-et-json
 
