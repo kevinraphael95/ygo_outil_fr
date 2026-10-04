@@ -1,5 +1,5 @@
 // ============================================================================
-// YGO -> ygopro.org Card Maker JSON generator (v5 - corrections)
+// YGO -> ygopro.org Card Maker JSON generator (v6 - fusion Deck/Traduire)
 // ============================================================================
 // Stratégie :
 //   1. Au premier lancement, propose de télécharger TOUTE la base de cartes
@@ -11,9 +11,9 @@
 //   4. Fallback API si l'utilisateur refuse le dump (avec rate limiter).
 //   5. Fallback Yugipedia pour les cartes absentes de la base (optionnel).
 //
-// Doc API : https://ygoprodeck.com/api-guide/
-// Doc Yugipedia : https://yugipedia.com/api.php
-// Format JSON cible vérifié sur ygo-cardmaker (fork lauqerm/ygocarder).
+// Nouveauté v6 :
+//   L'onglet "Decklist" fusionne les actions "Transformer en JSON" et
+//   "Traduire". Un sélecteur d'action (radio) détermine le comportement.
 // ============================================================================
 
 const API_BASE = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
@@ -61,6 +61,7 @@ const drawerClose = document.getElementById("drawer-close");
 const drawerTitle = document.getElementById("drawer-title");
 const drawerBody = document.getElementById("drawer-body");
 
+// --- Decklist (fusion Deck + Traduire) ---
 const deckInput = document.getElementById("deck-input");
 const deckGenerateBtn = document.getElementById("deck-generate");
 const deckStatusEl = document.getElementById("deck-status");
@@ -73,9 +74,12 @@ const progressFill = document.getElementById("progress-fill");
 const progressLabel = document.getElementById("progress-label");
 const progressPct = document.getElementById("progress-pct");
 
-const translateInput = document.getElementById("translate-input");
-const translateRunBtn = document.getElementById("translate-run");
-const translateStatusEl = document.getElementById("translate-status");
+// Sélecteur d'action (Deck)
+const deckActionJsonRadio = document.getElementById("deck-action-json");
+const deckActionTranslateRadio = document.getElementById("deck-action-translate");
+const deckTranslateOptions = document.getElementById("deck-translate-options");
+
+// Résultats de traduction (dans le panel deck maintenant)
 const translationResultEl = document.getElementById("translation-result");
 const translationActionsEl = document.getElementById("translation-actions");
 const translateCopyBtn = document.getElementById("translate-copy");
@@ -563,7 +567,6 @@ async function getCardsByIds(ids, language) {
   const uncached = [];
   const cache = language === "fr" ? cardFrByIdCache : cardByIdCache;
 
-  // 1. Vérifier les caches
   for (const id of ids) {
     const key = String(id);
     if (cache.has(key)) {
@@ -575,7 +578,6 @@ async function getCardsByIds(ids, language) {
 
   if (!uncached.length) return results;
 
-  // 2. Batching par 50
   for (let i = 0; i < uncached.length; i += BATCH_ID_LIMIT) {
     const chunk = uncached.slice(i, i + BATCH_ID_LIMIT);
     const params = { id: chunk.join(",") };
@@ -588,7 +590,6 @@ async function getCardsByIds(ids, language) {
         cache.set(key, card);
         results.set(key, card);
       }
-      // Les IDs non retournés sont "introuvables" → on les marque null
       for (const id of chunk) {
         if (!results.has(id)) results.set(id, null);
       }
@@ -611,17 +612,14 @@ function normalizeForSearch(str) {
 }
 
 async function searchCards(query, lang = "auto", allowYugipedia = false) {
-  // 1. Base locale
   if (appState.dbReady) {
     const local = searchLocal(query, lang);
     if (local.cards.length) return local;
   } else {
-    // 2. API YGOPRODeck
     const remote = await searchRemote(query, lang);
     if (remote.cards.length) return remote;
   }
 
-  // 3. Fallback Yugipedia
   if (allowYugipedia && window.yugipediaSearch && query.length >= 3) {
     try {
       const yugiCards = await window.yugipediaSearch(query);
@@ -696,8 +694,6 @@ async function searchRemote(query, lang) {
 async function getCardById(id, language) {
   const key = String(id);
 
-  // Les cartes Yugipedia n'ont pas de variante FR/EN séparée dans notre cache.
-  // Le code appelant doit gérer le cas en amont (voir showCard, generateJsonForCard).
   if (key.startsWith("yugi-")) return null;
 
   if (appState.dbReady) {
@@ -706,8 +702,6 @@ async function getCardById(id, language) {
     return null;
   }
 
-  // Mode API : 1 requête individuelle (pour usage ponctuel)
-  // Pour du bulk, utiliser getCardsByIds()
   const cache = language === "fr" ? cardFrByIdCache : cardByIdCache;
   if (cache.has(key)) return cache.get(key);
 
@@ -1011,8 +1005,6 @@ async function showCard(card) {
     : "";
   const typeLabel = getTypeLabel(card);
 
-  // ⚡ On récupère enCard UNE SEULE FOIS et on le passe à generateJsonForCard
-  //    pour éviter un appel API dupliqué en mode sans base locale.
   let enCard = null;
   let frCard = null;
   if (card._source !== "yugipedia") {
@@ -1130,7 +1122,6 @@ document.addEventListener("keydown", (e) => {
 // GÉNÉRATION JSON
 // ============================================================================
 async function generateJsonForCard(card, overrideName, providedStructural) {
-  // Cas Yugipedia : pas d'ID Konami, pas de variante structurelle séparée
   if (card._source === "yugipedia") {
     return buildYgoproJson({
       ...card,
@@ -1139,7 +1130,6 @@ async function generateJsonForCard(card, overrideName, providedStructural) {
     });
   }
 
-  // ⚡ Réutiliser la carte structurelle fournie (évite un appel API dupliqué)
   let structural = providedStructural || structuralCardCache.get(card.id);
   if (!structural) {
     try {
@@ -1160,10 +1150,6 @@ async function generateJsonForCard(card, overrideName, providedStructural) {
   return buildYgoproJson(merged);
 }
 
-/**
- * Cache LRU simple pour les cartes structurelles.
- * Évite la croissance illimitée de structuralCardCache.
- */
 function cacheStructural(id, card) {
   if (structuralCardCache.size >= MAX_STRUCTURAL_CACHE) {
     const firstKey = structuralCardCache.keys().next().value;
@@ -1324,7 +1310,42 @@ function copyTextToClipboard(text, buttonEl, resetLabel) {
 }
 
 // ============================================================================
-// DECKLIST -> JSON
+// DECKLIST — SÉLECTEUR D'ACTION
+// ============================================================================
+function isDeckActionTranslate() {
+  return deckActionTranslateRadio && deckActionTranslateRadio.checked;
+}
+
+function updateDeckActionUI() {
+  const isTranslate = isDeckActionTranslate();
+
+  // Afficher/masquer les options de traduction (langue source/cible)
+  if (deckTranslateOptions) {
+    deckTranslateOptions.classList.toggle("hidden", !isTranslate);
+  }
+
+  // Masquer les résultats de l'autre action au changement
+  if (translationResultEl) translationResultEl.classList.add("hidden");
+  if (translationActionsEl) translationActionsEl.classList.add("hidden");
+  if (deckDownloadsRow) deckDownloadsRow.classList.add("hidden");
+
+  // Vider les résultats
+  if (deckResultsEl) deckResultsEl.innerHTML = "";
+  if (deckStatusEl) deckStatusEl.textContent = "";
+  if (progressWrap) progressWrap.classList.remove("visible");
+
+  // Changer le libellé du bouton
+  if (deckGenerateBtn) {
+    deckGenerateBtn.textContent = isTranslate ? "🌐 Traduire" : "⚙️ Générer les JSON";
+  }
+}
+
+if (deckActionJsonRadio) deckActionJsonRadio.addEventListener("change", updateDeckActionUI);
+if (deckActionTranslateRadio) deckActionTranslateRadio.addEventListener("change", updateDeckActionUI);
+updateDeckActionUI();
+
+// ============================================================================
+// DECKLIST — PARSING
 // ============================================================================
 const DECK_LINE_RE = /^(\d+)\s*x?\s+(.+)$/i;
 
@@ -1369,25 +1390,43 @@ document.getElementById("deck-clear").addEventListener("click", () => {
   deckStatusEl.textContent = "";
   deckDownloadsRow.classList.add("hidden");
   progressWrap.classList.remove("visible");
+  if (translationResultEl) translationResultEl.classList.add("hidden");
+  if (translationActionsEl) translationActionsEl.classList.add("hidden");
+  lastTranslationResult = null;
 });
 
 async function findCardByName(name, lang) {
   const allowYugi = isYugipediaEnabled();
   const { cards } = await searchCards(name, lang, allowYugi);
   if (!cards.length) return null;
-  // ⚡ Comparaison normalisée (gère tirets, espaces, accents)
   const normalizedTarget = normalizeForSearch(name);
   const exact = cards.find((c) => normalizeForSearch(c.name) === normalizedTarget);
   return exact || cards[0];
 }
 
+// ============================================================================
+// DECKLIST — DISPATCHER (JSON ou Traduire)
+// ============================================================================
 deckGenerateBtn.addEventListener("click", async () => {
+  if (isDeckActionTranslate()) {
+    await runDeckTranslation();
+  } else {
+    await runDeckJsonGeneration();
+  }
+});
+
+// ============================================================================
+// DECKLIST — ACTION : GÉNÉRER LES JSON
+// ============================================================================
+async function runDeckJsonGeneration() {
   const names = parseDecklist(deckInput.value);
   if (!names.length) { toast("Colle d'abord une decklist.", "err"); return; }
 
   deckGenerateBtn.disabled = true;
   deckResultsEl.innerHTML = "";
   deckDownloadsRow.classList.add("hidden");
+  translationResultEl.classList.add("hidden");
+  translationActionsEl.classList.add("hidden");
   progressWrap.classList.add("visible");
   progressFill.style.width = "0%";
   progressPct.textContent = "0%";
@@ -1424,7 +1463,6 @@ deckGenerateBtn.addEventListener("click", async () => {
     progressLabel.textContent = `Recherche ${done} / ${uniqueNames.length} · ${n.slice(0, 30)}…`;
   }
 
-  // ⚡ Pré-récupération en batch des variantes FR (mode API uniquement)
   if (!appState.dbReady) {
     const idsNeedingFr = [];
     for (const card of resolved.values()) {
@@ -1485,8 +1523,168 @@ deckGenerateBtn.addEventListener("click", async () => {
     deckDownloadZipBtn.onclick = () => downloadAsZip(generatedFiles);
     deckDownloadCsvBtn.onclick = () => downloadManagerCsv(generatedCards);
   }
-});
+}
 
+// ============================================================================
+// DECKLIST — ACTION : TRADUIRE
+// ============================================================================
+function getTranslateSrc() {
+  const r = document.querySelector('input[name="translate-src"]:checked');
+  return r ? r.value : "auto";
+}
+function getTranslateDst() {
+  const r = document.querySelector('input[name="translate-dst"]:checked');
+  return r ? r.value : "fr";
+}
+
+async function runDeckTranslation() {
+  const text = deckInput.value.trim();
+  if (!text) { toast("Colle d'abord une decklist.", "err"); return; }
+
+  const src = getTranslateSrc();
+  const dst = getTranslateDst();
+
+  deckGenerateBtn.disabled = true;
+  deckStatusEl.textContent = appState.dbReady ? "Analyse locale…" : "Analyse via API…";
+  translationResultEl.innerHTML = "";
+  translationResultEl.classList.add("hidden");
+  translationActionsEl.classList.add("hidden");
+  deckResultsEl.innerHTML = "";
+  deckDownloadsRow.classList.add("hidden");
+  progressWrap.classList.remove("visible");
+
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const results = [];
+  const cardNames = [];
+  const cardIndexes = [];
+
+  lines.forEach((line, idx) => {
+    if (/^(main|extra|side)\s*deck\s*:?$/i.test(line)) {
+      results[idx] = { type: "section", label: line };
+      return;
+    }
+    const m = line.match(DECK_LINE_RE);
+    const qty = m ? parseInt(m[1], 10) : 1;
+    const name = m ? m[2].trim() : line;
+    results[idx] = { type: "card", qty, name, translated: null, status: "pending" };
+    cardNames.push(name);
+    cardIndexes.push(idx);
+  });
+
+  const uniqueNames = [...new Set(cardNames)];
+  const resolvedMap = new Map();
+  let done = 0;
+
+  for (const n of uniqueNames) {
+    try {
+      const card = await findCardByName(n, src);
+      if (card) resolvedMap.set(n, card);
+    } catch (err) { /* ignore */ }
+    done++;
+    deckStatusEl.textContent = `Résolution ${done} / ${uniqueNames.length}…`;
+  }
+
+  const targetLang = dst === "fr" ? "fr" : null;
+  if (!appState.dbReady) {
+    const idsToResolve = [];
+    for (const resolved of resolvedMap.values()) {
+      if (resolved._source !== "yugipedia") idsToResolve.push(resolved.id);
+    }
+    if (idsToResolve.length) {
+      try {
+        await getCardsByIds(idsToResolve, targetLang);
+      } catch (e) { /* toléré */ }
+    }
+  }
+
+  let okCount = 0;
+  let totalCards = 0;
+
+  for (const idx of cardIndexes) {
+    const r = results[idx];
+    const name = r.name;
+    const resolved = resolvedMap.get(name);
+    totalCards++;
+
+    if (!resolved) { r.status = "err"; continue; }
+
+    if (resolved._source === "yugipedia") {
+      r.status = "ok";
+      r.translated = resolved.name;
+      r.source = "yugipedia";
+      okCount++;
+      continue;
+    }
+
+    let target = null;
+    if (appState.dbReady) {
+      target = dst === "fr"
+        ? memCacheFr.get(String(resolved.id))
+        : memCacheEn.get(String(resolved.id));
+    } else {
+      const cache = targetLang === "fr" ? cardFrByIdCache : cardByIdCache;
+      target = cache.get(String(resolved.id)) || null;
+    }
+
+    if (!target) {
+      r.status = "warn";
+      r.translated = resolved.name;
+      continue;
+    }
+    const translatedName = target.name;
+    const isSame = translatedName.toLowerCase() === name.toLowerCase();
+    if (isSame) {
+      r.status = "warn";
+      r.translated = translatedName;
+    } else {
+      r.status = "ok";
+      r.translated = translatedName;
+      okCount++;
+    }
+  }
+
+  translationResultEl.innerHTML = "";
+  results.forEach((r) => {
+    if (!r) return;
+    if (r.type === "section") {
+      translationResultEl.innerHTML += `<div class="line section">${escapeHtml(r.label)}</div>`;
+      return;
+    }
+    let badge, translated;
+    if (r.status === "err") {
+      badge = '<span class="badge err">❌ introuvable</span>';
+      translated = '<span style="color:var(--text-dim)">—</span>';
+    } else if (r.status === "warn") {
+      badge = '<span class="badge warn">⚠️ pas de trad.</span>';
+      translated = `<span style="color:var(--text-muted)">${escapeHtml(r.translated || r.name)}</span>`;
+    } else {
+      badge = r.source === "yugipedia"
+        ? '<span class="badge yugi">🟣 Yugipedia</span>'
+        : '<span class="badge ok">✅</span>';
+      translated = `<span class="translated">${escapeHtml(r.translated)}</span>`;
+    }
+    translationResultEl.innerHTML += `
+      <div class="line">
+        <span class="qty">${r.qty}</span>
+        <span class="name">${escapeHtml(r.name)}</span>
+        <span class="arrow">→</span>
+        ${translated}
+        <span style="flex:1"></span>
+        ${badge}
+      </div>`;
+  });
+
+  translationResultEl.classList.remove("hidden");
+  translationActionsEl.classList.remove("hidden");
+  deckGenerateBtn.disabled = false;
+  deckStatusEl.textContent = `Terminé : ${okCount} / ${totalCards} carte(s) traduite(s).`;
+  lastTranslationResult = { results, dst };
+  toast("Traduction terminée !", "ok");
+}
+
+// ============================================================================
+// DECKLIST — BOUTONS DE TÉLÉCHARGEMENT (JSON)
+// ============================================================================
 async function downloadAsZip(files) {
   if (typeof JSZip === "undefined") { toast("JSZip non chargé.", "err"); return; }
   const zip = new JSZip();
@@ -1502,6 +1700,38 @@ async function downloadAsZip(files) {
   });
   const blob = await zip.generateAsync({ type: "blob" });
   downloadBlob(blob, "cartes-ygopro.zip");
+}
+
+// ============================================================================
+// DECKLIST — BOUTONS DE TÉLÉCHARGEMENT (TRADUCTION)
+// ============================================================================
+if (translateCopyBtn) {
+  translateCopyBtn.addEventListener("click", () => {
+    if (!lastTranslationResult) return;
+    const txt = buildTranslatedDecklist(lastTranslationResult);
+    copyTextToClipboard(txt, null, null);
+    toast("Decklist copiée !", "ok");
+  });
+}
+if (translateDownloadTxtBtn) {
+  translateDownloadTxtBtn.addEventListener("click", () => {
+    if (!lastTranslationResult) return;
+    const txt = buildTranslatedDecklist(lastTranslationResult);
+    downloadBlob(txt, "decklist-traduite.txt", "text/plain;charset=utf-8");
+  });
+}
+if (translateDownloadYdkBtn) {
+  translateDownloadYdkBtn.addEventListener("click", () => {
+    toast("Export .ydk non supporté en traduction.", "info");
+  });
+}
+
+function buildTranslatedDecklist({ results }) {
+  return results.filter(Boolean).map((r) => {
+    if (r.type === "section") return r.label;
+    const name = r.translated || r.name;
+    return `${r.qty} ${name}`;
+  }).join("\n");
 }
 
 // ============================================================================
@@ -1634,207 +1864,6 @@ function downloadManagerCsv(cards) {
 }
 
 // ============================================================================
-// TRADUCTION (locale ou API)
-// ============================================================================
-document.getElementById("translate-fill-example").addEventListener("click", () => {
-  translateInput.value =
-`Main Deck:
-1 Dark Magician
-1 Buster Blader
-2 Blue-Eyes White Dragon
-
-Extra Deck:
-1 Dark Paladin
-
-Side Deck:
-1 Mystical Space Typhoon`;
-});
-
-document.getElementById("translate-clear").addEventListener("click", () => {
-  translateInput.value = "";
-  translationResultEl.innerHTML = "";
-  translationResultEl.classList.add("hidden");
-  translationActionsEl.classList.add("hidden");
-  translateStatusEl.textContent = "";
-  lastTranslationResult = null;
-});
-
-function getTranslateSrc() {
-  const r = document.querySelector('input[name="translate-src"]:checked');
-  return r ? r.value : "auto";
-}
-function getTranslateDst() {
-  const r = document.querySelector('input[name="translate-dst"]:checked');
-  return r ? r.value : "fr";
-}
-
-translateRunBtn.addEventListener("click", async () => {
-  const text = translateInput.value.trim();
-  if (!text) { toast("Colle d'abord une decklist.", "err"); return; }
-
-  const src = getTranslateSrc();
-  const dst = getTranslateDst();
-
-  translateRunBtn.disabled = true;
-  translateStatusEl.textContent = appState.dbReady ? "Analyse locale…" : "Analyse via API…";
-  translationResultEl.innerHTML = "";
-  translationResultEl.classList.add("hidden");
-  translationActionsEl.classList.add("hidden");
-
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  const results = [];
-  const cardNames = [];
-  const cardIndexes = [];
-
-  lines.forEach((line, idx) => {
-    if (/^(main|extra|side)\s*deck\s*:?$/i.test(line)) {
-      results[idx] = { type: "section", label: line };
-      return;
-    }
-    const m = line.match(DECK_LINE_RE);
-    const qty = m ? parseInt(m[1], 10) : 1;
-    const name = m ? m[2].trim() : line;
-    results[idx] = { type: "card", qty, name, translated: null, status: "pending" };
-    cardNames.push(name);
-    cardIndexes.push(idx);
-  });
-
-  const uniqueNames = [...new Set(cardNames)];
-  const resolvedMap = new Map();
-  let done = 0;
-
-  for (const n of uniqueNames) {
-    try {
-      const card = await findCardByName(n, src);
-      if (card) resolvedMap.set(n, card);
-    } catch (err) { /* ignore */ }
-    done++;
-    translateStatusEl.textContent = `Résolution ${done} / ${uniqueNames.length}…`;
-  }
-
-  // ⚡ Batch des variantes cibles en mode API
-  const targetLang = dst === "fr" ? "fr" : null;
-  if (!appState.dbReady) {
-    const idsToResolve = [];
-    for (const resolved of resolvedMap.values()) {
-      if (resolved._source !== "yugipedia") idsToResolve.push(resolved.id);
-    }
-    if (idsToResolve.length) {
-      try {
-        await getCardsByIds(idsToResolve, targetLang);
-      } catch (e) { /* toléré */ }
-    }
-  }
-
-  let okCount = 0;
-  let totalCards = 0;
-
-  for (const idx of cardIndexes) {
-    const r = results[idx];
-    const name = r.name;
-    const resolved = resolvedMap.get(name);
-    totalCards++;
-
-    if (!resolved) { r.status = "err"; continue; }
-
-    if (resolved._source === "yugipedia") {
-      r.status = "ok";
-      r.translated = resolved.name;
-      r.source = "yugipedia";
-      okCount++;
-      continue;
-    }
-
-    let target = null;
-    if (appState.dbReady) {
-      target = dst === "fr"
-        ? memCacheFr.get(String(resolved.id))
-        : memCacheEn.get(String(resolved.id));
-    } else {
-      // ⚡ Utiliser le cache batch pré-rempli
-      const cache = targetLang === "fr" ? cardFrByIdCache : cardByIdCache;
-      target = cache.get(String(resolved.id)) || null;
-    }
-
-    if (!target) {
-      r.status = "warn";
-      r.translated = resolved.name;
-      continue;
-    }
-    const translatedName = target.name;
-    const isSame = translatedName.toLowerCase() === name.toLowerCase();
-    if (isSame) {
-      r.status = "warn";
-      r.translated = translatedName;
-    } else {
-      r.status = "ok";
-      r.translated = translatedName;
-      okCount++;
-    }
-  }
-
-  translationResultEl.innerHTML = "";
-  results.forEach((r) => {
-    if (!r) return;
-    if (r.type === "section") {
-      translationResultEl.innerHTML += `<div class="line section">${escapeHtml(r.label)}</div>`;
-      return;
-    }
-    let badge, translated;
-    if (r.status === "err") {
-      badge = '<span class="badge err">❌ introuvable</span>';
-      translated = '<span style="color:var(--text-dim)">—</span>';
-    } else if (r.status === "warn") {
-      badge = '<span class="badge warn">⚠️ pas de trad.</span>';
-      translated = `<span style="color:var(--text-muted)">${escapeHtml(r.translated || r.name)}</span>`;
-    } else {
-      badge = r.source === "yugipedia"
-        ? '<span class="badge yugi">🟣 Yugipedia</span>'
-        : '<span class="badge ok">✅</span>';
-      translated = `<span class="translated">${escapeHtml(r.translated)}</span>`;
-    }
-    translationResultEl.innerHTML += `
-      <div class="line">
-        <span class="qty">${r.qty}</span>
-        <span class="name">${escapeHtml(r.name)}</span>
-        <span class="arrow">→</span>
-        ${translated}
-        <span style="flex:1"></span>
-        ${badge}
-      </div>`;
-  });
-
-  translationResultEl.classList.remove("hidden");
-  translationActionsEl.classList.remove("hidden");
-  translateRunBtn.disabled = false;
-  translateStatusEl.textContent = `Terminé : ${okCount} / ${totalCards} carte(s) traduite(s).`;
-  lastTranslationResult = { results, dst };
-  toast("Traduction terminée !", "ok");
-});
-
-translateCopyBtn.addEventListener("click", () => {
-  if (!lastTranslationResult) return;
-  const txt = buildTranslatedDecklist(lastTranslationResult);
-  copyTextToClipboard(txt, null, null);
-  toast("Decklist copiée !", "ok");
-});
-translateDownloadTxtBtn.addEventListener("click", () => {
-  if (!lastTranslationResult) return;
-  const txt = buildTranslatedDecklist(lastTranslationResult);
-  downloadBlob(txt, "decklist-traduite.txt", "text/plain;charset=utf-8");
-});
-translateDownloadYdkBtn.addEventListener("click", () => {
-  toast("Export .ydk non supporté en traduction.", "info");
-});
-function buildTranslatedDecklist({ results }) {
-  return results.filter(Boolean).map((r) => {
-    if (r.type === "section") return r.label;
-    const name = r.translated || r.name;
-    return `${r.qty} ${name}`;
-  }).join("\n");
-}
-
-// ============================================================================
 // UTILITAIRES
 // ============================================================================
 function downloadBlob(data, filename, mime) {
@@ -1846,7 +1875,6 @@ function downloadBlob(data, filename, mime) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // ⚠️ Attendre que le download soit initié avant de révoquer (Firefox)
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function sanitizeFilename(name) { return name.replace(/[\\/:*?"<>|]/g, "").trim(); }
@@ -1864,10 +1892,8 @@ if (dbBannerSkip) dbBannerSkip.addEventListener("click", () => {
   toast("Mode API activé. Tu peux installer la base plus tard.", "info");
 });
 
-// ⚡ Clic = vérification intelligente. Shift+clic ou clic droit = force.
 if (dbSyncBtn) {
   dbSyncBtn.addEventListener("click", (e) => {
-    // Shift+clic = force
     syncDatabase(e.shiftKey === true);
   });
   dbSyncBtn.addEventListener("contextmenu", (e) => {
@@ -1887,6 +1913,20 @@ window.idbDelete = idbDelete;
 window.idbGetAll = idbGetAll;
 window.IDB_STORE_YUGI_CARDS = IDB_STORE_YUGI_CARDS;
 window.IDB_STORE_YUGI_SEARCH = IDB_STORE_YUGI_SEARCH;
+
+// Exposer les helpers utiles au cdb-translator
+window.findCardByName = findCardByName;
+window.generateJsonForCard = generateJsonForCard;
+window.buildCsvRow = buildCsvRow;
+window.CSV_FIELDS = CSV_FIELDS;
+window.downloadAsZip = downloadAsZip;
+window.downloadManagerCsv = downloadManagerCsv;
+window.sanitizeFilename = sanitizeFilename;
+window.searchCards = searchCards;
+window.isYugipediaEnabled = isYugipediaEnabled;
+window.toast = toast;
+window.downloadBlob = downloadBlob;
+window.escapeHtml = escapeHtml;
 
 // ============================================================================
 // MODAL DE CONFIRMATION CUSTOM
