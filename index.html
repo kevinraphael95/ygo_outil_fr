@@ -49,15 +49,14 @@
   <!-- ============================== HERO ============================== -->
   <section class="hero">
     <h1>Recherche carte Yu-Gi-Oh! <span class="grad">→ JSON</span></h1>
-    <p>Cherche une carte par son nom (FR, EN, JA…), génère le JSON prêt à charger dans l'éditeur ygopro.org, traduis des decklists entières, et télécharge les illustrations officielles.</p>
+    <p>Cherche une carte par son nom (FR, EN, JA…), génère le JSON prêt à charger dans l'éditeur ygopro.org, traduis des decklists entières, et convertis des .cdb EDOPro en JSON ou en .cdb traduit.</p>
   </section>
 
-  <!-- ============================== TABS ============================== -->
+  <!-- ============================== TABS (3 onglets source) ============================== -->
   <div class="tabs" role="tablist">
-    <button class="tab active" data-tab="search" role="tab">🔍 Recherche</button>
-    <button class="tab" data-tab="deck" role="tab">📋 Deck → JSON</button>
-    <button class="tab" data-tab="translate" role="tab">🌐 Traduire un deck</button>
-    <button class="tab" data-tab="cdb" role="tab">📦 Traduire un .cdb</button>
+    <button class="tab active" data-tab="search" role="tab">🔍 Nom de carte</button>
+    <button class="tab" data-tab="deck" role="tab">📋 Decklist</button>
+    <button class="tab" data-tab="cdb" role="tab">📦 .cdb</button>
   </div>
 
   <!-- ============================== PANEL : RECHERCHE ============================== -->
@@ -85,7 +84,6 @@
         </div>
       </div>
 
-      <!-- Option fallback Yugipedia (recherche) -->
       <label class="search-option">
         <input type="checkbox" id="search-yugipedia">
         <span>🟣 <strong>Fallback Yugipedia</strong> — si aucune carte n'est trouvée dans la base locale, interroger Yugipedia (1 req/s, cache 30 j)</span>
@@ -107,10 +105,10 @@
     <div class="results-grid" id="results-grid"></div>
   </section>
 
-  <!-- ============================== PANEL : DECK ============================== -->
+  <!-- ============================== PANEL : DECKLIST (fusion Deck + Traduire) ============================== -->
   <section class="panel" id="panel-deck">
     <div class="card">
-      <h2 class="card-title">📋 Générer plusieurs JSON depuis une decklist</h2>
+      <h2 class="card-title">📋 Traiter une decklist</h2>
       <p class="card-sub">Colle une liste au format <code>1 Nom de la carte</code>, une par ligne. Les en-têtes <em>Main / Extra / Side Deck</em> sont ignorés.</p>
 
       <textarea class="json-preview" id="deck-input" spellcheck="false" style="min-height:180px;" placeholder="Main Deck:
@@ -124,21 +122,68 @@ Extra Deck:
 Side Deck:
 1 Fissure"></textarea>
 
-      <!-- Option fallback Yugipedia (deck) -->
       <label class="search-option">
         <input type="checkbox" id="deck-yugipedia">
         <span>🟣 <strong>Fallback Yugipedia</strong> — pour les cartes absentes de la base locale</span>
       </label>
 
+      <!-- ===== Sélecteur d'action ===== -->
+      <div class="output-section">
+        <span class="output-label">Action</span>
+        <div class="output-options">
+
+          <label class="output-option">
+            <input type="radio" name="deck-action" value="json" id="deck-action-json" checked>
+            <div class="output-option-body">
+              <div class="output-option-title">📄 <strong>Transformer en JSON</strong></div>
+              <div class="output-option-desc">
+                Un JSON par carte (ZIP) + CSV Manager, prêt pour l'éditeur ygopro.org.
+              </div>
+            </div>
+          </label>
+
+          <label class="output-option">
+            <input type="radio" name="deck-action" value="translate" id="deck-action-translate">
+            <div class="output-option-body">
+              <div class="output-option-title">🌐 <strong>Traduire la decklist</strong></div>
+              <div class="output-option-desc">
+                Traduit chaque nom de carte (ex: EN → FR) et te donne la decklist traduite.
+              </div>
+            </div>
+          </label>
+
+        </div>
+      </div>
+
+      <!-- ===== Options de traduction (affichées seulement si action = translate) ===== -->
+      <div id="deck-translate-options" class="hidden" style="margin-top: 18px;">
+        <div class="lang-row">
+          <span class="lang-label">Source</span>
+          <div class="lang-pills">
+            <label class="lang-pill"><input type="radio" name="translate-src" value="auto" checked> 🪄 Auto</label>
+            <label class="lang-pill"><input type="radio" name="translate-src" value="en"> 🇬🇧 Anglais</label>
+            <label class="lang-pill"><input type="radio" name="translate-src" value="fr"> 🇫🇷 Français</label>
+          </div>
+        </div>
+
+        <div class="lang-row">
+          <span class="lang-label">Cible</span>
+          <div class="lang-pills">
+            <label class="lang-pill"><input type="radio" name="translate-dst" value="fr" checked> 🇫🇷 Français</label>
+            <label class="lang-pill"><input type="radio" name="translate-dst" value="en"> 🇬🇧 Anglais</label>
+          </div>
+        </div>
+      </div>
+
       <div class="actions-row">
-        <button class="btn-primary" id="deck-generate" type="button">⚙️ Générer les JSON</button>
+        <button class="btn-primary" id="deck-generate" type="button">⚙️ Lancer</button>
         <button class="btn" id="deck-fill-example" type="button">📥 Exemple</button>
         <button class="btn" id="deck-clear" type="button">🗑️ Effacer</button>
       </div>
 
       <div class="progress-wrap" id="progress-wrap">
         <div class="progress-info">
-          <span id="progress-label">Génération…</span>
+          <span id="progress-label">Traitement…</span>
           <span id="progress-pct">0%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
@@ -147,52 +192,16 @@ Side Deck:
       <p id="deck-status" class="status-line"></p>
       <ul class="gen-list" id="deck-results"></ul>
 
+      <!-- Résultat de traduction (affiché seulement si action = translate) -->
+      <div class="translation-result hidden" id="translation-result"></div>
+
+      <!-- Téléchargements JSON -->
       <div class="actions-row hidden" id="deck-downloads">
         <button class="btn" id="deck-download-zip" type="button">📦 Télécharger tous les JSON (.zip)</button>
         <button class="btn" id="deck-download-csv" type="button">📑 Télécharger le CSV Manager</button>
       </div>
-    </div>
-  </section>
 
-  <!-- ============================== PANEL : TRADUIRE ============================== -->
-  <section class="panel" id="panel-translate">
-    <div class="card">
-      <h2 class="card-title">🌐 Traduire une decklist</h2>
-      <p class="card-sub">Colle une decklist, choisis la langue source et cible. La traduction s'appuie sur l'API YGOPRODeck.</p>
-
-      <div class="lang-row">
-        <span class="lang-label">Source</span>
-        <div class="lang-pills">
-          <label class="lang-pill"><input type="radio" name="translate-src" value="auto" checked> 🪄 Auto</label>
-          <label class="lang-pill"><input type="radio" name="translate-src" value="en"> 🇬🇧 Anglais</label>
-          <label class="lang-pill"><input type="radio" name="translate-src" value="fr"> 🇫🇷 Français</label>
-        </div>
-      </div>
-
-      <div class="lang-row">
-        <span class="lang-label">Cible</span>
-        <div class="lang-pills">
-          <label class="lang-pill"><input type="radio" name="translate-dst" value="fr" checked> 🇫🇷 Français</label>
-          <label class="lang-pill"><input type="radio" name="translate-dst" value="en"> 🇬🇧 Anglais</label>
-        </div>
-      </div>
-
-      <textarea class="json-preview" id="translate-input" spellcheck="false" style="min-height:160px;" placeholder="Main Deck:
-1 Dark Magician
-2 Blue-Eyes White Dragon
-
-Extra Deck:
-1 Dark Paladin"></textarea>
-
-      <div class="actions-row">
-        <button class="btn-primary" id="translate-run" type="button">🌐 Traduire</button>
-        <button class="btn" id="translate-fill-example" type="button">📥 Exemple</button>
-        <button class="btn" id="translate-clear" type="button">🗑️ Effacer</button>
-      </div>
-
-      <p id="translate-status" class="status-line"></p>
-      <div class="translation-result hidden" id="translation-result"></div>
-
+      <!-- Téléchargements Traduction -->
       <div class="actions-row hidden" id="translation-actions">
         <button class="btn" id="translate-copy" type="button">📋 Copier la decklist</button>
         <button class="btn" id="translate-download-txt" type="button">💾 .txt</button>
@@ -201,11 +210,11 @@ Extra Deck:
     </div>
   </section>
 
-  <!-- ============================== PANEL : TRADUIRE UN CDB ============================== -->
+  <!-- ============================== PANEL : CDB (fusion Traduire + JSON) ============================== -->
   <section class="panel" id="panel-cdb">
     <div class="card">
-      <h2 class="card-title">📦 Traduire un fichier .cdb (EDOPro / YGO Pro)</h2>
-      <p class="card-sub">Dépose un fichier <code>.cdb</code> (base SQLite). L'outil remplacera les noms et effets des cartes par leur version française quand elle existe. Aucune requête API — tout se passe localement grâce à ta base installée.</p>
+      <h2 class="card-title">📦 Traiter un fichier .cdb (EDOPro / YGO Pro)</h2>
+      <p class="card-sub">Dépose un fichier <code>.cdb</code> (base SQLite), puis choisis ce que tu veux en faire.</p>
 
       <div id="cdb-drop" class="cdb-drop">
         <div class="cdb-drop-icon">📦</div>
@@ -218,8 +227,37 @@ Extra Deck:
 
       <div id="cdb-info" class="cdb-info hidden"></div>
 
-      <!-- ===== Option Mode VAACT ===== -->
-      <label class="cdb-option" id="cdb-vaact-wrap">
+      <!-- ===== Sélecteur d'action ===== -->
+      <div class="output-section">
+        <span class="output-label">Action</span>
+        <div class="output-options">
+
+          <label class="output-option">
+            <input type="radio" name="cdb-action" value="translate" id="cdb-action-translate" checked>
+            <div class="output-option-body">
+              <div class="output-option-title">🌐 <strong>Traduire en .cdb</strong></div>
+              <div class="output-option-desc">
+                Remplace les noms et effets par leur version française.
+                Sortie : <code>cards_fr.cdb</code>.
+              </div>
+            </div>
+          </label>
+
+          <label class="output-option">
+            <input type="radio" name="cdb-action" value="json" id="cdb-action-json">
+            <div class="output-option-body">
+              <div class="output-option-title">📄 <strong>Transformer en JSON</strong></div>
+              <div class="output-option-desc">
+                Un JSON par carte (ZIP) + CSV Manager, prêt pour l'éditeur ygopro.org.
+              </div>
+            </div>
+          </label>
+
+        </div>
+      </div>
+
+      <!-- ===== Option Mode VAACT (utile seulement pour la traduction) ===== -->
+      <label class="cdb-option" id="cdb-vaact-wrap" style="margin-top:20px;">
         <input type="checkbox" id="cdb-vaact-mode">
         <span class="cdb-option-label">
           <strong>Mode VAACT</strong> — préserver les effets modifiés
@@ -227,6 +265,7 @@ Extra Deck:
       </label>
       <p class="cdb-option-help">
         Pour les cartes dont l'effet a été <strong>modifié par VAACT</strong> (≠ effet officiel), garde l'effet original et ajoute la traduction officielle en dessous.
+        <em>S'applique uniquement à la traduction .cdb.</em>
       </p>
 
       <!-- ===== Option Fallback Yugipedia ===== -->
@@ -242,7 +281,7 @@ Extra Deck:
       </p>
 
       <div class="actions-row hidden" id="cdb-actions">
-        <button class="btn-primary" id="cdb-translate" type="button">🌐 Traduire en français</button>
+        <button class="btn-primary" id="cdb-translate" type="button">⚙️ Lancer</button>
         <button class="btn" id="cdb-clear" type="button">🗑️ Effacer</button>
       </div>
 
@@ -254,7 +293,6 @@ Extra Deck:
         <div class="progress-bar"><div class="progress-fill" id="cdb-progress-fill"></div></div>
       </div>
 
-      <!-- 2ᵉ barre de progression : enrichissement Yugipedia -->
       <div class="progress-wrap" id="cdb-yugi-progress-wrap">
         <div class="progress-info">
           <span id="cdb-yugi-label">Enrichissement Yugipedia…</span>
@@ -275,11 +313,11 @@ Extra Deck:
         </div>
         <div class="cdb-stat">
           <div class="cdb-stat-value cdb-ok" id="cdb-stat-translated">0</div>
-          <div class="cdb-stat-label">Traduites en FR</div>
+          <div class="cdb-stat-label" id="cdb-stat-translated-label">Traduites en FR</div>
         </div>
         <div class="cdb-stat">
           <div class="cdb-stat-value cdb-warn" id="cdb-stat-missing">0</div>
-          <div class="cdb-stat-label">Pas de trad. FR</div>
+          <div class="cdb-stat-label" id="cdb-stat-missing-label">Pas de trad. FR</div>
         </div>
       </div>
 
@@ -287,6 +325,8 @@ Extra Deck:
 
       <div class="actions-row hidden" id="cdb-downloads">
         <button class="btn" id="cdb-download" type="button">💾 Télécharger le .cdb traduit</button>
+        <button class="btn hidden" id="cdb-download-zip" type="button">📦 Télécharger les JSON (.zip)</button>
+        <button class="btn hidden" id="cdb-download-csv" type="button">📑 Télécharger le CSV Manager</button>
         <button class="btn hidden" id="cdb-export-missing" type="button">📄 Export .txt des non trouvées</button>
       </div>
     </div>
@@ -312,15 +352,19 @@ Extra Deck:
       <button class="icon-btn" id="about-close" aria-label="Fermer">✕</button>
     </div>
     <div class="modal-body">
-      <p>Cet outil permet de rechercher des cartes Yu-Gi-Oh! par leur nom dans plusieurs langues, de générer un <strong>JSON compatible avec l'éditeur ygopro.org</strong>, de télécharger les illustrations officielles, de traduire des decklists entières, et de traduire des fichiers .cdb EDOPro/YGO Pro.</p>
+      <p>Cet outil permet de rechercher des cartes Yu-Gi-Oh! par leur nom dans plusieurs langues, de générer un <strong>JSON compatible avec l'éditeur ygopro.org</strong>, de télécharger les illustrations officielles, de traduire des decklists entières, et de convertir des fichiers .cdb EDOPro/YGO Pro en JSON ou en .cdb traduit.</p>
 
       <h3>💾 Base de cartes locale</h3>
       <p>Pour des recherches instantanées et zéro requête API, l'app peut télécharger <strong>toute la base de cartes</strong> (~30 Mo) dans le navigateur (IndexedDB). Une seule fois. Ensuite, tout fonctionne hors-ligne.</p>
       <p>Utilise le bouton 🔄 du header pour synchroniser si une nouvelle version est disponible.</p>
 
-      <h3>📦 Traduction .cdb</h3>
-      <p>Dépose un fichier <code>.cdb</code> (base SQLite EDOPro/YGO Pro) dans l'onglet dédié. L'outil remplace les noms et effets des cartes par leur version française quand elle existe, puis te redonne un <code>_fr.cdb</code> prêt à utiliser.</p>
-      <p><strong>Mode VAACT :</strong> pour les cartes dont l'effet a été modifié par le projet VAACT, conserve l'effet original (anglais) et ajoute la traduction officielle française en dessous.</p>
+      <h3>📦 Traitement .cdb</h3>
+      <p>Dépose un fichier <code>.cdb</code> (base SQLite EDOPro/YGO Pro) dans l'onglet dédié. Tu peux ensuite :</p>
+      <ul>
+        <li><strong>Le traduire</strong> — les noms et effets passent en français. Sortie : <code>_fr.cdb</code>.</li>
+        <li><strong>Le convertir en JSON</strong> — un JSON par carte (ZIP) + CSV Manager, prêt pour l'éditeur ygopro.org.</li>
+      </ul>
+      <p><strong>Mode VAACT :</strong> pour les cartes dont l'effet a été modifié par le projet VAACT, conserve l'effet original (anglais) et ajoute la traduction officielle française en dessous. S'applique uniquement à la sortie <code>.cdb</code>.</p>
 
       <h3>🟣 Fallback Yugipedia</h3>
       <p>Pour les cartes absentes de la base locale (cartes récentes, errata, etc.), l'app peut interroger l'API de <a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia</a> pour récupérer la traduction française officielle.</p>
@@ -370,7 +414,6 @@ Extra Deck:
 </div>
 
 <!-- ============================== MODAL DE CONFIRMATION CUSTOM ============================== -->
-<!-- Remplace les window.confirm() bloquants. Contrôlé par showConfirm() dans script.js -->
 <div class="modal-backdrop" id="confirm-modal">
   <div class="modal" style="max-width: 440px;">
     <div class="modal-header">
