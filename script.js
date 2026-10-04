@@ -1,5 +1,5 @@
 // ============================================================================
-// YGO -> ygopro.org Card Maker JSON generator (v3 - Dump local IndexedDB)
+// YGO -> ygopro.org Card Maker JSON generator (v5 - corrections)
 // ============================================================================
 // Stratégie :
 //   1. Au premier lancement, propose de télécharger TOUTE la base de cartes
@@ -7,9 +7,12 @@
 //   2. Ensuite, toutes les recherches/decks/traductions sont LOCALES.
 //      → 0 requête API, instantané, offline-friendly.
 //   3. Bouton "Synchroniser" pour rafraîchir via checkDBVer.php
+//      (clic = vérif intelligente, clic droit ou Shift+clic = force)
 //   4. Fallback API si l'utilisateur refuse le dump (avec rate limiter).
+//   5. Fallback Yugipedia pour les cartes absentes de la base (optionnel).
 //
 // Doc API : https://ygoprodeck.com/api-guide/
+// Doc Yugipedia : https://yugipedia.com/api.php
 // Format JSON cible vérifié sur ygo-cardmaker (fork lauqerm/ygocarder).
 // ============================================================================
 
@@ -31,10 +34,16 @@ const LS_CACHE_TTL = 1000 * 60 * 60 * 24;
 
 // --- IndexedDB ---
 const IDB_NAME = "ygo-cards-db";
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 const IDB_STORE_EN = "cards_en";
 const IDB_STORE_FR = "cards_fr";
 const IDB_STORE_META = "meta";
+const IDB_STORE_YUGI_CARDS = "yugipedia_cards";
+const IDB_STORE_YUGI_SEARCH = "yugipedia_search";
+
+// --- Limites caches ---
+const MAX_STRUCTURAL_CACHE = 500;
+const TOAST_MAX_LENGTH = 200;
 
 // ----------------------------------------------------------------------------
 // DOM
@@ -79,27 +88,41 @@ const aboutModal = document.getElementById("about-modal");
 const aboutClose = document.getElementById("about-close");
 const toastsEl = document.getElementById("toasts");
 
-// Nouveaux éléments (à ajouter dans le HTML, voir section "HTML à patcher")
-const dbBadge = document.getElementById("db-badge");           // badge dans le header
-const dbBanner = document.getElementById("db-banner");         // bandeau d'installation
-const dbBannerInstall = document.getElementById("db-install");  // bouton "Installer"
-const dbBannerSkip = document.getElementById("db-skip");        // bouton "Plus tard"
-const dbBannerBody = document.getElementById("db-banner-body"); // zone de contenu
-const dbSyncBtn = document.getElementById("db-sync");           // bouton "Sync" header
+// Base locale
+const dbBadge = document.getElementById("db-badge");
+const dbBanner = document.getElementById("db-banner");
+const dbBannerInstall = document.getElementById("db-install");
+const dbBannerSkip = document.getElementById("db-skip");
+const dbBannerBody = document.getElementById("db-banner-body");
+const dbSyncBtn = document.getElementById("db-sync");
+
+// Yugipedia
+const searchYugipediaCb = document.getElementById("search-yugipedia");
+const deckYugipediaCb = document.getElementById("deck-yugipedia");
+const cdbYugipediaCb = document.getElementById("cdb-yugipedia-mode");
+const clearYugiCacheBtn = document.getElementById("clear-yugi-cache");
+const yugiCacheStatsEl = document.getElementById("yugi-cache-stats");
 
 // ----------------------------------------------------------------------------
-// État global
+// État global (exposé pour modules externes)
 // ----------------------------------------------------------------------------
-let dbReady = false;          // true si la base locale est utilisable
-let dbMeta = null;            // { version, date, countEn, countFr }
+const appState = {
+  dbReady: false,
+  dbMeta: null,
+};
+
+// Raccourci pour compatibilité avec l'ancien code
+Object.defineProperty(window, "dbReady", {
+  get: () => appState.dbReady,
+  set: (v) => { appState.dbReady = v; },
+});
+
 let activeController = null;
 let lastTranslationResult = null;
 
-// Caches mémoire pour accès rapide (au-dessus d'IndexedDB)
-const memCacheEn = new Map(); // id -> carte EN
-const memCacheFr = new Map(); // id -> carte FR (ou null)
+const memCacheEn = new Map();
+const memCacheFr = new Map();
 
-// Cache fallback API
 const searchCache = new Map();
 const cardByIdCache = new Map();
 const cardFrByIdCache = new Map();
@@ -124,6 +147,12 @@ function openIDB() {
       }
       if (!db.objectStoreNames.contains(IDB_STORE_META)) {
         db.createObjectStore(IDB_STORE_META, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(IDB_STORE_YUGI_CARDS)) {
+        db.createObjectStore(IDB_STORE_YUGI_CARDS, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(IDB_STORE_YUGI_SEARCH)) {
+        db.createObjectStore(IDB_STORE_YUGI_SEARCH, { keyPath: "key" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -160,6 +189,26 @@ async function idbGet(storeName, key) {
     const req = tx.objectStore(storeName).get(key);
     req.onsuccess = () => resolve(req.result || null);
     req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbPut(storeName, item) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).put(item);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbDelete(storeName, key) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -210,30 +259,25 @@ async function initDatabase() {
   try {
     const countEn = await idbCount(IDB_STORE_EN);
     const countFr = await idbCount(IDB_STORE_FR);
-    dbMeta = await idbGetMeta("meta");
+    appState.dbMeta = await idbGetMeta("meta");
 
     if (countEn > 1000) {
-      // Base installée
-      dbReady = true;
-      window.dbReady = true;
+      appState.dbReady = true;
       updateDbBadge(countEn, countFr);
       await loadMemCache();
       console.log(`[DB] Base locale chargée : ${countEn} EN, ${countFr} FR`);
     } else {
-      dbReady = false;
-      window.dbReady = false;
+      appState.dbReady = false;
       showInstallBanner();
     }
   } catch (err) {
     console.error("[DB] Init échouée", err);
-    dbReady = false;
-    window.dbReady = false;
+    appState.dbReady = false;
     showInstallBanner();
   }
 }
 
 async function loadMemCache() {
-  // Charge tout en mémoire pour accès synchrone ultra-rapide
   const [en, fr] = await Promise.all([
     idbGetAll(IDB_STORE_EN),
     idbGetAll(IDB_STORE_FR),
@@ -242,7 +286,7 @@ async function loadMemCache() {
   fr.forEach((c) => memCacheFr.set(String(c.id), c));
   console.log(`[DB] Cache mémoire : ${memCacheEn.size} EN, ${memCacheFr.size} FR`);
 
-  // Expose pour cdb-translator.js
+  // Exposition pour cdb-translator.js
   window.memCacheEn = memCacheEn;
   window.memCacheFr = memCacheFr;
 }
@@ -280,37 +324,26 @@ async function downloadFullDatabase() {
   showDownloadProgress();
 
   try {
-    // 1) EN
     updateProgressText("Téléchargement de la base anglaise…", 5);
     const enCards = await fetchAllCards(null, (pct) => {
-      updateProgressText(
-        `Téléchargement EN… ${pct}%`,
-        Math.round(pct * 0.4)
-      );
+      updateProgressText(`Téléchargement EN… ${pct}%`, Math.round(pct * 0.4));
     });
     console.log(`[DB] ${enCards.length} cartes EN reçues`);
 
-    // 2) FR
     updateProgressText("Téléchargement de la base française…", 50);
     const frCards = await fetchAllCards("fr", (pct) => {
-      updateProgressText(
-        `Téléchargement FR… ${pct}%`,
-        Math.round(50 + pct * 0.3)
-      );
+      updateProgressText(`Téléchargement FR… ${pct}%`, Math.round(50 + pct * 0.3));
     });
     console.log(`[DB] ${frCards.length} cartes FR reçues`);
 
-    // 3) Stockage EN
     updateProgressText("Stockage de la base anglaise…", 80);
     await idbClear(IDB_STORE_EN);
     await idbPutAll(IDB_STORE_EN, enCards);
 
-    // 4) Stockage FR
     updateProgressText("Stockage de la base française…", 90);
     await idbClear(IDB_STORE_FR);
     await idbPutAll(IDB_STORE_FR, frCards);
 
-    // 5) Métadonnées
     let version = "unknown";
     try {
       const verRes = await fetch(API_DBVER);
@@ -327,13 +360,11 @@ async function downloadFullDatabase() {
       countFr: frCards.length,
     };
     await idbSetMeta("meta", meta);
-    dbMeta = meta;
+    appState.dbMeta = meta;
 
-    // 6) Activation
     updateProgressText("Chargement en mémoire…", 98);
     await loadMemCache();
-    dbReady = true;
-    window.dbReady = true;
+    appState.dbReady = true;
     updateDbBadge(enCards.length, frCards.length);
 
     updateProgressText("✅ Base installée !", 100);
@@ -351,10 +382,6 @@ async function downloadFullDatabase() {
   }
 }
 
-/**
- * Télécharge TOUTES les cartes. L'API peut renvoyer un très gros JSON.
- * On gère la progression via la taille du stream (Content-Length + chunks).
- */
 async function fetchAllCards(language, onProgress) {
   const url = new URL(API_BASE);
   if (language) url.searchParams.set("language", language);
@@ -377,7 +404,6 @@ async function fetchAllCards(language, onProgress) {
     }
   }
 
-  // Reconstitue le JSON
   const blob = new Blob(chunks);
   const text = await blob.text();
   const data = JSON.parse(text);
@@ -421,7 +447,7 @@ function hideDownloadProgress() {
 // SYNCHRONISATION
 // ============================================================================
 async function syncDatabase(force = false) {
-  if (!dbReady) {
+  if (!appState.dbReady) {
     await downloadFullDatabase();
     return;
   }
@@ -435,7 +461,7 @@ async function syncDatabase(force = false) {
     if (!res.ok) return;
     const data = await res.json();
     const remoteVer = data.database_version || "unknown";
-    if (dbMeta && dbMeta.version !== remoteVer) {
+    if (appState.dbMeta && appState.dbMeta.version !== remoteVer) {
       toast("Nouvelle version de la base disponible. Sync en cours…", "info");
       await downloadFullDatabase();
     } else {
@@ -448,7 +474,7 @@ async function syncDatabase(force = false) {
 }
 
 // ============================================================================
-// RATE LIMITER + FETCH API (fallback)
+// RATE LIMITER + FETCH API (fallback YGOPRODeck)
 // ============================================================================
 const apiQueue = [];
 let apiBusy = false;
@@ -526,21 +552,92 @@ async function apiFetchCards(params, signal) {
   return data.data || [];
 }
 
+/**
+ * Récupère plusieurs cartes par ID en UNE ou plusieurs requêtes batchées.
+ * Utilise BATCH_ID_LIMIT (50) pour respecter la limite de l'API.
+ */
+async function getCardsByIds(ids, language) {
+  if (!ids.length) return new Map();
+
+  const results = new Map();
+  const uncached = [];
+  const cache = language === "fr" ? cardFrByIdCache : cardByIdCache;
+
+  // 1. Vérifier les caches
+  for (const id of ids) {
+    const key = String(id);
+    if (cache.has(key)) {
+      results.set(key, cache.get(key));
+    } else {
+      uncached.push(key);
+    }
+  }
+
+  if (!uncached.length) return results;
+
+  // 2. Batching par 50
+  for (let i = 0; i < uncached.length; i += BATCH_ID_LIMIT) {
+    const chunk = uncached.slice(i, i + BATCH_ID_LIMIT);
+    const params = { id: chunk.join(",") };
+    if (language === "fr") params.language = "fr";
+
+    try {
+      const cards = await apiFetchCards(params);
+      for (const card of cards) {
+        const key = String(card.id);
+        cache.set(key, card);
+        results.set(key, card);
+      }
+      // Les IDs non retournés sont "introuvables" → on les marque null
+      for (const id of chunk) {
+        if (!results.has(id)) results.set(id, null);
+      }
+    } catch (err) {
+      console.warn("[API] Batch échoué", err);
+    }
+  }
+
+  return results;
+}
+
 // ============================================================================
-// RECHERCHE (locale si base dispo, sinon API)
+// RECHERCHE (locale / API / Yugipedia)
 // ============================================================================
 function normalizeForSearch(str) {
   return String(str || "")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, ""); // enlève les accents
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
-async function searchCards(query, lang = "auto") {
-  if (dbReady) {
-    return searchLocal(query, lang);
+async function searchCards(query, lang = "auto", allowYugipedia = false) {
+  // 1. Base locale
+  if (appState.dbReady) {
+    const local = searchLocal(query, lang);
+    if (local.cards.length) return local;
+  } else {
+    // 2. API YGOPRODeck
+    const remote = await searchRemote(query, lang);
+    if (remote.cards.length) return remote;
   }
-  return searchRemote(query, lang);
+
+  // 3. Fallback Yugipedia
+  if (allowYugipedia && window.yugipediaSearch && query.length >= 3) {
+    try {
+      const yugiCards = await window.yugipediaSearch(query);
+      if (yugiCards && yugiCards.length) {
+        return {
+          cards: yugiCards,
+          usedLanguage: "yugipedia",
+          source: "yugipedia",
+        };
+      }
+    } catch (e) {
+      console.warn("[Yugipedia] Fallback recherche échoué", e);
+    }
+  }
+
+  return { cards: [], usedLanguage: lang === "auto" ? "fr" : lang };
 }
 
 function searchLocal(query, lang = "auto") {
@@ -598,27 +695,32 @@ async function searchRemote(query, lang) {
 // ============================================================================
 async function getCardById(id, language) {
   const key = String(id);
-  if (dbReady) {
+
+  // Les cartes Yugipedia n'ont pas de variante FR/EN séparée dans notre cache.
+  // Le code appelant doit gérer le cas en amont (voir showCard, generateJsonForCard).
+  if (key.startsWith("yugi-")) return null;
+
+  if (appState.dbReady) {
     if (language === "fr") return memCacheFr.get(key) || null;
     if (!language) return memCacheEn.get(key) || null;
     return null;
   }
-  // Fallback API
-  if (!language) {
-    if (cardByIdCache.has(key)) return cardByIdCache.get(key);
-    const cards = await apiFetchCards({ id: key });
+
+  // Mode API : 1 requête individuelle (pour usage ponctuel)
+  // Pour du bulk, utiliser getCardsByIds()
+  const cache = language === "fr" ? cardFrByIdCache : cardByIdCache;
+  if (cache.has(key)) return cache.get(key);
+
+  try {
+    const params = { id: key };
+    if (language === "fr") params.language = "fr";
+    const cards = await apiFetchCards(params);
     const card = cards[0] || null;
-    if (card) cardByIdCache.set(key, card);
+    if (card) cache.set(key, card);
     return card;
+  } catch (err) {
+    return null;
   }
-  if (language === "fr") {
-    if (cardFrByIdCache.has(key)) return cardFrByIdCache.get(key);
-    const cards = await apiFetchCards({ id: key, language: "fr" });
-    const card = cards[0] || null;
-    cardFrByIdCache.set(key, card);
-    return card;
-  }
-  return null;
 }
 
 // ============================================================================
@@ -641,12 +743,34 @@ themeToggle.addEventListener("click", () => {
 });
 
 // ============================================================================
-// MODAL À PROPOS
+// MODAL À PROPOS + CACHE YUGIPEDIA
 // ============================================================================
-aboutBtn.addEventListener("click", () => aboutModal.classList.add("open"));
+aboutBtn.addEventListener("click", () => {
+  aboutModal.classList.add("open");
+  refreshYugiCacheStats();
+});
 aboutClose.addEventListener("click", closeAbout);
 aboutModal.addEventListener("click", (e) => { if (e.target === aboutModal) closeAbout(); });
 function closeAbout() { aboutModal.classList.remove("open"); }
+
+async function refreshYugiCacheStats() {
+  if (!yugiCacheStatsEl || !window.YugipediaAPI) return;
+  try {
+    const stats = await window.YugipediaAPI.getYugipediaCacheStats();
+    yugiCacheStatsEl.textContent = `${stats.total} entrées en cache (${stats.cards} cartes, ${stats.searches} recherches)`;
+  } catch (e) {
+    yugiCacheStatsEl.textContent = "";
+  }
+}
+
+if (clearYugiCacheBtn) {
+  clearYugiCacheBtn.addEventListener("click", async () => {
+    if (!window.YugipediaAPI) return;
+    await window.YugipediaAPI.clearYugipediaCache();
+    toast("Cache Yugipedia vidé", "ok");
+    refreshYugiCacheStats();
+  });
+}
 
 // ============================================================================
 // TABS
@@ -667,7 +791,11 @@ function toast(msg, kind = "info") {
   const el = document.createElement("div");
   el.className = "toast " + kind;
   const icon = kind === "ok" ? "✅" : kind === "err" ? "❌" : "ℹ️";
-  el.innerHTML = `<span>${icon}</span><span>${escapeHtml(msg)}</span>`;
+  const text = String(msg);
+  const truncated = text.length > TOAST_MAX_LENGTH
+    ? text.slice(0, TOAST_MAX_LENGTH) + "…"
+    : text;
+  el.innerHTML = `<span>${icon}</span><span>${escapeHtml(truncated)}</span>`;
   toastsEl.appendChild(el);
   setTimeout(() => {
     el.style.transition = "opacity 0.3s, transform 0.3s";
@@ -675,6 +803,39 @@ function toast(msg, kind = "info") {
     el.style.transform = "translateX(40px)";
     setTimeout(() => el.remove(), 300);
   }, 2800);
+}
+
+// ============================================================================
+// CHECKBOXES YUGIPEDIA — SYNCHRONISATION
+// ============================================================================
+function syncYugipediaCheckboxes() {
+  if (!window.YugipediaAPI) return;
+  const enabled = window.YugipediaAPI.isYugipediaEnabled();
+  [searchYugipediaCb, deckYugipediaCb, cdbYugipediaCb].forEach((cb) => {
+    if (cb) cb.checked = enabled;
+  });
+}
+
+function bindYugipediaCheckbox(cb) {
+  if (!cb || !window.YugipediaAPI) return;
+  cb.addEventListener("change", () => {
+    window.YugipediaAPI.setYugipediaEnabled(cb.checked);
+    toast(
+      cb.checked ? "Fallback Yugipedia activé" : "Fallback Yugipedia désactivé",
+      cb.checked ? "ok" : "info"
+    );
+  });
+}
+
+bindYugipediaCheckbox(searchYugipediaCb);
+bindYugipediaCheckbox(deckYugipediaCb);
+bindYugipediaCheckbox(cdbYugipediaCb);
+syncYugipediaCheckboxes();
+
+window.addEventListener("yugipedia-toggle", syncYugipediaCheckboxes);
+
+function isYugipediaEnabled() {
+  return window.YugipediaAPI ? window.YugipediaAPI.isYugipediaEnabled() : false;
 }
 
 // ============================================================================
@@ -708,15 +869,18 @@ async function search(query) {
   submitBtn.disabled = true;
 
   const lang = getSearchLanguage();
+  const allowYugi = isYugipediaEnabled();
 
   try {
-    const { cards, usedLanguage } = await searchCards(query, lang);
+    const { cards, usedLanguage, source } = await searchCards(query, lang, allowYugi);
     if (!cards.length) {
       resultsCountEl.textContent = "Aucune carte trouvée.";
       return;
     }
     resultsCountEl.textContent = `${cards.length} résultat${cards.length > 1 ? "s" : ""}`;
-    resultsLangEl.textContent = langBadge(usedLanguage);
+    resultsLangEl.textContent = source === "yugipedia"
+      ? "🟣 trouvés sur Yugipedia"
+      : langBadge(usedLanguage);
     resultsLangEl.classList.remove("hidden");
     renderResults(cards);
   } catch (err) {
@@ -756,8 +920,9 @@ function buildCardTile(card) {
   tile.setAttribute("role", "button");
 
   const img = card.card_images && card.card_images[0];
-  const imgHtml = img
-    ? `<img src="${img.image_url_cropped}" alt="${escapeHtml(card.name)}" loading="lazy">`
+  const imgUrl = img ? (img.image_url_cropped || img.image_url) : "";
+  const imgHtml = imgUrl
+    ? `<img src="${imgUrl}" alt="${escapeHtml(card.name)}" loading="lazy">`
     : `<span>🃏</span>`;
 
   const gemClass = card.attribute ? `gem ${card.attribute.toUpperCase()}` : "";
@@ -766,6 +931,9 @@ function buildCardTile(card) {
     ? `<span class="stars">${"★".repeat(Math.min(card.level, 12))}</span>`
     : "";
   const typeLabel = getTypeLabel(card);
+  const yugiBadge = card._source === "yugipedia"
+    ? `<span class="badge yugi" title="Traduit via Yugipedia">🟣 Yugipedia</span>`
+    : "";
 
   tile.innerHTML = `
     <div class="card-tile-img">
@@ -774,7 +942,7 @@ function buildCardTile(card) {
         <div class="overlay-actions">
           <button class="mini-btn" data-act="open" type="button">Voir</button>
           <button class="mini-btn" data-act="json" type="button">JSON</button>
-          ${img ? `<button class="mini-btn" data-act="img" type="button">IMG</button>` : ""}
+          ${imgUrl ? `<button class="mini-btn" data-act="img" type="button">IMG</button>` : ""}
         </div>
       </div>
     </div>
@@ -783,15 +951,16 @@ function buildCardTile(card) {
       <div class="card-tile-meta">
         ${gem} ${stars}
         <span class="type-tag">${escapeHtml(typeLabel)}</span>
+        ${yugiBadge}
       </div>
     </div>`;
 
   tile.addEventListener("click", (e) => {
     const act = e.target.dataset.act;
     if (act === "json") { showCardAndCopyJson(card); return; }
-    if (act === "img" && img) {
+    if (act === "img" && imgUrl) {
       const a = document.createElement("a");
-      a.href = img.image_url_cropped;
+      a.href = imgUrl;
       a.download = `${sanitizeFilename(card.name)}.jpg`;
       a.target = "_blank";
       a.click();
@@ -832,6 +1001,7 @@ async function showCard(card) {
   drawerBackdrop.classList.add("open");
 
   const img = card.card_images && card.card_images[0];
+  const imgUrl = img ? (img.image_url_cropped || img.image_url) : "";
   let showingCropped = true;
 
   const gemClass = card.attribute ? `gem ${card.attribute.toUpperCase()}` : "";
@@ -841,30 +1011,37 @@ async function showCard(card) {
     : "";
   const typeLabel = getTypeLabel(card);
 
-  let json;
-  let frCard = null;
+  // ⚡ On récupère enCard UNE SEULE FOIS et on le passe à generateJsonForCard
+  //    pour éviter un appel API dupliqué en mode sans base locale.
   let enCard = null;
+  let frCard = null;
+  if (card._source !== "yugipedia") {
+    enCard = await getCardById(card.id, null).catch(() => null);
+    frCard = await getCardById(card.id, "fr").catch(() => null);
+  }
+
+  let json;
   try {
-    [json, frCard, enCard] = await Promise.all([
-      generateJsonForCard(card),
-      getCardById(card.id, "fr").catch(() => null),
-      getCardById(card.id, null).catch(() => null),
-    ]);
+    json = await generateJsonForCard(card, undefined, enCard);
   } catch (err) {
     console.error(err);
     json = buildYgoproJson(card);
   }
 
   const jsonString = JSON.stringify(json, null, 2);
+  const yugiNote = card._source === "yugipedia"
+    ? `<p style="color:#b88ae0; font-size:0.82rem; margin-top:8px;">🟣 Source : Yugipedia (cache 30j)</p>`
+    : "";
 
   drawerBody.innerHTML = `
     <img class="drawer-image" id="drawer-img" alt="${escapeHtml(card.name)}"
-         src="${img ? img.image_url_cropped : ""}">
+         src="${imgUrl}">
     <div class="drawer-meta">
       ${gem} ${stars}
       <span class="type-tag" style="background:var(--surface-3); color:var(--text);">${escapeHtml(typeLabel)}</span>
       <span>· ID ${card.id}</span>
     </div>
+    ${yugiNote}
     <div class="drawer-actions">
       <button class="btn" id="drawer-copy-url" type="button">🔗 URL image</button>
       <button class="btn" id="drawer-toggle-img" type="button">🖼️ Carte complète</button>
@@ -890,7 +1067,7 @@ async function showCard(card) {
 
   function applyImage() {
     if (!img) return;
-    const url = showingCropped ? img.image_url_cropped : img.image_url;
+    const url = showingCropped ? (img.image_url_cropped || img.image_url) : (img.image_url || img.image_url_cropped);
     drawerImg.src = url;
     downloadImgBtn.href = url;
     downloadImgBtn.setAttribute("download", `${sanitizeFilename(card.name)}${showingCropped ? "" : "-complete"}.jpg`);
@@ -899,7 +1076,8 @@ async function showCard(card) {
   applyImage();
   toggleImgBtn.addEventListener("click", () => { showingCropped = !showingCropped; applyImage(); });
   copyUrlBtn.addEventListener("click", () => {
-    copyTextToClipboard(showingCropped ? img.image_url_cropped : img.image_url, copyUrlBtn, "🔗 URL image");
+    const url = showingCropped ? (img.image_url_cropped || img.image_url) : (img.image_url || img.image_url_cropped);
+    copyTextToClipboard(url, copyUrlBtn, "🔗 URL image");
   });
 
   const row = document.getElementById("json-name-row");
@@ -921,7 +1099,7 @@ async function showCard(card) {
       let newName = card.name;
       if (val === "fr" && frCard) newName = frCard.name;
       if (val === "en" && enCard) newName = enCard.name;
-      const newJson = await generateJsonForCard(card, newName);
+      const newJson = await generateJsonForCard(card, newName, enCard);
       document.getElementById("drawer-json").value = JSON.stringify(newJson, null, 2);
       drawerTitle.textContent = newName;
     });
@@ -951,12 +1129,22 @@ document.addEventListener("keydown", (e) => {
 // ============================================================================
 // GÉNÉRATION JSON
 // ============================================================================
-async function generateJsonForCard(card, overrideName) {
-  let structural = structuralCardCache.get(card.id);
+async function generateJsonForCard(card, overrideName, providedStructural) {
+  // Cas Yugipedia : pas d'ID Konami, pas de variante structurelle séparée
+  if (card._source === "yugipedia") {
+    return buildYgoproJson({
+      ...card,
+      name: overrideName || card.name,
+      desc: card.desc || card._descs?.fr || card._descs?.en || "",
+    });
+  }
+
+  // ⚡ Réutiliser la carte structurelle fournie (évite un appel API dupliqué)
+  let structural = providedStructural || structuralCardCache.get(card.id);
   if (!structural) {
     try {
       structural = (await getCardById(card.id, null)) || card;
-      structuralCardCache.set(card.id, structural);
+      cacheStructural(card.id, structural);
     } catch (err) {
       structural = card;
     }
@@ -970,6 +1158,18 @@ async function generateJsonForCard(card, overrideName) {
     displayRace: card.race,
   };
   return buildYgoproJson(merged);
+}
+
+/**
+ * Cache LRU simple pour les cartes structurelles.
+ * Évite la croissance illimitée de structuralCardCache.
+ */
+function cacheStructural(id, card) {
+  if (structuralCardCache.size >= MAX_STRUCTURAL_CACHE) {
+    const firstKey = structuralCardCache.keys().next().value;
+    structuralCardCache.delete(firstKey);
+  }
+  structuralCardCache.set(id, card);
 }
 
 function buildYgoproJson(card) {
@@ -1171,11 +1371,13 @@ document.getElementById("deck-clear").addEventListener("click", () => {
   progressWrap.classList.remove("visible");
 });
 
-// Recherche d'un nom par correspondance exacte puis fuzzy (local ou API)
 async function findCardByName(name, lang) {
-  const { cards } = await searchCards(name, lang);
+  const allowYugi = isYugipediaEnabled();
+  const { cards } = await searchCards(name, lang, allowYugi);
   if (!cards.length) return null;
-  const exact = cards.find((c) => c.name.toLowerCase() === name.toLowerCase());
+  // ⚡ Comparaison normalisée (gère tirets, espaces, accents)
+  const normalizedTarget = normalizeForSearch(name);
+  const exact = cards.find((c) => normalizeForSearch(c.name) === normalizedTarget);
   return exact || cards[0];
 }
 
@@ -1189,7 +1391,7 @@ deckGenerateBtn.addEventListener("click", async () => {
   progressWrap.classList.add("visible");
   progressFill.style.width = "0%";
   progressPct.textContent = "0%";
-  deckStatusEl.textContent = dbReady ? "Recherche locale…" : "Recherche via API…";
+  deckStatusEl.textContent = appState.dbReady ? "Recherche locale…" : "Recherche via API…";
 
   const itemEls = names.map((name) => {
     const li = document.createElement("li");
@@ -1206,7 +1408,6 @@ deckGenerateBtn.addEventListener("click", async () => {
   const generatedCards = [];
   const resolved = new Map();
 
-  // Résolution
   const uniqueNames = [...new Set(names)];
   let done = 0;
   for (const n of uniqueNames) {
@@ -1223,7 +1424,19 @@ deckGenerateBtn.addEventListener("click", async () => {
     progressLabel.textContent = `Recherche ${done} / ${uniqueNames.length} · ${n.slice(0, 30)}…`;
   }
 
-  // Génération
+  // ⚡ Pré-récupération en batch des variantes FR (mode API uniquement)
+  if (!appState.dbReady) {
+    const idsNeedingFr = [];
+    for (const card of resolved.values()) {
+      if (card._source !== "yugipedia") idsNeedingFr.push(card.id);
+    }
+    if (idsNeedingFr.length) {
+      try {
+        await getCardsByIds(idsNeedingFr, "fr");
+      } catch (e) { /* toléré */ }
+    }
+  }
+
   for (let i = 0; i < names.length; i++) {
     const name = names[i];
     const li = itemEls[i];
@@ -1237,9 +1450,10 @@ deckGenerateBtn.addEventListener("click", async () => {
           filename: `${sanitizeFilename(found.name)}.json`,
           json: JSON.stringify(json, null, 2),
         });
-        // Version FR si dispo (pour CSV)
-        const fr = await getCardById(found.id, "fr");
-        const structural = structuralCardCache.get(found.id) || found;
+        const fr = found._source === "yugipedia" ? null : await getCardById(found.id, "fr");
+        const structural = found._source === "yugipedia"
+          ? found
+          : (structuralCardCache.get(found.id) || found);
         generatedCards.push({
           ...structural,
           name: (fr && fr.name) || found.name,
@@ -1248,7 +1462,8 @@ deckGenerateBtn.addEventListener("click", async () => {
           monster_desc: found.monster_desc,
           displayRace: found.race,
         });
-        setDeckItemStatus(li, "ok", "✅ OK");
+        setDeckItemStatus(li, found._source === "yugipedia" ? "info" : "ok",
+          found._source === "yugipedia" ? "🟣 Yugipedia" : "✅ OK");
       } catch (err) {
         console.error(err);
         setDeckItemStatus(li, "err", "❌ Erreur");
@@ -1372,6 +1587,7 @@ function buildCsvRow(card) {
   const isLink = baseFrame === "link";
   const links = buildLinkMarkers(card);
   const img = card.card_images && card.card_images[0];
+  const imgUrl = img ? (img.image_url_cropped || img.image_url) : "";
 
   const values = {
     Format: "tcg",
@@ -1380,7 +1596,7 @@ function buildCsvRow(card) {
     Attribute: buildAttributeInternal(card),
     Star: String(card.level || card.linkval || ""),
     "Spell/Trap Icon": buildIconInternal(card),
-    "Art Link": img ? img.image_url_cropped : "",
+    "Art Link": imgUrl,
     "Type Ability": buildTypeLine(card),
     Effect: buildEffectText(card),
     "Set Id": String(card.id || ""),
@@ -1460,7 +1676,7 @@ translateRunBtn.addEventListener("click", async () => {
   const dst = getTranslateDst();
 
   translateRunBtn.disabled = true;
-  translateStatusEl.textContent = dbReady ? "Analyse locale…" : "Analyse via API…";
+  translateStatusEl.textContent = appState.dbReady ? "Analyse locale…" : "Analyse via API…";
   translationResultEl.innerHTML = "";
   translationResultEl.classList.add("hidden");
   translationActionsEl.classList.add("hidden");
@@ -1496,6 +1712,20 @@ translateRunBtn.addEventListener("click", async () => {
     translateStatusEl.textContent = `Résolution ${done} / ${uniqueNames.length}…`;
   }
 
+  // ⚡ Batch des variantes cibles en mode API
+  const targetLang = dst === "fr" ? "fr" : null;
+  if (!appState.dbReady) {
+    const idsToResolve = [];
+    for (const resolved of resolvedMap.values()) {
+      if (resolved._source !== "yugipedia") idsToResolve.push(resolved.id);
+    }
+    if (idsToResolve.length) {
+      try {
+        await getCardsByIds(idsToResolve, targetLang);
+      } catch (e) { /* toléré */ }
+    }
+  }
+
   let okCount = 0;
   let totalCards = 0;
 
@@ -1507,12 +1737,23 @@ translateRunBtn.addEventListener("click", async () => {
 
     if (!resolved) { r.status = "err"; continue; }
 
+    if (resolved._source === "yugipedia") {
+      r.status = "ok";
+      r.translated = resolved.name;
+      r.source = "yugipedia";
+      okCount++;
+      continue;
+    }
+
     let target = null;
-    if (dbReady) {
-      target = dst === "fr" ? memCacheFr.get(String(resolved.id)) : memCacheEn.get(String(resolved.id));
+    if (appState.dbReady) {
+      target = dst === "fr"
+        ? memCacheFr.get(String(resolved.id))
+        : memCacheEn.get(String(resolved.id));
     } else {
-      try { target = await getCardById(resolved.id, dst === "fr" ? "fr" : null); }
-      catch (e) { target = null; }
+      // ⚡ Utiliser le cache batch pré-rempli
+      const cache = targetLang === "fr" ? cardFrByIdCache : cardByIdCache;
+      target = cache.get(String(resolved.id)) || null;
     }
 
     if (!target) {
@@ -1547,7 +1788,9 @@ translateRunBtn.addEventListener("click", async () => {
       badge = '<span class="badge warn">⚠️ pas de trad.</span>';
       translated = `<span style="color:var(--text-muted)">${escapeHtml(r.translated || r.name)}</span>`;
     } else {
-      badge = '<span class="badge ok">✅</span>';
+      badge = r.source === "yugipedia"
+        ? '<span class="badge yugi">🟣 Yugipedia</span>'
+        : '<span class="badge ok">✅</span>';
       translated = `<span class="translated">${escapeHtml(r.translated)}</span>`;
     }
     translationResultEl.innerHTML += `
@@ -1603,7 +1846,8 @@ function downloadBlob(data, filename, mime) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // ⚠️ Attendre que le download soit initié avant de révoquer (Firefox)
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function sanitizeFilename(name) { return name.replace(/[\\/:*?"<>|]/g, "").trim(); }
 function escapeHtml(str) {
@@ -1619,20 +1863,79 @@ if (dbBannerSkip) dbBannerSkip.addEventListener("click", () => {
   hideInstallBanner();
   toast("Mode API activé. Tu peux installer la base plus tard.", "info");
 });
-if (dbSyncBtn) dbSyncBtn.addEventListener("click", () => {
-  if (confirm("Rafraîchir la base locale ? (~30 Mo, ~20s)")) {
+
+// ⚡ Clic = vérification intelligente. Shift+clic ou clic droit = force.
+if (dbSyncBtn) {
+  dbSyncBtn.addEventListener("click", (e) => {
+    // Shift+clic = force
+    syncDatabase(e.shiftKey === true);
+  });
+  dbSyncBtn.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
     syncDatabase(true);
-  } else {
-    syncDatabase(false);
-  }
-});
+  });
+  dbSyncBtn.title = "Synchroniser (Shift+clic ou clic droit pour forcer)";
+}
+
+// ============================================================================
+// EXPOSITION POUR cdb-translator.js
+// ============================================================================
+window.appState = appState;
+window.idbGet = idbGet;
+window.idbPut = idbPut;
+window.idbDelete = idbDelete;
+window.idbGetAll = idbGetAll;
+window.IDB_STORE_YUGI_CARDS = IDB_STORE_YUGI_CARDS;
+window.IDB_STORE_YUGI_SEARCH = IDB_STORE_YUGI_SEARCH;
+
+// ============================================================================
+// MODAL DE CONFIRMATION CUSTOM
+// ============================================================================
+function showConfirm(message, title = "Confirmation") {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("confirm-modal");
+    const titleEl = document.getElementById("confirm-title");
+    const msgEl = document.getElementById("confirm-message");
+    const yesBtn = document.getElementById("confirm-yes");
+    const noBtn = document.getElementById("confirm-no");
+
+    if (!modal || !yesBtn || !noBtn) {
+      resolve(window.confirm(message));
+      return;
+    }
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    modal.classList.add("open");
+
+    const cleanup = (result) => {
+      modal.classList.remove("open");
+      yesBtn.removeEventListener("click", onYes);
+      noBtn.removeEventListener("click", onNo);
+      modal.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onKey);
+      resolve(result);
+    };
+    const onYes = () => cleanup(true);
+    const onNo = () => cleanup(false);
+    const onBackdrop = (e) => { if (e.target === modal) cleanup(false); };
+    const onKey = (e) => { if (e.key === "Escape") cleanup(false); };
+
+    yesBtn.addEventListener("click", onYes);
+    noBtn.addEventListener("click", onNo);
+    modal.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onKey);
+  });
+}
+
+window.showConfirm = showConfirm;
 
 // ============================================================================
 // DÉMARRAGE
 // ============================================================================
 (async function boot() {
   await initDatabase();
-  if (dbReady) {
+  if (appState.dbReady) {
     toast("Base locale prête ⚡", "ok");
   } else {
     toast("Mode API. Installe la base pour plus de vitesse.", "info");

@@ -24,6 +24,8 @@
   --warning-soft:  rgba(224, 182, 76, 0.14);
   --danger:        #e07a7a;
   --danger-soft:   rgba(224, 122, 122, 0.14);
+  --yugi:          #b88ae0;
+  --yugi-soft:     rgba(155, 107, 196, 0.15);
   --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
   --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
   --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
@@ -52,6 +54,8 @@
   --warning-soft:  rgba(166, 124, 0, 0.12);
   --danger:        #c33a3a;
   --danger-soft:   rgba(195, 58, 58, 0.12);
+  --yugi:          #6a3a9a;
+  --yugi-soft:     rgba(106, 58, 154, 0.12);
   --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
   --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
   --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
@@ -487,6 +491,77 @@ body {
   color: var(--gold);
   box-shadow: 0 0 10px var(--gold-glow);
 }
+
+/* ============================================================
+   SEARCH OPTION (checkbox générique : Yugipedia, etc.)
+   ============================================================ */
+.search-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+  position: relative;
+  z-index: 1;
+}
+
+.search-option:hover {
+  border-color: var(--yugi);
+  background: var(--yugi-soft);
+  color: var(--text);
+}
+
+.search-option input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface);
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: all 0.15s ease;
+  margin: 0;
+}
+
+.search-option input[type="checkbox"]:hover {
+  border-color: var(--yugi);
+}
+
+.search-option input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, var(--yugi), #8a5ac0);
+  border-color: var(--yugi);
+  box-shadow: 0 0 10px var(--yugi-soft);
+}
+
+.search-option input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 5px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.search-option input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--yugi);
+  outline-offset: 2px;
+}
+
+.search-option strong { color: var(--text); }
 
 /* ============================================================
    RÉSULTATS
@@ -949,6 +1024,16 @@ body {
   box-shadow: 0 0 8px var(--gold-glow);
 }
 
+/* 2ᵉ barre de progression (Yugipedia) — variante violette */
+#cdb-yugi-progress-wrap .progress-fill {
+  background: linear-gradient(90deg, #6a3a9a, var(--yugi), #d8b0f0);
+  box-shadow: 0 0 8px var(--yugi-soft);
+}
+
+#cdb-yugi-progress-wrap .progress-info {
+  color: var(--yugi);
+}
+
 .gen-list {
   list-style: none;
   margin: 0;
@@ -1027,6 +1112,10 @@ body {
 .badge.warn { background: var(--warning-soft); color: var(--warning); }
 .badge.err  { background: var(--danger-soft);  color: var(--danger); }
 .badge.info { background: var(--gold-soft);    color: var(--gold); }
+.badge.yugi {
+  background: var(--yugi-soft);
+  color: var(--yugi);
+}
 
 /* ============================================================
    TOASTS
@@ -1172,6 +1261,24 @@ body {
   color: var(--gold-light);
 }
 
+/* Stats cache Yugipedia dans le modal */
+#yugi-cache-stats {
+  color: var(--yugi) !important;
+  font-weight: 600;
+}
+
+#clear-yugi-cache {
+  border-color: var(--yugi);
+  color: var(--yugi);
+}
+
+#clear-yugi-cache:hover {
+  background: var(--yugi-soft);
+  border-color: var(--yugi);
+  color: var(--yugi);
+  box-shadow: 0 0 10px var(--yugi-soft);
+}
+
 .lang-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
@@ -1292,44 +1399,7 @@ body {
 }
 
 /* ============================================================
-   RESPONSIVE
-   ============================================================ */
-@media (max-width: 720px) {
-  .db-banner { flex-direction: column; }
-  .db-banner-actions { align-self: stretch; }
-  .db-banner-actions .btn,
-  .db-banner-actions .btn-primary { flex: 1; justify-content: center; }
-  .db-badge { display: none; }
-}
-
-@media (max-width: 640px) {
-  .container { padding: 20px 16px 60px; }
-  .hero h1 { font-size: 1.5rem; }
-  .app-header-inner { padding: 10px 16px; }
-  .brand-sub { display: none; }
-  .tabs { padding: 4px; }
-  .tab { padding: 10px 12px; font-size: 0.82rem; }
-  .search-bar { flex-direction: column; }
-  .results-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
-  .drawer { width: 100%; }
-  .toasts { left: 16px; right: 16px; bottom: 16px; }
-  .toast { max-width: none; }
-  .actions-row { flex-direction: column; align-items: stretch; }
-  .actions-row .btn,
-  .actions-row .btn-primary { width: 100%; justify-content: center; }
-}
-
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 10px;
-  border: 2px solid var(--bg);
-}
-::-webkit-scrollbar-thumb:hover { background: var(--gold); }
-
-/* ============================================================
-   CDB — OPTION MODE VAACT
+   CDB — OPTION MODE VAACT / YUGIPEDIA
    ============================================================ */
 .cdb-option {
   display: flex;
@@ -1350,7 +1420,12 @@ body {
   background: var(--gold-soft);
 }
 
-/* Case à cocher stylisée (au lieu du carré natif moche) */
+/* Variante Yugipedia (violette) */
+#cdb-yugipedia-wrap:hover {
+  border-color: var(--yugi);
+  background: var(--yugi-soft);
+}
+
 .cdb-option input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -1393,6 +1468,25 @@ body {
   outline-offset: 2px;
 }
 
+/* Variante Yugipedia : checkbox violette */
+#cdb-yugipedia-wrap input[type="checkbox"]:hover {
+  border-color: var(--yugi);
+}
+
+#cdb-yugipedia-wrap input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, var(--yugi), #8a5ac0);
+  border-color: var(--yugi);
+  box-shadow: 0 0 10px var(--yugi-soft);
+}
+
+#cdb-yugipedia-wrap input[type="checkbox"]:checked::after {
+  border-color: #fff;
+}
+
+#cdb-yugipedia-wrap input[type="checkbox"]:focus-visible {
+  outline-color: var(--yugi);
+}
+
 .cdb-option-label {
   color: var(--text);
   font-size: 0.9rem;
@@ -1405,7 +1499,10 @@ body {
   font-weight: 700;
 }
 
-/* Texte d'aide sous la case */
+#cdb-yugipedia-wrap .cdb-option-label strong {
+  color: var(--yugi);
+}
+
 .cdb-option-help {
   margin: 0 0 18px;
   padding: 0 4px;
@@ -1426,3 +1523,51 @@ body {
   font-size: 0.78rem;
   color: var(--gold-light);
 }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 720px) {
+  .db-banner { flex-direction: column; }
+  .db-banner-actions { align-self: stretch; }
+  .db-banner-actions .btn,
+  .db-banner-actions .btn-primary { flex: 1; justify-content: center; }
+  .db-badge { display: none; }
+}
+
+@media (max-width: 640px) {
+  .container { padding: 20px 16px 60px; }
+  .hero h1 { font-size: 1.5rem; }
+  .app-header-inner { padding: 10px 16px; }
+  .brand-sub { display: none; }
+  .tabs { padding: 4px; }
+  .tab { padding: 10px 12px; font-size: 0.82rem; }
+  .search-bar { flex-direction: column; }
+  .results-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .drawer { width: 100%; }
+  .toasts { left: 16px; right: 16px; bottom: 16px; }
+  .toast { max-width: none; }
+  .actions-row { flex-direction: column; align-items: stretch; }
+  .actions-row .btn,
+  .actions-row .btn-primary { width: 100%; justify-content: center; }
+
+  /* Options : checkbox plus compacte sur mobile */
+  .search-option,
+  .cdb-option {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+  .search-option span,
+  .cdb-option-label {
+    font-size: 0.82rem;
+  }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 10px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }

@@ -8,6 +8,11 @@
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par VAACT.
 //   On garde alors l'effet original (anglais VAACT) puis on ajoute en dessous
 //   l'effet officiel FR, préfixé de "(VAACT) ".
+//
+// Fallback Yugipedia (option, désactivé par défaut) :
+//   Si une carte est en anglais dans la base locale mais qu'une VF existe sur
+//   Yugipedia, on récupère la VF. Sinon, on interroge Yugipedia uniquement
+//   pour les cartes introuvables.
 // ============================================================================
 
 (() => {
@@ -20,6 +25,7 @@
   const SQL_CDN = "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3";
   const MAX_REPORT_LINES = 250;
   const YIELD_EVERY = 200;
+  const YUGI_CONFIRM_THRESHOLD = 50;
 
   // ==========================================================================
   // ÉTAT
@@ -33,6 +39,9 @@
     sqlReady: false,
     nameIndexFr: null,
     nameIndexEn: null,
+    missingNames: [],
+    cancelled: false,
+    running: false,
   };
 
   // ==========================================================================
@@ -49,6 +58,7 @@
     btnClear:     $("cdb-clear"),
     btnDownload:  $("cdb-download"),
     vaactMode:    $("cdb-vaact-mode"),
+    yugiMode:     $("cdb-yugipedia-mode"),
     progressWrap: $("cdb-progress-wrap"),
     progressLbl:  $("cdb-progress-label"),
     progressPct:  $("cdb-progress-pct"),
@@ -60,6 +70,12 @@
     statMissing:  $("cdb-stat-missing"),
     results:      $("cdb-results"),
     downloads:    $("cdb-downloads"),
+    yugiProgressWrap: $("cdb-yugi-progress-wrap"),
+    yugiLabel:        $("cdb-yugi-label"),
+    yugiPct:          $("cdb-yugi-pct"),
+    yugiFill:         $("cdb-yugi-fill"),
+    btnCancelYugi:    $("cdb-cancel-yugi"),
+    btnExportMissing: $("cdb-export-missing"),
   };
 
   // ==========================================================================
@@ -119,73 +135,191 @@
     console.log(`[CDB] Index construits : ${fr.size} FR, ${en.size} EN`);
   }
 
-  /**
-   * Compare deux textes d'effet en ignorant espaces/retours à la ligne.
-   * Retourne true si différents (= modifié par VAACT).
-   */
-  function descDiffers(a, b) {
-    const clean = (s) =>
-      String(s || "")
-        .replace(/\r\n/g, "\n")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
-    return clean(a) !== clean(b);
+  // ==========================================================================
+  // COMPARAISON D'EFFETS (VAACT) — ⚡ STRICTE ⚡
+  // ==========================================================================
+
+  function cleanDesc(s) {
+    return String(s || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
   }
 
-  /**
-   * Pour une carte du .cdb, essaie de trouver la version FR.
-   * Retourne :
-   *   { status: "translated", name, desc, vaact? }
-   *   { status: "en_only",   name, desc }
-   *   { status: "not_found" }
-   */
-  function resolveCard(localName, localDesc, vaactMode) {
+  function descDiffers(a, b) {
+    const ca = cleanDesc(a);
+    const cb = cleanDesc(b);
+    return ca !== cb;
+  }
+
+  // ==========================================================================
+  // RÉSOLUTION DE CARTE — ASYNC
+  // ==========================================================================
+
+  async function resolveCard(localName, localDesc, vaactMode, allowYugipedia) {
     const key = normalize(localName);
     if (!key) return { status: "not_found" };
 
-    // 1. Nom déjà FR officiel
+    // 1. Nom déjà FR officiel en base locale → parfait
     const frMatch = state.nameIndexFr.get(key);
     if (frMatch) {
       return {
         status: "translated",
         name: frMatch.name,
         desc: frMatch.desc || "",
+        source: "local",
       };
     }
 
-    // 2. Nom EN officiel → chercher la version FR via l'id Konami
+    // 2. Nom EN officiel en base locale
     const enMatch = state.nameIndexEn.get(key);
     if (enMatch) {
+      // 2a. Chercher la VF via l'ID Konami dans memCacheFr
       const frById = window.memCacheFr.get(String(enMatch.id));
       if (frById) {
-        // Détection modif VAACT : l'effet du cdb diffère-t-il de l'effet EN officiel ?
         const modified = vaactMode && descDiffers(localDesc, enMatch.desc);
-
         if (modified) {
           return {
             status: "translated",
             name: frById.name,
             desc: `(VAACT) ${localDesc || ""}\n\n${frById.desc || ""}`,
             vaact: true,
+            source: "local",
           };
         }
         return {
           status: "translated",
           name: frById.name,
           desc: frById.desc || "",
+          source: "local",
         };
       }
-      // Pas de trad FR → garder l'EN
+
+      // 2b. Pas de VF en base → essayer Yugipedia
+      if (allowYugipedia && window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
+        try {
+          const yugiCards = await window.yugipediaSearch(enMatch.name);
+          if (yugiCards && yugiCards.length) {
+            const exact = yugiCards.find((c) => normalize(c._names?.en || "") === key)
+                       || yugiCards.find((c) => normalize(c.name) === key)
+                       || yugiCards[0];
+
+            const frName = exact._names?.fr || "";
+            const frDesc = exact._descs?.fr || "";
+
+            if (frName && frName !== enMatch.name) {
+              const modified = vaactMode && descDiffers(localDesc, enMatch.desc);
+              if (modified) {
+                return {
+                  status: "translated",
+                  name: frName,
+                  desc: `(VAACT) ${localDesc || ""}\n\n${frDesc || enMatch.desc || ""}`,
+                  vaact: true,
+                  source: "yugipedia",
+                };
+              }
+              return {
+                status: "translated",
+                name: frName,
+                desc: frDesc || enMatch.desc || "",
+                source: "yugipedia",
+              };
+            }
+          }
+        } catch (err) {
+          if (err.message === "Annulé par l'utilisateur") throw err;
+          console.warn(`[CDB] Yugipedia VF échec pour "${enMatch.name}"`, err.message);
+        }
+      }
+
+      // 2c. Pas de VF trouvée → garder l'anglais
       return {
         status: "en_only",
         name: enMatch.name,
         desc: enMatch.desc || localDesc || "",
+        source: "local",
       };
     }
 
-    // 3. Carte custom inconnue
+    // 3. Carte pas trouvée en base → essayer Yugipedia
+    if (allowYugipedia && window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
+      try {
+        const yugiCards = await window.yugipediaSearch(localName);
+        if (yugiCards && yugiCards.length) {
+          const exact = yugiCards.find((c) => normalize(c.name) === key)
+                     || yugiCards.find((c) => normalize(c._names?.en || "") === key)
+                     || yugiCards[0];
+
+          const frName = exact._names?.fr || exact.name;
+          const frDesc = exact._descs?.fr || exact.desc || localDesc;
+          const enDesc = exact._descs?.en || "";
+
+          const modified = vaactMode && enDesc && descDiffers(localDesc, enDesc);
+
+          if (modified) {
+            return {
+              status: "translated",
+              name: frName,
+              desc: `(VAACT) ${localDesc || ""}\n\n${frDesc || ""}`,
+              vaact: true,
+              source: "yugipedia",
+            };
+          }
+
+          return {
+            status: "translated",
+            name: frName,
+            desc: frDesc || localDesc || "",
+            source: "yugipedia",
+          };
+        }
+      } catch (err) {
+        if (err.message === "Annulé par l'utilisateur") throw err;
+        console.warn(`[CDB] Yugipedia échec pour "${localName}"`, err.message);
+      }
+    }
+
     return { status: "not_found" };
+  }
+
+  // ==========================================================================
+  // RÉSOLUTION DE CARTE AVEC DONNÉES YUGIPEDIA PRÉ-CHARGÉES (batch)
+  // ==========================================================================
+  // ⚡ Utilise les résultats déjà récupérés par yugipediaSearchBatch()
+  //    pour éviter une 2ᵉ requête.
+
+  function resolveCardFromYugiCache(localName, localDesc, vaactMode, yugiCards) {
+    const key = normalize(localName);
+    if (!key) return { status: "not_found" };
+    if (!yugiCards || !yugiCards.length) return { status: "not_found" };
+
+    const exact = yugiCards.find((c) => normalize(c.name) === key)
+               || yugiCards.find((c) => normalize(c._names?.en || "") === key)
+               || yugiCards[0];
+
+    const frName = exact._names?.fr || exact.name;
+    const frDesc = exact._descs?.fr || exact.desc || localDesc;
+    const enDesc = exact._descs?.en || "";
+
+    const modified = vaactMode && enDesc && descDiffers(localDesc, enDesc);
+
+    if (modified) {
+      return {
+        status: "translated",
+        name: frName,
+        desc: `(VAACT) ${localDesc || ""}\n\n${frDesc || ""}`,
+        vaact: true,
+        source: "yugipedia",
+      };
+    }
+
+    return {
+      status: "translated",
+      name: frName,
+      desc: frDesc || localDesc || "",
+      source: "yugipedia",
+    };
   }
 
   // ==========================================================================
@@ -218,6 +352,10 @@
   }
 
   async function loadFile(file) {
+    if (state.running) {
+      toast("Une traduction est en cours. Attends ou annule.", "err");
+      return;
+    }
     resetUI();
     setStatus("Lecture du fichier…");
 
@@ -271,12 +409,22 @@
     }
 
     const vaactMode = dom.vaactMode ? dom.vaactMode.checked : false;
+    const yugiMode = dom.yugiMode ? dom.yugiMode.checked : false;
+
+    state.cancelled = false;
+    state.running = true;
+    state.missingNames = [];
+    if (window.resetYugipediaCancel) window.resetYugipediaCancel();
 
     dom.btnTranslate.disabled = true;
+    dom.btnClear.disabled = true;
     dom.results.innerHTML = "";
     dom.stats.classList.add("hidden");
     dom.downloads.classList.add("hidden");
     dom.progressWrap.classList.add("visible");
+    dom.yugiProgressWrap.classList.remove("visible");
+    dom.btnCancelYugi.classList.add("hidden");
+    dom.btnExportMissing.classList.add("hidden");
     setProgress(0, "Préparation de l'index…");
 
     try {
@@ -284,58 +432,164 @@
       await nextFrame();
 
       setProgress(5, "Lecture du .cdb…");
-      const rows = state.sqlite.exec(
-        "SELECT id, name, desc FROM texts"
-      )[0].values;
+      const rows = state.sqlite.exec("SELECT id, name, desc FROM texts")[0].values;
       const total = rows.length;
 
       const updates = [];
       const report = [];
+      const reportIndex = new Map();
+      const missingCards = [];
       let done = 0;
+      let doneYugi = 0;
       let missing = 0;
       let vaactCount = 0;
 
+      // ======================================================================
+      // PHASE 1 : Analyse locale (synchrone, pas de requête réseau)
+      // ======================================================================
       for (let i = 0; i < rows.length; i++) {
         const [localId, localName, localDesc] = rows[i];
-        const resolved = resolveCard(localName, localDesc, vaactMode);
+
+        // ⚡ On utilise resolveCard avec yugiMode=false pour skip Yugipedia
+        const resolved = await resolveCard(localName, localDesc, vaactMode, false);
 
         if (resolved.status === "translated") {
-          updates.push({
-            id: localId,
-            name: resolved.name,
-            desc: resolved.desc,
-          });
+          updates.push({ id: localId, name: resolved.name, desc: resolved.desc });
           done++;
           if (resolved.vaact) vaactCount++;
-          pushReport(report, {
+          pushReport(report, reportIndex, {
             id: localId,
             name: resolved.name,
             status: "ok",
             vaact: !!resolved.vaact,
+            source: resolved.source,
           });
         } else if (resolved.status === "en_only") {
           missing++;
-          pushReport(report, {
+          pushReport(report, reportIndex, {
             id: localId,
             name: resolved.name,
             status: "warn",
           });
         } else {
           missing++;
-          pushReport(report, {
+          missingCards.push({ id: localId, name: localName, desc: localDesc });
+          pushReport(report, reportIndex, {
             id: localId,
             name: localName,
             status: "warn",
           });
         }
 
-        if (i % YIELD_EVERY === 0) {
+        if (i % YIELD_EVERY === 0 || i === rows.length - 1) {
           setProgress(
-            5 + Math.round((i / total) * 80),
+            5 + Math.round((i / total) * 60),
             `Analyse ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`
           );
           await nextFrame();
         }
+
+        if (state.cancelled) break;
+      }
+
+      // ======================================================================
+      // PHASE 2 : BATCH Yugipedia pour les cartes manquantes
+      // ======================================================================
+      if (yugiMode && missingCards.length > 0 && !state.cancelled) {
+        if (missingCards.length > YUGI_CONFIRM_THRESHOLD) {
+          // ⚡ Avec le batch, c'est BEAUCOUP plus rapide
+          const estimatedSec = Math.ceil(missingCards.length / 50) + 2;
+          const message =
+            `⚠️ ${missingCards.length} cartes introuvables localement.\n\n` +
+            `Interroger Yugipedia (batch de 50) prendra ~${estimatedSec} seconde(s).\n\n` +
+            `Continuer ?`;
+          const ok = window.showConfirm
+            ? await window.showConfirm(message, "Fallback Yugipedia")
+            : confirm(message);
+          if (!ok) {
+            console.log("[CDB] Fallback Yugipedia annulé par l'utilisateur");
+            missingCards.length = 0;
+          }
+        }
+
+        if (missingCards.length > 0) {
+          dom.yugiProgressWrap.classList.add("visible");
+          dom.btnCancelYugi.classList.remove("hidden");
+          setYugiProgress(0, `Enrichissement Yugipedia (batch)…`);
+
+          const totalMissing = missingCards.length;
+
+          // ⚡ ÉTAPE 1 : Récupérer tous les noms UNIQUES
+          const uniqueNames = [...new Set(missingCards.map((c) => c.name))];
+          console.log(`[CDB] ⚡ BATCH : ${uniqueNames.length} noms uniques pour ${missingCards.length} cartes`);
+
+          // ⚡ ÉTAPE 2 : UNE SEULE FOIS, faire le batch de requêtes
+          let batchResults;
+          try {
+            batchResults = await window.yugipediaSearchBatch(uniqueNames);
+          } catch (err) {
+            console.error("[CDB] Erreur batch", err);
+            batchResults = new Map();
+          }
+
+          // ⚡ ÉTAPE 3 : Distribuer les résultats aux cartes
+          let yugiResolved = 0;
+          let yugiErrors = 0;
+
+          for (let i = 0; i < missingCards.length; i++) {
+            if (state.cancelled) break;
+
+            const card = missingCards[i];
+            const yugiCards = batchResults.get(card.name) || [];
+
+            if (yugiCards.length > 0) {
+              // ⚡ Utiliser les données pré-chargées (pas de requête supplémentaire)
+              const resolved = resolveCardFromYugiCache(
+                card.name, card.desc, vaactMode, yugiCards
+              );
+
+              if (resolved.status === "translated") {
+                updates.push({ id: card.id, name: resolved.name, desc: resolved.desc });
+                done++;
+                doneYugi++;
+                if (resolved.vaact) vaactCount++;
+
+                updateReport(reportIndex, card.id, {
+                  name: resolved.name,
+                  status: "ok",
+                  source: "yugipedia",
+                  vaact: !!resolved.vaact,
+                });
+
+                yugiResolved++;
+              } else {
+                state.missingNames.push(card.name);
+              }
+            } else {
+              state.missingNames.push(card.name);
+            }
+
+            const pct = Math.round(((i + 1) / totalMissing) * 100);
+            setYugiProgress(
+              pct,
+              `Yugipedia ${i + 1} / ${totalMissing}… (${yugiResolved} OK)`
+            );
+          }
+
+          dom.btnCancelYugi.classList.add("hidden");
+        }
+      }
+
+      if (state.cancelled) {
+        applyUpdates(state.sqlite, updates);
+        state.patched = state.sqlite.export();
+        renderResults(report, { total, done, missing, vaactCount, doneYugi });
+        dom.downloads.classList.remove("hidden");
+        if (state.missingNames.length > 0) {
+          dom.btnExportMissing.classList.remove("hidden");
+        }
+        toast("Traduction interrompue", "info");
+        return;
       }
 
       setProgress(88, "Application des traductions…");
@@ -345,13 +599,17 @@
       state.patched = state.sqlite.export();
 
       setProgress(100, "Terminé !");
-      renderResults(report, { total, done, missing, vaactCount });
+      renderResults(report, { total, done, missing, vaactCount, doneYugi });
       dom.downloads.classList.remove("hidden");
+      if (state.missingNames.length > 0) {
+        dom.btnExportMissing.classList.remove("hidden");
+      }
 
-      const suffix =
-        vaactMode && vaactCount > 0
-          ? ` · ${vaactCount} modifiée(s) VAACT`
-          : "";
+      const parts = [];
+      if (vaactMode && vaactCount > 0) parts.push(`${vaactCount} VAACT`);
+      if (doneYugi > 0) parts.push(`${doneYugi} via Yugipedia`);
+      const suffix = parts.length ? ` · ${parts.join(" · ")}` : "";
+
       setStatus(
         `✅ Terminé : ${done.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")} carte(s) traduite(s)${suffix}.`
       );
@@ -360,38 +618,71 @@
       console.error("[CDB] Erreur traduction", err);
       setStatus(`❌ Erreur : ${err.message}`);
     } finally {
+      state.running = false;
       dom.btnTranslate.disabled = false;
+      dom.btnClear.disabled = false;
+      dom.btnCancelYugi.classList.add("hidden");
     }
   }
 
-  function pushReport(report, entry) {
-    if (report.length < MAX_REPORT_LINES) report.push(entry);
+  // ==========================================================================
+  // RAPPORT
+  // ==========================================================================
+
+  function pushReport(report, reportIndex, entry) {
+    if (report.length < MAX_REPORT_LINES) {
+      report.push(entry);
+      reportIndex.set(entry.id, entry);
+    }
+  }
+
+  function updateReport(reportIndex, id, updates) {
+    const item = reportIndex.get(id);
+    if (item) Object.assign(item, updates);
   }
 
   function nextFrame() {
     return new Promise((r) => setTimeout(r, 0));
   }
 
+  // ==========================================================================
+  // APPLICATION SQL
+  // ==========================================================================
+
   function applyUpdates(db, updates) {
+    if (!updates.length) return;
+
     const columns = getColumns(db, "texts");
-    const setClauses = ["name = ?"];
-    if (columns.includes("desc")) setClauses.push("desc = ?");
-    // ⚠️ On ne touche PAS à str1 : DataEditorX/EDOPro l'utilisent pour
-    // d'autres usages (scripts, flags internes). On modifie seulement
-    // le nom et l'effet.
+    const hasDesc = columns.includes("desc");
+
+    const setClauses = hasDesc ? ["name = ?", "desc = ?"] : ["name = ?"];
 
     const stmt = db.prepare(
       `UPDATE texts SET ${setClauses.join(", ")} WHERE id = ?`
     );
+
     db.run("BEGIN TRANSACTION");
-    for (const u of updates) {
-      const params = [u.name];
-      if (columns.includes("desc")) params.push(u.desc);
-      params.push(u.id);
-      stmt.run(params);
+    try {
+      for (const u of updates) {
+        const name = String(u.name ?? "");
+        const desc = String(u.desc ?? "");
+        const id = parseInt(u.id, 10);
+
+        if (isNaN(id)) {
+          console.warn("[CDB] id invalide, skip:", u.id);
+          continue;
+        }
+
+        const params = hasDesc ? [name, desc, id] : [name, id];
+        stmt.run(params);
+      }
+      db.run("COMMIT");
+    } catch (err) {
+      db.run("ROLLBACK");
+      throw err;
+    } finally {
+      stmt.free();
     }
-    db.run("COMMIT");
-    stmt.free();
   }
 
   function getColumns(db, table) {
@@ -415,8 +706,30 @@
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ==========================================================================
+  // EXPORT DES CARTES NON TROUVÉES
+  // ==========================================================================
+
+  function exportMissing() {
+    if (!state.missingNames.length) {
+      toast("Aucune carte non trouvée à exporter.", "info");
+      return;
+    }
+    const header =
+      `# Cartes non trouvées — ${new Date().toLocaleString("fr-FR")}\n` +
+      `# ${state.missingNames.length} carte(s)\n` +
+      `# Source : ${state.file ? state.file.name : "inconnu"}\n\n`;
+    const content = header + state.missingNames.join("\n");
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const baseName = state.file ? state.file.name.replace(/\.cdb$/i, "") : "cdb";
+    triggerDownload(blob, `${baseName}_non_trouvees.txt`);
+    toast(`${state.missingNames.length} carte(s) exportée(s)`, "ok");
   }
 
   // ==========================================================================
@@ -461,6 +774,9 @@
     if (isOk && r.vaact) {
       badgeText = "Traduit (VAACT)";
       badgeClass = "info";
+    } else if (isOk && r.source === "yugipedia") {
+      badgeText = "🟣 Yugipedia";
+      badgeClass = "yugi";
     } else if (isOk) {
       badgeText = "Traduit";
       badgeClass = "ok";
@@ -483,14 +799,25 @@
     if (label) dom.progressLbl.textContent = label;
   }
 
+  function setYugiProgress(pct, label) {
+    if (!dom.yugiFill) return;
+    dom.yugiFill.style.width = pct + "%";
+    dom.yugiPct.textContent = pct + "%";
+    if (label) dom.yugiLabel.textContent = label;
+  }
+
   function setStatus(text) {
     dom.status.textContent = text;
   }
 
   function resetUI() {
+    if (state.running) return;
+
     state.file = null;
     state.sqlite = null;
     state.patched = null;
+    state.missingNames = [];
+    state.cancelled = false;
 
     dom.fileInput.value = "";
     dom.info.classList.add("hidden");
@@ -499,6 +826,9 @@
     dom.results.innerHTML = "";
     dom.downloads.classList.add("hidden");
     dom.progressWrap.classList.remove("visible");
+    dom.yugiProgressWrap.classList.remove("visible");
+    dom.btnCancelYugi.classList.add("hidden");
+    dom.btnExportMissing.classList.add("hidden");
     setStatus("");
   }
 
@@ -521,9 +851,22 @@
 
   function bindEvents() {
     bindDropZone();
+
     if (dom.btnTranslate) dom.btnTranslate.addEventListener("click", translate);
     if (dom.btnDownload) dom.btnDownload.addEventListener("click", downloadPatched);
     if (dom.btnClear) dom.btnClear.addEventListener("click", resetUI);
+
+    if (dom.btnCancelYugi) {
+      dom.btnCancelYugi.addEventListener("click", () => {
+        state.cancelled = true;
+        if (window.cancelYugipedia) window.cancelYugipedia();
+        toast("Annulation en cours…", "info");
+      });
+    }
+
+    if (dom.btnExportMissing) {
+      dom.btnExportMissing.addEventListener("click", exportMissing);
+    }
   }
 
   bindEvents();

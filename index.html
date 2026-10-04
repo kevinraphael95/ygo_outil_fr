@@ -25,7 +25,7 @@
     <div id="db-badge" class="db-badge hidden"></div>
 
     <div class="header-actions">
-      <button class="icon-btn" id="db-sync" title="Synchroniser la base locale" aria-label="Synchroniser la base locale">🔄</button>
+      <button class="icon-btn" id="db-sync" title="Synchroniser la base locale (Shift+clic ou clic droit pour forcer)" aria-label="Synchroniser la base locale">🔄</button>
       <button class="icon-btn" id="theme-toggle" title="Changer de thème" aria-label="Changer de thème">🌙</button>
       <button class="icon-btn" id="about-btn" title="À propos" aria-label="À propos">ℹ️</button>
     </div>
@@ -85,6 +85,12 @@
         </div>
       </div>
 
+      <!-- Option fallback Yugipedia (recherche) -->
+      <label class="search-option">
+        <input type="checkbox" id="search-yugipedia">
+        <span>🟣 <strong>Fallback Yugipedia</strong> — si aucune carte n'est trouvée dans la base locale, interroger Yugipedia (1 req/s, cache 30 j)</span>
+      </label>
+
       <div class="hint">
         <span class="ico">💡</span>
         <div><strong>Mode Auto :</strong> la recherche essaie d'abord en français, puis bascule automatiquement en anglais si rien n'est trouvé. Tu peux forcer une langue avec les pilules ci-dessus.</div>
@@ -117,6 +123,12 @@ Extra Deck:
 
 Side Deck:
 1 Fissure"></textarea>
+
+      <!-- Option fallback Yugipedia (deck) -->
+      <label class="search-option">
+        <input type="checkbox" id="deck-yugipedia">
+        <span>🟣 <strong>Fallback Yugipedia</strong> — pour les cartes absentes de la base locale</span>
+      </label>
 
       <div class="actions-row">
         <button class="btn-primary" id="deck-generate" type="button">⚙️ Générer les JSON</button>
@@ -217,6 +229,18 @@ Extra Deck:
         Pour les cartes dont l'effet a été <strong>modifié par VAACT</strong> (≠ effet officiel), garde l'effet original et ajoute la traduction officielle en dessous.
       </p>
 
+      <!-- ===== Option Fallback Yugipedia ===== -->
+      <label class="cdb-option" id="cdb-yugipedia-wrap">
+        <input type="checkbox" id="cdb-yugipedia-mode">
+        <span class="cdb-option-label">
+          <strong>Fallback Yugipedia</strong> — pour les cartes absentes de la base locale
+        </span>
+      </label>
+      <p class="cdb-option-help">
+        Interroge l'API Yugipedia (<strong>1 req/s max</strong>) pour récupérer les traductions FR des cartes récentes absentes de YGOPRODeck.
+        <strong>Lent</strong> sur de gros .cdb. Les résultats sont mis en cache 30 jours.
+      </p>
+
       <div class="actions-row hidden" id="cdb-actions">
         <button class="btn-primary" id="cdb-translate" type="button">🌐 Traduire en français</button>
         <button class="btn" id="cdb-clear" type="button">🗑️ Effacer</button>
@@ -228,6 +252,18 @@ Extra Deck:
           <span id="cdb-progress-pct">0%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="cdb-progress-fill"></div></div>
+      </div>
+
+      <!-- 2ᵉ barre de progression : enrichissement Yugipedia -->
+      <div class="progress-wrap" id="cdb-yugi-progress-wrap">
+        <div class="progress-info">
+          <span id="cdb-yugi-label">Enrichissement Yugipedia…</span>
+          <span id="cdb-yugi-pct">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="cdb-yugi-fill"></div></div>
+        <div class="actions-row" style="margin-top:10px;">
+          <button class="btn hidden" id="cdb-cancel-yugi" type="button">⏹️ Annuler Yugipedia</button>
+        </div>
       </div>
 
       <p id="cdb-status" class="status-line"></p>
@@ -251,6 +287,7 @@ Extra Deck:
 
       <div class="actions-row hidden" id="cdb-downloads">
         <button class="btn" id="cdb-download" type="button">💾 Télécharger le .cdb traduit</button>
+        <button class="btn hidden" id="cdb-export-missing" type="button">📄 Export .txt des non trouvées</button>
       </div>
     </div>
   </section>
@@ -285,6 +322,10 @@ Extra Deck:
       <p>Dépose un fichier <code>.cdb</code> (base SQLite EDOPro/YGO Pro) dans l'onglet dédié. L'outil remplace les noms et effets des cartes par leur version française quand elle existe, puis te redonne un <code>_fr.cdb</code> prêt à utiliser.</p>
       <p><strong>Mode VAACT :</strong> pour les cartes dont l'effet a été modifié par le projet VAACT, conserve l'effet original (anglais) et ajoute la traduction officielle française en dessous.</p>
 
+      <h3>🟣 Fallback Yugipedia</h3>
+      <p>Pour les cartes absentes de la base locale (cartes récentes, errata, etc.), l'app peut interroger l'API de <a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia</a> pour récupérer la traduction française officielle.</p>
+      <p><strong>Important :</strong> cette option est <strong>désactivée par défaut</strong> et respecte strictement la politique d'utilisation de Yugipedia (1 requête/seconde, User-Agent descriptif, cache 30 jours). Une fois activée, ton choix est mémorisé.</p>
+
       <h3>🌐 Langues supportées</h3>
       <p>La recherche accepte les noms de cartes dans toutes les langues gérées par l'API YGOPRODeck :</p>
       <div class="lang-grid">
@@ -300,6 +341,7 @@ Extra Deck:
       <h3>🔗 Liens utiles</h3>
       <ul>
         <li><a href="https://ygoprodeck.com/api-guide/" target="_blank" rel="noopener">Documentation de l'API YGOPRODeck</a></li>
+        <li><a href="https://yugipedia.com/api.php" target="_blank" rel="noopener">API Yugipedia (MediaWiki)</a></li>
         <li><a href="https://ygopro.org/yugioh-card-maker/" target="_blank" rel="noopener">Éditeur de cartes ygopro.org</a></li>
         <li><a href="https://github.com/maYayoh/ygo-cardmaker" target="_blank" rel="noopener">Repo du card maker (format JSON de référence)</a></li>
       </ul>
@@ -307,15 +349,39 @@ Extra Deck:
       <h3>📄 Format JSON généré</h3>
       <p>Le JSON suit le schéma <code>compatible-card</code> du card maker ygopro.org : version, name, level, type, icon, effect, atk, def, serial, copyright, attribute, id, rarity, pendulum, variant, link, layout, boxSize.</p>
 
+      <h3>🧹 Cache Yugipedia</h3>
+      <p>
+        <button class="btn" id="clear-yugi-cache" type="button">🗑️ Vider le cache Yugipedia</button>
+        <span id="yugi-cache-stats" style="margin-left:10px; color:var(--text-muted); font-size:0.82rem;"></span>
+      </p>
+
       <h3>⚠️ Limitations</h3>
       <ul>
         <li>Toutes les cartes n'ont pas de traduction française officielle ; dans ce cas, le nom anglais est conservé.</li>
+        <li>Les cartes custom (VAACT, Project Ignis, fan-made) ne sont <strong>pas</strong> sur Yugipedia — le fallback ne les résoudra pas.</li>
         <li>Le champ <code>serial</code> (numéro de set) n'est pas fourni par l'API — laisse vide ou clique RANDOMIZE dans l'éditeur.</li>
         <li>Les images ne sont pas stockées localement — elles sont chargées depuis images.ygoprodeck.com (mise en cache navigateur).</li>
       </ul>
 
       <h3>⚖️ Mentions</h3>
-      <p>Données fournies par l'API <a href="https://ygoprodeck.com" target="_blank" rel="noopener">YGOPRODeck</a>. Yu-Gi-Oh! est une marque de Konami. Cet outil est non officiel et à usage personnel.</p>
+      <p>Données fournies par l'API <a href="https://ygoprodeck.com" target="_blank" rel="noopener">YGOPRODeck</a> et <a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia</a>. Yu-Gi-Oh! est une marque de Konami. Cet outil est non officiel et à usage personnel.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== MODAL DE CONFIRMATION CUSTOM ============================== -->
+<!-- Remplace les window.confirm() bloquants. Contrôlé par showConfirm() dans script.js -->
+<div class="modal-backdrop" id="confirm-modal">
+  <div class="modal" style="max-width: 440px;">
+    <div class="modal-header">
+      <h2 id="confirm-title">Confirmation</h2>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-message" style="white-space: pre-line;"></p>
+      <div class="actions-row" style="margin-top: 20px; margin-bottom: 0;">
+        <button class="btn-primary" id="confirm-yes" type="button">Confirmer</button>
+        <button class="btn" id="confirm-no" type="button">Annuler</button>
+      </div>
     </div>
   </div>
 </div>
@@ -325,6 +391,7 @@ Extra Deck:
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="yugipedia-api.js"></script>
 <script src="script.js"></script>
 <script src="cdb-translator.js"></script>
 </body>
