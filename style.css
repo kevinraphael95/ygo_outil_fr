@@ -367,6 +367,13 @@ body {
 }
 
 .card-sub { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 18px; }
+.card-sub code {
+  background: var(--code-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: var(--gold-light);
+}
 
 /* ============================================================
    SEARCH BAR
@@ -562,6 +569,120 @@ body {
 }
 
 .search-option strong { color: var(--text); }
+
+/* ============================================================
+   OUTPUT SECTION — sélecteur d'action (Traduire / JSON)
+   ============================================================ */
+.output-section {
+  margin: 22px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.output-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.output-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.output-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.output-option:hover {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.output-option input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--surface);
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: all 0.15s ease;
+  margin: 2px 0 0 0;
+}
+
+.output-option input[type="radio"]:hover {
+  border-color: var(--gold);
+}
+
+.output-option input[type="radio"]:checked {
+  border-color: var(--gold);
+  box-shadow: 0 0 10px var(--gold-glow);
+}
+
+.output-option input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+}
+
+.output-option input[type="radio"]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.output-option:has(input:checked) {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+
+.output-option-body { flex: 1; min-width: 0; }
+
+.output-option-title {
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin-bottom: 3px;
+  line-height: 1.35;
+}
+
+.output-option-title strong { color: var(--gold); }
+
+.output-option-desc {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.output-option-desc code {
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--gold-light);
+}
 
 /* ============================================================
    RÉSULTATS
@@ -968,8 +1089,10 @@ body {
   font-size: 0.78rem;
   line-height: 1.6;
   resize: vertical;
-  margin-top: 22px;
+  margin-top: 0;
 }
+
+.json-preview::placeholder { color: var(--text-dim); }
 
 /* ============================================================
    ACTIONS / PROGRESSION
@@ -1551,7 +1674,7 @@ body {
   .actions-row .btn,
   .actions-row .btn-primary { width: 100%; justify-content: center; }
 
-  /* Options : checkbox plus compacte sur mobile */
+  /* Options : compactes sur mobile */
   .search-option,
   .cdb-option {
     padding: 10px 12px;
@@ -1561,6 +1684,14 @@ body {
   .cdb-option-label {
     font-size: 0.82rem;
   }
+
+  /* Sélecteur d'action : compact aussi */
+  .output-option {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .output-option-title { font-size: 0.88rem; }
+  .output-option-desc { font-size: 0.76rem; }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
