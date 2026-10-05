@@ -8,7 +8,7 @@
 //   - "Traduire" : remplace noms + effets par leur VF. Sortie : .cdb_fr
 //   - "JSON"     : génère un JSON par carte (ZIP) + CSV Manager.
 //                  ⚡ SANS recherche : on prend DIRECTEMENT les infos du .cdb
-//                  (id, name, desc). Pas de croisement avec la base locale.
+//                  (jointure texts + datas).
 //
 // Mode VAACT (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par VAACT.
@@ -48,10 +48,9 @@
     missingNames: [],
     cancelled: false,
     running: false,
-    // ⚡ Pour l'action JSON
-    resolvedCards: [],   // { localId, name, desc, card }
-    generatedFiles: [],  // { filename, json }
-    generatedCards: [],  // pour le CSV Manager
+    resolvedCards: [],
+    generatedFiles: [],
+    generatedCards: [],
   };
 
   // ==========================================================================
@@ -67,22 +66,18 @@
     btnRun:       $("cdb-translate"),
     btnClear:     $("cdb-clear"),
 
-    // Actions (radios)
     actionTranslate: $("cdb-action-translate"),
     actionJson:      $("cdb-action-json"),
 
-    // Options
     vaactMode:    $("cdb-vaact-mode"),
     yugiMode:     $("cdb-yugipedia-mode"),
 
-    // Progression
     progressWrap: $("cdb-progress-wrap"),
     progressLbl:  $("cdb-progress-label"),
     progressPct:  $("cdb-progress-pct"),
     progressFill: $("cdb-progress-fill"),
     status:       $("cdb-status"),
 
-    // Stats
     stats:        $("cdb-stats"),
     statTotal:    $("cdb-stat-total"),
     statDone:     $("cdb-stat-translated"),
@@ -90,17 +85,14 @@
     statDoneLbl:  $("cdb-stat-translated-label"),
     statMissingLbl: $("cdb-stat-missing-label"),
 
-    // Résultats
     results:      $("cdb-results"),
 
-    // Téléchargements
     downloads:    $("cdb-downloads"),
     btnDownloadCdb: $("cdb-download"),
     btnDownloadZip: $("cdb-download-zip"),
     btnDownloadCsv: $("cdb-download-csv"),
     btnExportMissing: $("cdb-export-missing"),
 
-    // Barre Yugipedia
     yugiProgressWrap: $("cdb-yugi-progress-wrap"),
     yugiLabel:        $("cdb-yugi-label"),
     yugiPct:          $("cdb-yugi-pct"),
@@ -166,7 +158,7 @@
   }
 
   // ==========================================================================
-  // COMPARAISON D'EFFETS (VAACT) — ⚡ STRICTE ⚡
+  // COMPARAISON D'EFFETS (VAACT)
   // ==========================================================================
 
   function cleanDesc(s) {
@@ -191,7 +183,6 @@
     const key = normalize(localName);
     if (!key) return { status: "not_found" };
 
-    // 1. Nom déjà FR officiel en base locale
     const frMatch = state.nameIndexFr.get(key);
     if (frMatch) {
       return {
@@ -203,10 +194,8 @@
       };
     }
 
-    // 2. Nom EN officiel en base locale
     const enMatch = state.nameIndexEn.get(key);
     if (enMatch) {
-      // 2a. Chercher la VF via l'ID Konami dans memCacheFr
       const frById = window.memCacheFr.get(String(enMatch.id));
       if (frById) {
         const modified = vaactMode && descDiffers(localDesc, enMatch.desc);
@@ -229,7 +218,6 @@
         };
       }
 
-      // 2b. Pas de VF en base → essayer Yugipedia
       if (allowYugipedia && window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
         try {
           const yugiCards = await window.yugipediaSearch(enMatch.name);
@@ -268,7 +256,6 @@
         }
       }
 
-      // 2c. Pas de VF trouvée → garder l'anglais
       return {
         status: "en_only",
         name: enMatch.name,
@@ -278,7 +265,6 @@
       };
     }
 
-    // 3. Carte pas trouvée en base → essayer Yugipedia
     if (allowYugipedia && window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
       try {
         const yugiCards = await window.yugipediaSearch(localName);
@@ -435,7 +421,7 @@
 
   function getAction() {
     if (dom.actionJson && dom.actionJson.checked) return "json";
-    return "translate"; // par défaut
+    return "translate";
   }
 
   function updateActionUI() {
@@ -453,7 +439,6 @@
       dom.statMissingLbl.textContent = isJson ? "—" : "Pas de trad. FR";
     }
 
-    // ⚡ Désactiver VAACT + Yugipedia en mode JSON
     if (dom.vaactMode) {
       dom.vaactMode.disabled = isJson;
       if (isJson) dom.vaactMode.checked = false;
@@ -543,7 +528,6 @@
       let missing = 0;
       let vaactCount = 0;
 
-      // PHASE 1 : Analyse locale
       for (let i = 0; i < rows.length; i++) {
         const [localId, localName, localDesc] = rows[i];
 
@@ -588,7 +572,6 @@
         if (state.cancelled) break;
       }
 
-      // PHASE 2 : BATCH Yugipedia
       if (yugiMode && missingCards.length > 0 && !state.cancelled) {
         if (missingCards.length > YUGI_CONFIRM_THRESHOLD) {
           const estimatedSec = Math.ceil(missingCards.length / 50) + 2;
@@ -727,7 +710,7 @@
   }
 
   // ==========================================================================
-  // ACTION 2 : GÉNÉRER LES JSON — ⚡ DIRECTEMENT depuis le .cdb
+  // ACTION 2 : GÉNÉRER LES JSON — DIRECTEMENT depuis le .cdb
   // ==========================================================================
 
   async function runJsonGeneration() {
@@ -758,37 +741,57 @@
       await nextFrame();
 
       setProgress(5, "Lecture du .cdb…");
-      const rows = state.sqlite.exec("SELECT id, name, desc FROM texts")[0].values;
+
+      // ⚡ Jointure entre texts et datas pour récupérer TOUTES les infos
+      const rows = state.sqlite.exec(`
+        SELECT 
+          t.id AS id,
+          t.name AS name,
+          t.desc AS desc,
+          d.type AS type,
+          d.atk AS atk,
+          d.def AS def,
+          d.level AS level,
+          d.race AS race,
+          d.attribute AS attribute
+        FROM texts t
+        LEFT JOIN datas d ON t.id = d.id
+      `)[0].values;
       const total = rows.length;
 
       const report = [];
       const reportIndex = new Map();
       let done = 0;
 
-      // ======================================================================
-      // PHASE 1 : On prend DIRECTEMENT les infos du .cdb (pas de recherche)
-      // ======================================================================
       for (let i = 0; i < rows.length; i++) {
-        const [localId, localName, localDesc] = rows[i];
+        const [
+          localId, localName, localDesc,
+          dbType, dbAtk, dbDef, dbLevel, dbRace, dbAttribute
+        ] = rows[i];
+
+        const frameType = detectFrameType(dbType);
+        const isSpell = (dbType & 0x2) !== 0;
+        const isTrap  = (dbType & 0x4) !== 0;
 
         state.resolvedCards.push({
           localId,
           name: localName,
           desc: localDesc,
-          // Carte minimale construite à partir des infos du CDB
           card: {
             id: localId,
             name: localName,
             desc: localDesc,
-            type: "Effect Monster",
-            frameType: "effect",
-            atk: 0,
-            def: 0,
-            level: 0,
-            race: "Warrior",
-            attribute: "DARK",
-            card_images: [],
-            _minimal: true,
+            type: isSpell ? "Spell Card" : isTrap ? "Trap Card" : "Effect Monster",
+            frameType: frameType,
+            atk: dbAtk ?? 0,
+            def: dbDef ?? 0,
+            level: dbLevel ?? 0,
+            race: raceFromCode(dbRace),
+            attribute: attributeFromCode(dbAttribute),
+            card_images: [{
+              image_url: `https://images.ygoprodeck.com/images/cards/${localId}.jpg`,
+              image_url_cropped: `https://images.ygoprodeck.com/images/cards_cropped/${localId}.jpg`,
+            }],
           },
           source: "cdb",
         });
@@ -811,9 +814,6 @@
         if (state.cancelled) break;
       }
 
-      // ======================================================================
-      // PHASE 2 : Génération des JSON + CSV
-      // ======================================================================
       setProgress(80, "Génération des JSON…");
 
       const totalResolved = state.resolvedCards.length;
@@ -872,6 +872,53 @@
       dom.btnClear.disabled = false;
       dom.btnCancelYugi.classList.add("hidden");
     }
+  }
+
+  // ==========================================================================
+  // ⚡ HELPERS — Décodage des codes numériques du .cdb
+  // ==========================================================================
+
+  function detectFrameType(type) {
+    if (!type) return "effect";
+    if (type & 0x4000000) return "link";
+    if (type & 0x800000) return "xyz";
+    if (type & 0x2000) return "synchro";
+    if (type & 0x40) return "fusion";
+    if (type & 0x80) return "ritual";
+    if (type & 0x10) return "normal";
+    if (type & 0x2) return "spell";
+    if (type & 0x4) return "trap";
+    return "effect";
+  }
+
+  function raceFromCode(code) {
+    if (!code) return "Warrior";
+    const RACES = {
+      0x1: "Warrior", 0x2: "Spellcaster", 0x4: "Fairy", 0x8: "Fiend",
+      0x10: "Zombie", 0x20: "Machine", 0x40: "Aqua", 0x80: "Pyro",
+      0x100: "Rock", 0x200: "Winged Beast", 0x400: "Plant", 0x800: "Insect",
+      0x1000: "Thunder", 0x2000: "Dragon", 0x4000: "Beast",
+      0x8000: "Beast-Warrior", 0x10000: "Dinosaur", 0x20000: "Fish",
+      0x40000: "Sea Serpent", 0x80000: "Reptile", 0x100000: "Psychic",
+      0x200000: "Divine-Beast", 0x400000: "Creator God", 0x800000: "Wyrm",
+      0x1000000: "Cyberse",
+    };
+    for (const [bit, name] of Object.entries(RACES)) {
+      if (code & parseInt(bit)) return name;
+    }
+    return "Warrior";
+  }
+
+  function attributeFromCode(code) {
+    if (!code) return "DARK";
+    const ATTRS = {
+      0x1: "EARTH", 0x2: "WATER", 0x4: "FIRE",
+      0x8: "WIND", 0x10: "LIGHT", 0x20: "DARK", 0x40: "DIVINE",
+    };
+    for (const [bit, name] of Object.entries(ATTRS)) {
+      if (code & parseInt(bit)) return name;
+    }
+    return "DARK";
   }
 
   // ==========================================================================
@@ -1020,37 +1067,7 @@
     dom.statDone.textContent = stats.done.toLocaleString("fr-FR");
     dom.statMissing.textContent = stats.missing.toLocaleString("fr-FR");
     dom.stats.classList.remove("hidden");
-
     dom.results.innerHTML = "";
-  }
-
-  function buildResultItem(r) {
-    const li = document.createElement("li");
-    li.className = "gen-item";
-    const isOk = r.status === "ok";
-    const icon = isOk ? "✅" : "⚠️";
-
-    let badgeText, badgeClass;
-    if (isOk && r.vaact) {
-      badgeText = "Traduit (VAACT)";
-      badgeClass = "info";
-    } else if (isOk && r.source === "yugipedia") {
-      badgeText = "🟣 Yugipedia";
-      badgeClass = "yugi";
-    } else if (isOk) {
-      badgeText = "Traduit";
-      badgeClass = "ok";
-    } else {
-      badgeText = "Pas de trad.";
-      badgeClass = "warn";
-    }
-
-    li.innerHTML = `
-      <span>${icon}</span>
-      <span class="name">${escapeHtml(r.name)}</span>
-      <span class="badge ${badgeClass}">${badgeText}</span>
-    `;
-    return li;
   }
 
   function setProgress(pct, label) {
