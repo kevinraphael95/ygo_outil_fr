@@ -7,7 +7,12 @@
 // Deux actions supportées :
 //   - "Traduire" : remplace noms + effets par leur VF. Sortie : .cdb_fr
 //   - "JSON"     : génère un JSON par carte (ZIP) + CSV Manager.
-//                  ⚡ Recherche par NOM dans la base locale + fallback .cdb.
+//                  ⚡ Recherche multi-fallback :
+//                    1. Nom FR base locale
+//                    2. Nom EN base locale
+//                    3. Nom EN entre ~...~ dans la desc
+//                    4. Yugipedia (si activé)
+//                    5. Infos du .cdb (dernier recours)
 //
 // Mode VAACT (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par VAACT.
@@ -709,7 +714,7 @@
   }
 
   // ==========================================================================
-  // ACTION 2 : GÉNÉRER LES JSON — Recherche par nom + fallback .cdb
+  // ACTION 2 : GÉNÉRER LES JSON — Recherche multi-fallback
   // ==========================================================================
 
   async function runJsonGeneration() {
@@ -766,10 +771,12 @@
       const reportIndex = new Map();
       let done = 0;
       let foundLocal = 0;
+      let foundTilde = 0;
+      let foundYugi = 0;
       let foundCdb = 0;
 
       // ======================================================================
-      // PHASE 1 : Cherche par NOM dans la base locale, fallback sur le .cdb
+      // PHASE 1 : Recherche multi-fallback
       // ======================================================================
       for (let i = 0; i < rows.length; i++) {
         const [
@@ -777,14 +784,69 @@
           dbType, dbAtk, dbDef, dbLevel, dbRace, dbAttribute
         ] = rows[i];
 
-        // ⚡ Recherche par nom dans la base locale
+        // ⚡ 1. Recherche par nom dans la base locale (FR puis EN)
         const key = normalize(localName);
         let matched = null;
+        let matchedSource = null;
 
         if (state.nameIndexFr || state.nameIndexEn) {
           const frMatch = state.nameIndexFr ? state.nameIndexFr.get(key) : null;
           const enMatch = state.nameIndexEn ? state.nameIndexEn.get(key) : null;
           matched = frMatch || enMatch;
+          if (matched) matchedSource = "local";
+        }
+
+        // ⚡ 2. Fallback : nom EN entre ~...~ dans la desc
+        let enNameFromTilde = null;
+        if (!matched && localDesc) {
+          const tildeMatch = localDesc.match(/~([^~]+)~/);
+          if (tildeMatch && tildeMatch[1]) {
+            enNameFromTilde = tildeMatch[1].trim();
+            const enKey = normalize(enNameFromTilde);
+            const enMatch2 = state.nameIndexEn ? state.nameIndexEn.get(enKey) : null;
+            const frMatch2 = state.nameIndexFr ? state.nameIndexFr.get(enKey) : null;
+            matched = frMatch2 || enMatch2;
+            if (matched) {
+              matchedSource = "tilde";
+              console.log(`[CDB] ✅ Trouvé via ~nom~ : "${enNameFromTilde}"`);
+            }
+          }
+        }
+
+        // ⚡ 3. Fallback : Yugipedia (si activé)
+        if (!matched && window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
+          const searchQuery = enNameFromTilde || localName;
+          try {
+            const yugiCards = await window.yugipediaSearch(searchQuery);
+            if (yugiCards && yugiCards.length) {
+              const exact = yugiCards.find((c) =>
+                normalize(c._names?.en || "") === normalize(searchQuery)
+              ) || yugiCards.find((c) =>
+                normalize(c.name) === normalize(searchQuery)
+              ) || yugiCards[0];
+
+              if (exact) {
+                matched = {
+                  id: exact.id || localId,
+                  name: exact.name,
+                  desc: exact.desc || localDesc,
+                  type: exact.type || "Effect Monster",
+                  frameType: exact.frameType || "effect",
+                  atk: exact.atk ?? 0,
+                  def: exact.def ?? 0,
+                  level: exact.level ?? 0,
+                  race: exact.race || "Warrior",
+                  attribute: exact.attribute || "DARK",
+                  card_images: exact.card_images || [],
+                };
+                matchedSource = "yugipedia";
+                console.log(`[CDB] 🟣 Trouvé via Yugipedia : "${exact.name}"`);
+              }
+            }
+          } catch (err) {
+            if (err.message === "Annulé par l'utilisateur") throw err;
+            console.warn(`[CDB] Yugipedia échoué pour "${searchQuery}"`, err.message);
+          }
         }
 
         let card;
@@ -797,7 +859,9 @@
             name: localName,
             desc: localDesc,
           };
-          foundLocal++;
+          if (matchedSource === "local") foundLocal++;
+          else if (matchedSource === "tilde") foundTilde++;
+          else if (matchedSource === "yugipedia") foundYugi++;
         } else {
           // ❌ Pas trouvé → infos du .cdb + image YGOPRODeck par ID
           const frameType = detectFrameType(dbType);
@@ -828,14 +892,14 @@
           name: localName,
           desc: localDesc,
           card: card,
-          source: matched ? "local" : "cdb",
+          source: matchedSource || "cdb",
         });
         done++;
         pushReport(report, reportIndex, {
           id: localId,
           name: localName,
           status: "ok",
-          source: matched ? "local" : "cdb",
+          source: matchedSource || "cdb",
         });
 
         if (i % YIELD_EVERY === 0 || i === rows.length - 1) {
@@ -849,7 +913,7 @@
         if (state.cancelled) break;
       }
 
-      console.log(`[CDB] JSON : ${foundLocal} cartes trouvées en base locale, ${foundCdb} via .cdb seul`);
+      console.log(`[CDB] JSON : ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundYugi} via Yugipedia, ${foundCdb} via .cdb seul`);
 
       // ======================================================================
       // PHASE 2 : Génération des JSON + CSV
@@ -900,7 +964,7 @@
       showJsonDownloadsOnly();
 
       setStatus(
-        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s) (${foundLocal} trouvées en base, ${foundCdb} via .cdb).`
+        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s) · ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundYugi} Yugipedia, ${foundCdb} .cdb seul.`
       );
       toast(`${state.generatedFiles.length} JSON générés !`, "ok");
     } catch (err) {
