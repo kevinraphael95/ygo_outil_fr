@@ -473,10 +473,10 @@
 
     // Adapter les libellés des stats
     if (dom.statDoneLbl) {
-      dom.statDoneLbl.textContent = isJson ? "Résolues" : "Traduites en FR";
+      dom.statDoneLbl.textContent = isJson ? "JSON générés" : "Traduites en FR";
     }
     if (dom.statMissingLbl) {
-      dom.statMissingLbl.textContent = isJson ? "Non trouvées" : "Pas de trad. FR";
+      dom.statMissingLbl.textContent = isJson ? "Introuvables" : "Pas de trad. FR";
     }
 
     // ⚡ Désactiver VAACT + Yugipedia en mode JSON (grisés + décochés)
@@ -1063,23 +1063,14 @@
   }
 
   function renderResults(report, stats) {
+    // Met à jour les 3 stats
     dom.statTotal.textContent = stats.total.toLocaleString("fr-FR");
     dom.statDone.textContent = stats.done.toLocaleString("fr-FR");
     dom.statMissing.textContent = stats.missing.toLocaleString("fr-FR");
     dom.stats.classList.remove("hidden");
-
+  
+    // ⚡ On n'affiche plus la liste des cartes une par une
     dom.results.innerHTML = "";
-    report.forEach((r) => dom.results.appendChild(buildResultItem(r)));
-
-    const hidden = stats.total - report.length;
-    if (hidden > 0) {
-      const li = document.createElement("li");
-      li.className = "gen-item";
-      li.style.justifyContent = "center";
-      li.style.color = "var(--text-muted)";
-      li.textContent = `… et ${hidden.toLocaleString("fr-FR")} autres`;
-      dom.results.appendChild(li);
-    }
   }
 
   function buildResultItem(r) {
