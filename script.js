@@ -1808,9 +1808,9 @@ function csvQuote(value) {
   if (value === undefined || value === null || value === "") return "";
   return `"${String(value)
     .replace(/"/g, '""')
-    .replace(/\r\n/g, "\\n")
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\n")}"`;
+    .replace(/\r\n/g, " ")
+    .replace(/\n/g, " ")
+    .replace(/\r/g, " ")}"`;
 }
 
 function buildCsvRow(card) {
