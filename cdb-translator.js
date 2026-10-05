@@ -7,13 +7,16 @@
 // Deux actions supportées :
 //   - "Traduire" : remplace noms + effets par leur VF. Sortie : .cdb_fr
 //   - "JSON"     : génère un JSON par carte (ZIP) + CSV Manager.
+//                  ⚡ SANS traduction : on garde les noms/effets ORIGINAUX
+//                  du .cdb. La base locale sert uniquement à récupérer les
+//                  métadonnées (atk, def, level, race, frameType, linkmarkers…).
 //
 // Mode VAACT (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par VAACT.
 //   On garde alors l'effet original (anglais VAACT) puis on ajoute en dessous
 //   l'effet officiel FR, préfixé de "(VAACT) ".
 //
-// Fallback Yugipedia (option, désactivé par défaut) :
+// Fallback Yugipedia (option, traduction uniquement, désactivé par défaut) :
 //   Si une carte est en anglais dans la base locale mais qu'une VF existe sur
 //   Yugipedia, on récupère la VF. Sinon, on interroge Yugipedia uniquement
 //   pour les cartes introuvables.
@@ -46,8 +49,8 @@
     missingNames: [],
     cancelled: false,
     running: false,
-    // ⚡ Nouveaux pour l'action JSON
-    resolvedCards: [],   // cartes complètes résolues (pour generateJsonForCard)
+    // ⚡ Pour l'action JSON
+    resolvedCards: [],   // { localId, name, desc, card }
     generatedFiles: [],  // { filename, json }
     generatedCards: [],  // pour le CSV Manager
   };
@@ -164,6 +167,27 @@
   }
 
   // ==========================================================================
+  // ⚡ RECHERCHE STRUCTURALE (pour l'action JSON — SANS traduction)
+  // ==========================================================================
+  // Cherche une carte en base locale par nom (FR ou EN), SANS traduire.
+  // Retourne la carte structurale (pour atk, def, level, race, frameType…)
+  // ou null si introuvable.
+
+  function findStructuralCard(localName) {
+    const key = normalize(localName);
+    if (!key) return null;
+
+    // Priorité FR puis EN (mêmes stats de toute façon)
+    const frMatch = state.nameIndexFr.get(key);
+    if (frMatch) return frMatch;
+
+    const enMatch = state.nameIndexEn.get(key);
+    if (enMatch) return enMatch;
+
+    return null;
+  }
+
+  // ==========================================================================
   // COMPARAISON D'EFFETS (VAACT) — ⚡ STRICTE ⚡
   // ==========================================================================
 
@@ -182,10 +206,10 @@
   }
 
   // ==========================================================================
-  // RÉSOLUTION DE CARTE — retourne aussi la carte complète
+  // RÉSOLUTION DE CARTE (pour la TRADUCTION)
   // ==========================================================================
-  // ⚡ On retourne maintenant `card` (objet complet de la base locale/Yugipedia)
-  //    en plus de name/desc, pour pouvoir générer le JSON.
+  // ⚡ Retourne aussi `card` (objet complet de la base locale/Yugipedia) pour
+  //    permettre la génération du .cdb patché.
 
   async function resolveCard(localName, localDesc, vaactMode, allowYugipedia) {
     const key = normalize(localName);
@@ -455,6 +479,20 @@
       dom.statMissingLbl.textContent = isJson ? "Non trouvées" : "Pas de trad. FR";
     }
 
+    // ⚡ Désactiver VAACT + Yugipedia en mode JSON (grisés + décochés)
+    if (dom.vaactMode) {
+      dom.vaactMode.disabled = isJson;
+      if (isJson) dom.vaactMode.checked = false;
+      const wrap = dom.vaactMode.closest(".cdb-option");
+      if (wrap) wrap.style.opacity = isJson ? "0.4" : "1";
+    }
+    if (dom.yugiMode) {
+      dom.yugiMode.disabled = isJson;
+      if (isJson) dom.yugiMode.checked = false;
+      const wrap = dom.yugiMode.closest("#cdb-yugipedia-wrap");
+      if (wrap) wrap.style.opacity = isJson ? "0.4" : "1";
+    }
+
     // Masquer les blocs de résultats au changement
     if (dom.downloads) dom.downloads.classList.add("hidden");
     if (dom.stats) dom.stats.classList.add("hidden");
@@ -479,7 +517,7 @@
   }
 
   // ==========================================================================
-  // ACTION 1 : TRADUIRE LE .CDB
+  // ACTION 1 : TRADUIRE LE .CDB (inchangé)
   // ==========================================================================
 
   async function runTranslation() {
@@ -720,7 +758,7 @@
   }
 
   // ==========================================================================
-  // ACTION 2 : GÉNÉRER LES JSON À PARTIR DU .CDB
+  // ACTION 2 : GÉNÉRER LES JSON À PARTIR DU .CDB (SANS TRADUCTION)
   // ==========================================================================
 
   async function runJsonGeneration() {
@@ -736,15 +774,12 @@
       return;
     }
 
-    const yugiMode = dom.yugiMode ? dom.yugiMode.checked : false;
-
     state.cancelled = false;
     state.running = true;
     state.missingNames = [];
     state.resolvedCards = [];
     state.generatedFiles = [];
     state.generatedCards = [];
-    if (window.resetYugipediaCancel) window.resetYugipediaCancel();
 
     dom.btnRun.disabled = true;
     dom.btnClear.disabled = true;
@@ -767,51 +802,37 @@
 
       const report = [];
       const reportIndex = new Map();
-      const missingCards = [];
       let done = 0;
-      let doneYugi = 0;
       let missing = 0;
 
       // ======================================================================
-      // PHASE 1 : Analyse locale
+      // PHASE 1 : Analyse locale — SANS traduction
       // ======================================================================
       for (let i = 0; i < rows.length; i++) {
         const [localId, localName, localDesc] = rows[i];
 
-        // ⚡ vaactMode=false : on veut l'effet officiel FR dans le JSON
-        const resolved = await resolveCard(localName, localDesc, false, false);
+        // ⚡ On cherche juste la carte STRUCTURALE (pour atk, def, level, race…)
+        //    On garde le nom et l'effet ORIGINAUX du CDB.
+        const structural = findStructuralCard(localName);
 
-        if (resolved.status === "translated" && resolved.card) {
+        if (structural) {
           state.resolvedCards.push({
             localId,
-            name: resolved.name,
-            card: resolved.card,
-            source: resolved.source,
+            name: localName,     // nom ORIGINAL du CDB
+            desc: localDesc,     // effet ORIGINAL du CDB
+            card: structural,    // métadonnées (atk, def, race, frame…)
+            source: "local",
           });
           done++;
           pushReport(report, reportIndex, {
             id: localId,
-            name: resolved.name,
+            name: localName,
             status: "ok",
-            source: resolved.source,
-          });
-        } else if (resolved.status === "en_only" && resolved.card) {
-          // On garde quand même la carte EN pour le JSON
-          state.resolvedCards.push({
-            localId,
-            name: resolved.name,
-            card: resolved.card,
             source: "local",
-          });
-          missing++;
-          pushReport(report, reportIndex, {
-            id: localId,
-            name: resolved.name,
-            status: "warn",
           });
         } else {
           missing++;
-          missingCards.push({ id: localId, name: localName, desc: localDesc });
+          state.missingNames.push(localName);
           pushReport(report, reportIndex, {
             id: localId,
             name: localName,
@@ -821,7 +842,7 @@
 
         if (i % YIELD_EVERY === 0 || i === rows.length - 1) {
           setProgress(
-            5 + Math.round((i / total) * 60),
+            5 + Math.round((i / total) * 70),
             `Analyse ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`
           );
           await nextFrame();
@@ -831,93 +852,9 @@
       }
 
       // ======================================================================
-      // PHASE 2 : BATCH Yugipedia pour les introuvables
+      // PHASE 2 : Génération des JSON + CSV
       // ======================================================================
-      if (yugiMode && missingCards.length > 0 && !state.cancelled) {
-        if (missingCards.length > YUGI_CONFIRM_THRESHOLD) {
-          const estimatedSec = Math.ceil(missingCards.length / 50) + 2;
-          const message =
-            `⚠️ ${missingCards.length} cartes introuvables localement.\n\n` +
-            `Interroger Yugipedia (batch de 50) prendra ~${estimatedSec} seconde(s).\n\n` +
-            `Continuer ?`;
-          const ok = window.showConfirm
-            ? await window.showConfirm(message, "Fallback Yugipedia")
-            : confirm(message);
-          if (!ok) {
-            console.log("[CDB] Fallback Yugipedia annulé par l'utilisateur");
-            missingCards.length = 0;
-          }
-        }
-
-        if (missingCards.length > 0) {
-          dom.yugiProgressWrap.classList.add("visible");
-          dom.btnCancelYugi.classList.remove("hidden");
-          setYugiProgress(0, `Enrichissement Yugipedia (batch)…`);
-
-          const totalMissing = missingCards.length;
-          const uniqueNames = [...new Set(missingCards.map((c) => c.name))];
-
-          let batchResults;
-          try {
-            batchResults = await window.yugipediaSearchBatch(uniqueNames);
-          } catch (err) {
-            console.error("[CDB] Erreur batch", err);
-            batchResults = new Map();
-          }
-
-          let yugiResolved = 0;
-
-          for (let i = 0; i < missingCards.length; i++) {
-            if (state.cancelled) break;
-
-            const card = missingCards[i];
-            const yugiCards = batchResults.get(card.name) || [];
-
-            if (yugiCards.length > 0) {
-              // ⚡ vaactMode=false pour le JSON
-              const resolved = resolveCardFromYugiCache(
-                card.name, card.desc, false, yugiCards
-              );
-
-              if (resolved.status === "translated" && resolved.card) {
-                state.resolvedCards.push({
-                  localId: card.id,
-                  name: resolved.name,
-                  card: resolved.card,
-                  source: "yugipedia",
-                });
-                done++;
-                doneYugi++;
-
-                updateReport(reportIndex, card.id, {
-                  name: resolved.name,
-                  status: "ok",
-                  source: "yugipedia",
-                });
-
-                yugiResolved++;
-              } else {
-                state.missingNames.push(card.name);
-              }
-            } else {
-              state.missingNames.push(card.name);
-            }
-
-            const pct = Math.round(((i + 1) / totalMissing) * 100);
-            setYugiProgress(
-              pct,
-              `Yugipedia ${i + 1} / ${totalMissing}… (${yugiResolved} OK)`
-            );
-          }
-
-          dom.btnCancelYugi.classList.add("hidden");
-        }
-      }
-
-      // ======================================================================
-      // PHASE 3 : Génération des JSON + CSV
-      // ======================================================================
-      setProgress(88, "Génération des JSON…");
+      setProgress(80, "Génération des JSON…");
 
       const totalResolved = state.resolvedCards.length;
       if (totalResolved === 0) {
@@ -930,23 +867,31 @@
         if (state.cancelled) break;
 
         const item = state.resolvedCards[i];
+
+        // ⚡ Fusion : métadonnées de la carte structurale + nom/desc ORIGINAUX du CDB
+        const mergedCard = {
+          ...item.card,
+          name: item.name,                  // nom du CDB
+          desc: item.desc,                  // effet du CDB
+          pend_desc: item.card.pend_desc,
+          monster_desc: item.card.monster_desc,
+          displayRace: item.card.race,
+        };
+
         try {
-          const json = await window.generateJsonForCard(item.card, item.name);
+          const json = await window.generateJsonForCard(mergedCard, item.name);
           state.generatedFiles.push({
             filename: `${window.sanitizeFilename(item.name)}.json`,
             json: JSON.stringify(json, null, 2),
           });
-          state.generatedCards.push({
-            ...item.card,
-            name: item.name,
-          });
+          state.generatedCards.push(mergedCard);
         } catch (err) {
           console.error(`[CDB] Erreur génération JSON pour "${item.name}"`, err);
         }
 
         if (i % 100 === 0 || i === totalResolved - 1) {
           setProgress(
-            88 + Math.round(((i + 1) / totalResolved) * 10),
+            80 + Math.round(((i + 1) / totalResolved) * 18),
             `JSON ${i + 1} / ${totalResolved}…`
           );
           await nextFrame();
@@ -954,19 +899,15 @@
       }
 
       setProgress(100, "Terminé !");
-      renderResults(report, { total, done, missing, vaactCount: 0, doneYugi });
+      renderResults(report, { total, done, missing, vaactCount: 0, doneYugi: 0 });
       dom.downloads.classList.remove("hidden");
       showJsonDownloadsOnly();
       if (state.missingNames.length > 0) {
         dom.btnExportMissing.classList.remove("hidden");
       }
 
-      const parts = [];
-      if (doneYugi > 0) parts.push(`${doneYugi} via Yugipedia`);
-      const suffix = parts.length ? ` · ${parts.join(" · ")}` : "";
-
       setStatus(
-        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s)${suffix}.`
+        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s).`
       );
       toast(`${state.generatedFiles.length} JSON générés !`, "ok");
     } catch (err) {
