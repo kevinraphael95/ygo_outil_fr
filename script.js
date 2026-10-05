@@ -1273,16 +1273,18 @@ function buildEffectText(card) {
   }
   let text = card.desc || "";
 
-  // ⚡ Remplace les lignes de séparateurs (#----, ====, ****, ----) par une puce ●
+  // ⚡ Séparateurs → puce ●
   text = text.replace(/^[#=*\-_\s]{3,}$/gm, " ● ");
 
-  // ⚡ Convertit les vrais sauts de ligne en puce ●
-  text = text.replace(/\r\n/g, " ● ");
-  text = text.replace(/\n/g, " ● ");
-  text = text.replace(/\r/g, " ● ");
+  // ⚡ Sauts de ligne → espace (supprimés)
+  text = text.replace(/\r\n/g, " ");
+  text = text.replace(/\n/g, " ");
+  text = text.replace(/\r/g, " ");
 
-  // ⚡ Nettoie les espaces multiples + puces consécutives
-  text = text.replace(/[ \t]+/g, " ");
+  // ⚡ Nettoie les espaces multiples (1 seul espace partout)
+  text = text.replace(/\s+/g, " ");
+
+  // ⚡ Nettoie les puces consécutives
   text = text.replace(/(\s*●\s*)+/g, " ● ");
   text = text.replace(/^\s*●\s*/, "");
   text = text.replace(/\s*●\s*$/, "");
