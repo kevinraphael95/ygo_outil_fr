@@ -7,9 +7,8 @@
 // Deux actions supportées :
 //   - "Traduire" : remplace noms + effets par leur VF. Sortie : .cdb_fr
 //   - "JSON"     : génère un JSON par carte (ZIP) + CSV Manager.
-//                  ⚡ SANS traduction : on garde les noms/effets ORIGINAUX
-//                  du .cdb. La base locale sert uniquement à récupérer les
-//                  métadonnées (atk, def, level, race, frameType, linkmarkers…).
+//                  ⚡ SANS recherche : on prend DIRECTEMENT les infos du .cdb
+//                  (id, name, desc). Pas de croisement avec la base locale.
 //
 // Mode VAACT (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par VAACT.
@@ -167,27 +166,6 @@
   }
 
   // ==========================================================================
-  // ⚡ RECHERCHE STRUCTURALE (pour l'action JSON — SANS traduction)
-  // ==========================================================================
-  // Cherche une carte en base locale par nom (FR ou EN), SANS traduire.
-  // Retourne la carte structurale (pour atk, def, level, race, frameType…)
-  // ou null si introuvable.
-
-  function findStructuralCard(localName) {
-    const key = normalize(localName);
-    if (!key) return null;
-
-    // Priorité FR puis EN (mêmes stats de toute façon)
-    const frMatch = state.nameIndexFr.get(key);
-    if (frMatch) return frMatch;
-
-    const enMatch = state.nameIndexEn.get(key);
-    if (enMatch) return enMatch;
-
-    return null;
-  }
-
-  // ==========================================================================
   // COMPARAISON D'EFFETS (VAACT) — ⚡ STRICTE ⚡
   // ==========================================================================
 
@@ -206,10 +184,8 @@
   }
 
   // ==========================================================================
-  // RÉSOLUTION DE CARTE (pour la TRADUCTION)
+  // RÉSOLUTION DE CARTE (pour la TRADUCTION uniquement)
   // ==========================================================================
-  // ⚡ Retourne aussi `card` (objet complet de la base locale/Yugipedia) pour
-  //    permettre la génération du .cdb patché.
 
   async function resolveCard(localName, localDesc, vaactMode, allowYugipedia) {
     const key = normalize(localName);
@@ -466,20 +442,18 @@
     const action = getAction();
     const isJson = action === "json";
 
-    // Adapter le libellé du bouton
     if (dom.btnRun) {
       dom.btnRun.textContent = isJson ? "⚙️ Lancer" : "⚙️ Lancer";
     }
 
-    // Adapter les libellés des stats
     if (dom.statDoneLbl) {
       dom.statDoneLbl.textContent = isJson ? "JSON générés" : "Traduites en FR";
     }
     if (dom.statMissingLbl) {
-      dom.statMissingLbl.textContent = isJson ? "Introuvables" : "Pas de trad. FR";
+      dom.statMissingLbl.textContent = isJson ? "—" : "Pas de trad. FR";
     }
 
-    // ⚡ Désactiver VAACT + Yugipedia en mode JSON (grisés + décochés)
+    // ⚡ Désactiver VAACT + Yugipedia en mode JSON
     if (dom.vaactMode) {
       dom.vaactMode.disabled = isJson;
       if (isJson) dom.vaactMode.checked = false;
@@ -493,7 +467,6 @@
       if (wrap) wrap.style.opacity = isJson ? "0.4" : "1";
     }
 
-    // Masquer les blocs de résultats au changement
     if (dom.downloads) dom.downloads.classList.add("hidden");
     if (dom.stats) dom.stats.classList.add("hidden");
     if (dom.results) dom.results.innerHTML = "";
@@ -570,9 +543,7 @@
       let missing = 0;
       let vaactCount = 0;
 
-      // ======================================================================
       // PHASE 1 : Analyse locale
-      // ======================================================================
       for (let i = 0; i < rows.length; i++) {
         const [localId, localName, localDesc] = rows[i];
 
@@ -617,9 +588,7 @@
         if (state.cancelled) break;
       }
 
-      // ======================================================================
       // PHASE 2 : BATCH Yugipedia
-      // ======================================================================
       if (yugiMode && missingCards.length > 0 && !state.cancelled) {
         if (missingCards.length > YUGI_CONFIRM_THRESHOLD) {
           const estimatedSec = Math.ceil(missingCards.length / 50) + 2;
@@ -758,19 +727,12 @@
   }
 
   // ==========================================================================
-  // ACTION 2 : GÉNÉRER LES JSON À PARTIR DU .CDB (SANS TRADUCTION)
+  // ACTION 2 : GÉNÉRER LES JSON — ⚡ DIRECTEMENT depuis le .cdb
   // ==========================================================================
 
   async function runJsonGeneration() {
     if (!state.sqlite) {
       toast("Charge d'abord un fichier .cdb.", "err");
-      return;
-    }
-    if (!window.memCacheFr || !window.memCacheEn) {
-      toast(
-        "La base locale n'est pas installée. Installe-la dans l'onglet Nom de carte.",
-        "err"
-      );
       return;
     }
 
@@ -790,10 +752,9 @@
     dom.yugiProgressWrap.classList.remove("visible");
     dom.btnCancelYugi.classList.add("hidden");
     dom.btnExportMissing.classList.add("hidden");
-    setProgress(0, "Préparation de l'index…");
+    setProgress(0, "Lecture du .cdb…");
 
     try {
-      buildNameIndexes();
       await nextFrame();
 
       setProgress(5, "Lecture du .cdb…");
@@ -803,47 +764,46 @@
       const report = [];
       const reportIndex = new Map();
       let done = 0;
-      let missing = 0;
 
       // ======================================================================
-      // PHASE 1 : Analyse locale — SANS traduction
+      // PHASE 1 : On prend DIRECTEMENT les infos du .cdb (pas de recherche)
       // ======================================================================
       for (let i = 0; i < rows.length; i++) {
         const [localId, localName, localDesc] = rows[i];
 
-        // ⚡ On cherche juste la carte STRUCTURALE (pour atk, def, level, race…)
-        //    On garde le nom et l'effet ORIGINAUX du CDB.
-        const structural = findStructuralCard(localName);
-
-        if (structural) {
-          state.resolvedCards.push({
-            localId,
-            name: localName,     // nom ORIGINAL du CDB
-            desc: localDesc,     // effet ORIGINAL du CDB
-            card: structural,    // métadonnées (atk, def, race, frame…)
-            source: "local",
-          });
-          done++;
-          pushReport(report, reportIndex, {
+        state.resolvedCards.push({
+          localId,
+          name: localName,
+          desc: localDesc,
+          // Carte minimale construite à partir des infos du CDB
+          card: {
             id: localId,
             name: localName,
-            status: "ok",
-            source: "local",
-          });
-        } else {
-          missing++;
-          state.missingNames.push(localName);
-          pushReport(report, reportIndex, {
-            id: localId,
-            name: localName,
-            status: "warn",
-          });
-        }
+            desc: localDesc,
+            type: "Effect Monster",
+            frameType: "effect",
+            atk: 0,
+            def: 0,
+            level: 0,
+            race: "Warrior",
+            attribute: "DARK",
+            card_images: [],
+            _minimal: true,
+          },
+          source: "cdb",
+        });
+        done++;
+        pushReport(report, reportIndex, {
+          id: localId,
+          name: localName,
+          status: "ok",
+          source: "cdb",
+        });
 
         if (i % YIELD_EVERY === 0 || i === rows.length - 1) {
           setProgress(
             5 + Math.round((i / total) * 70),
-            `Analyse ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`
+            `Lecture ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`
           );
           await nextFrame();
         }
@@ -858,8 +818,8 @@
 
       const totalResolved = state.resolvedCards.length;
       if (totalResolved === 0) {
-        setStatus("❌ Aucune carte résolue — impossible de générer les JSON.");
-        toast("Aucune carte résolue.", "err");
+        setStatus("❌ Aucune carte à convertir.");
+        toast("Aucune carte à convertir.", "err");
         return;
       }
 
@@ -868,14 +828,10 @@
 
         const item = state.resolvedCards[i];
 
-        // ⚡ Fusion : métadonnées de la carte structurale + nom/desc ORIGINAUX du CDB
         const mergedCard = {
           ...item.card,
-          name: item.name,                  // nom du CDB
-          desc: item.desc,                  // effet du CDB
-          pend_desc: item.card.pend_desc,
-          monster_desc: item.card.monster_desc,
-          displayRace: item.card.race,
+          name: item.name,
+          desc: item.desc,
         };
 
         try {
@@ -899,12 +855,9 @@
       }
 
       setProgress(100, "Terminé !");
-      renderResults(report, { total, done, missing, vaactCount: 0, doneYugi: 0 });
+      renderResults(report, { total, done, missing: 0, vaactCount: 0, doneYugi: 0 });
       dom.downloads.classList.remove("hidden");
       showJsonDownloadsOnly();
-      if (state.missingNames.length > 0) {
-        dom.btnExportMissing.classList.remove("hidden");
-      }
 
       setStatus(
         `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s).`
@@ -1063,13 +1016,11 @@
   }
 
   function renderResults(report, stats) {
-    // Met à jour les 3 stats
     dom.statTotal.textContent = stats.total.toLocaleString("fr-FR");
     dom.statDone.textContent = stats.done.toLocaleString("fr-FR");
     dom.statMissing.textContent = stats.missing.toLocaleString("fr-FR");
     dom.stats.classList.remove("hidden");
-  
-    // ⚡ On n'affiche plus la liste des cartes une par une
+
     dom.results.innerHTML = "";
   }
 
@@ -1182,7 +1133,6 @@
       dom.btnExportMissing.addEventListener("click", exportMissing);
     }
 
-    // Init UI
     updateActionUI();
   }
 
