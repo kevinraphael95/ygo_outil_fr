@@ -7,8 +7,7 @@
 // Deux actions supportées :
 //   - "Traduire" : remplace noms + effets par leur VF. Sortie : .cdb_fr
 //   - "JSON"     : génère un JSON par carte (ZIP) + CSV Manager.
-//                  ⚡ SANS recherche : on prend DIRECTEMENT les infos du .cdb
-//                  (jointure texts + datas).
+//                  ⚡ Recherche par NOM dans la base locale + fallback .cdb.
 //
 // Mode VAACT (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par VAACT.
@@ -710,7 +709,7 @@
   }
 
   // ==========================================================================
-  // ACTION 2 : GÉNÉRER LES JSON — DIRECTEMENT depuis le .cdb
+  // ACTION 2 : GÉNÉRER LES JSON — Recherche par nom + fallback .cdb
   // ==========================================================================
 
   async function runJsonGeneration() {
@@ -735,9 +734,13 @@
     dom.yugiProgressWrap.classList.remove("visible");
     dom.btnCancelYugi.classList.add("hidden");
     dom.btnExportMissing.classList.add("hidden");
-    setProgress(0, "Lecture du .cdb…");
+    setProgress(0, "Préparation de l'index…");
 
     try {
+      // ⚡ Construit les index FR/EN depuis la base locale
+      if (window.memCacheFr && window.memCacheEn) {
+        buildNameIndexes();
+      }
       await nextFrame();
 
       setProgress(5, "Lecture du .cdb…");
@@ -762,22 +765,46 @@
       const report = [];
       const reportIndex = new Map();
       let done = 0;
+      let foundLocal = 0;
+      let foundCdb = 0;
 
+      // ======================================================================
+      // PHASE 1 : Cherche par NOM dans la base locale, fallback sur le .cdb
+      // ======================================================================
       for (let i = 0; i < rows.length; i++) {
         const [
           localId, localName, localDesc,
           dbType, dbAtk, dbDef, dbLevel, dbRace, dbAttribute
         ] = rows[i];
 
-        const frameType = detectFrameType(dbType);
-        const isSpell = (dbType & 0x2) !== 0;
-        const isTrap  = (dbType & 0x4) !== 0;
+        // ⚡ Recherche par nom dans la base locale
+        const key = normalize(localName);
+        let matched = null;
 
-        state.resolvedCards.push({
-          localId,
-          name: localName,
-          desc: localDesc,
-          card: {
+        if (state.nameIndexFr || state.nameIndexEn) {
+          const frMatch = state.nameIndexFr ? state.nameIndexFr.get(key) : null;
+          const enMatch = state.nameIndexEn ? state.nameIndexEn.get(key) : null;
+          matched = frMatch || enMatch;
+        }
+
+        let card;
+
+        if (matched) {
+          // ✅ Trouvé → vraies infos (image, atk, type…)
+          card = {
+            ...matched,
+            // Override nom + desc avec ceux du .cdb (pour garder l'effet original)
+            name: localName,
+            desc: localDesc,
+          };
+          foundLocal++;
+        } else {
+          // ❌ Pas trouvé → infos du .cdb + image YGOPRODeck par ID
+          const frameType = detectFrameType(dbType);
+          const isSpell = (dbType & 0x2) !== 0;
+          const isTrap  = (dbType & 0x4) !== 0;
+
+          card = {
             id: localId,
             name: localName,
             desc: localDesc,
@@ -792,21 +819,29 @@
               image_url: `https://images.ygoprodeck.com/images/cards/${localId}.jpg`,
               image_url_cropped: `https://images.ygoprodeck.com/images/cards_cropped/${localId}.jpg`,
             }],
-          },
-          source: "cdb",
+          };
+          foundCdb++;
+        }
+
+        state.resolvedCards.push({
+          localId,
+          name: localName,
+          desc: localDesc,
+          card: card,
+          source: matched ? "local" : "cdb",
         });
         done++;
         pushReport(report, reportIndex, {
           id: localId,
           name: localName,
           status: "ok",
-          source: "cdb",
+          source: matched ? "local" : "cdb",
         });
 
         if (i % YIELD_EVERY === 0 || i === rows.length - 1) {
           setProgress(
             5 + Math.round((i / total) * 70),
-            `Lecture ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`
+            `Analyse ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`
           );
           await nextFrame();
         }
@@ -814,6 +849,11 @@
         if (state.cancelled) break;
       }
 
+      console.log(`[CDB] JSON : ${foundLocal} cartes trouvées en base locale, ${foundCdb} via .cdb seul`);
+
+      // ======================================================================
+      // PHASE 2 : Génération des JSON + CSV
+      // ======================================================================
       setProgress(80, "Génération des JSON…");
 
       const totalResolved = state.resolvedCards.length;
@@ -860,7 +900,7 @@
       showJsonDownloadsOnly();
 
       setStatus(
-        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s).`
+        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s) (${foundLocal} trouvées en base, ${foundCdb} via .cdb).`
       );
       toast(`${state.generatedFiles.length} JSON générés !`, "ok");
     } catch (err) {
