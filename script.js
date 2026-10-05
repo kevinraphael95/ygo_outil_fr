@@ -1848,8 +1848,8 @@ function buildCsvRow(card) {
     "Link - Bottom Arrow": links.bottomCenter ? "true" : "false",
     "Link - Bottom Right Arrow": links.bottomRight ? "true" : "false",
     Region: "fr",
-    "Effect Style - Justify Ratio": 100,
-    "Effect Style - Min Line": 0,
+    "Effect Style - Justify Ratio": "100",
+    "Effect Style - Min Line": "0",
   };
   return CSV_FIELDS.map((f) => csvQuote(values[f])).join(",");
 }
