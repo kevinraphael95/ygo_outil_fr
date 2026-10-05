@@ -1263,10 +1263,26 @@ function buildAttribute(card) {
   if (!card.attribute) return "Light";
   return card.attribute.charAt(0) + card.attribute.slice(1).toLowerCase();
 }
+
+// ============================================================================
+// ⚡ buildEffectText — supprime les séparateurs + compacte le texte
+// ============================================================================
 function buildEffectText(card) {
-  if (card.type.includes("Pendulum") && card.monster_desc) return card.monster_desc;
-  return card.desc || "";
+  if (card.type.includes("Pendulum") && card.monster_desc) {
+    return card.monster_desc;
+  }
+  let text = card.desc || "";
+
+  // Supprime les lignes de séparateurs : #----, -----, ====, ****, ____
+  // (au moins 3 caractères répétés, sur une ligne entière)
+  text = text.replace(/^[#=*\-_\s]{3,}$/gm, "");
+
+  // Remplace tous les sauts de ligne + espaces multiples par un seul espace
+  text = text.replace(/\s+/g, " ");
+
+  return text.trim();
 }
+
 function buildLinkMarkers(card) {
   const base = {
     topLeft: false, topCenter: false, topRight: false,
@@ -1319,22 +1335,18 @@ function isDeckActionTranslate() {
 function updateDeckActionUI() {
   const isTranslate = isDeckActionTranslate();
 
-  // Afficher/masquer les options de traduction (langue source/cible)
   if (deckTranslateOptions) {
     deckTranslateOptions.classList.toggle("hidden", !isTranslate);
   }
 
-  // Masquer les résultats de l'autre action au changement
   if (translationResultEl) translationResultEl.classList.add("hidden");
   if (translationActionsEl) translationActionsEl.classList.add("hidden");
   if (deckDownloadsRow) deckDownloadsRow.classList.add("hidden");
 
-  // Vider les résultats
   if (deckResultsEl) deckResultsEl.innerHTML = "";
   if (deckStatusEl) deckStatusEl.textContent = "";
   if (progressWrap) progressWrap.classList.remove("visible");
 
-  // Changer le libellé du bouton
   if (deckGenerateBtn) {
     deckGenerateBtn.textContent = isTranslate ? "🌐 Traduire" : "⚙️ Générer les JSON";
   }
@@ -1804,6 +1816,10 @@ function buildAttributeInternal(card) {
   if (!card.attribute) return "NONE";
   return card.attribute.toUpperCase();
 }
+
+// ============================================================================
+// ⚡ csvQuote — sécurité : remplace les \n par espaces si jamais il en reste
+// ============================================================================
 function csvQuote(value) {
   if (value === undefined || value === null || value === "") return "";
   return `"${String(value)
