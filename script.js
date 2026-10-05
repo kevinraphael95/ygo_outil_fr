@@ -1806,7 +1806,11 @@ function buildAttributeInternal(card) {
 }
 function csvQuote(value) {
   if (value === undefined || value === null || value === "") return "";
-  return `"${String(value).replace(/"/g, '""')}"`;
+  return `"${String(value)
+    .replace(/"/g, '""')
+    .replace(/\r\n/g, "\\n")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\n")}"`;
 }
 
 function buildCsvRow(card) {
