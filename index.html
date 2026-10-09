@@ -256,20 +256,23 @@ Side Deck:
         </div>
       </div>
 
-      <!-- ===== Option Mode VAACT (utile seulement pour la traduction) ===== -->
-      <label class="cdb-option" id="cdb-vaact-wrap" style="margin-top:20px;">
-        <input type="checkbox" id="cdb-vaact-mode">
+      <!-- ===== Option : préserver les effets modifiés (cartes custom) ===== -->
+      <label class="cdb-option" id="cdb-custom-wrap" style="margin-top:20px;">
+        <input type="checkbox" id="cdb-custom-mode">
         <span class="cdb-option-label">
-          <strong>Mode VAACT</strong> — préserver les effets modifiés
+          <strong>Préserver les effets modifiés</strong> — pour les cartes custom
         </span>
       </label>
       <p class="cdb-option-help">
-        Pour les cartes dont l'effet a été <strong>modifié par VAACT</strong> (≠ effet officiel), garde l'effet original et ajoute la traduction officielle en dessous.
-        <em>S'applique uniquement à la traduction .cdb.</em>
+        Pour les cartes dont l'effet a été <strong>modifié par un mod custom</strong> (VAACT, Project Ignis, fan-made…), garde l'effet original du <code>.cdb</code> et ajoute la traduction officielle en dessous. Chaque bloc est étiqueté :
+        <br>
+        <code>[Traducteur] &lt;effet original&gt;</code><br>
+        <code>[Vérificateur] &lt;effet officiel FR&gt;</code>
+        <br><em>S'applique uniquement à la traduction .cdb.</em>
       </p>
 
       <!-- ===== Option Fallback Yugipedia ===== -->
-      <label class="cdb-option" id="cdb-yugipedia-wrap">
+      <label class="cdb-option" id="cdb-yugipedia-wrap" style="margin-top:20px;">
         <input type="checkbox" id="cdb-yugipedia-mode">
         <span class="cdb-option-label">
           <strong>Fallback Yugipedia</strong> — pour les cartes absentes de la base locale
@@ -364,7 +367,7 @@ Side Deck:
         <li><strong>Le traduire</strong> — les noms et effets passent en français. Sortie : <code>_fr.cdb</code>.</li>
         <li><strong>Le convertir en JSON</strong> — un JSON par carte (ZIP) + CSV Manager, prêt pour l'éditeur ygopro.org.</li>
       </ul>
-      <p><strong>Mode VAACT :</strong> pour les cartes dont l'effet a été modifié par le projet VAACT, conserve l'effet original (anglais) et ajoute la traduction officielle française en dessous. S'applique uniquement à la sortie <code>.cdb</code>.</p>
+      <p><strong>Préserver les effets modifiés :</strong> pour les cartes dont l'effet a été modifié par un mod custom (VAACT, Project Ignis, fan-made…), conserve l'effet original du <code>.cdb</code> et ajoute la traduction officielle française en dessous. Chaque bloc est étiqueté avec un tag universel : <code>[Traducteur]</code> pour l'effet original, <code>[Vérificateur]</code> pour l'effet officiel. Les tags sont configurables dans le code (<code>TAG_TRAD</code> / <code>TAG_VERIF</code>). S'applique uniquement à la sortie <code>.cdb</code>.</p>
 
       <h3>🟣 Fallback Yugipedia</h3>
       <p>Pour les cartes absentes de la base locale (cartes récentes, errata, etc.), l'app peut interroger l'API de <a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia</a> pour récupérer la traduction française officielle.</p>
