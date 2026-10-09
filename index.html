@@ -263,25 +263,14 @@ Side Deck:
           <strong>Préserver les effets modifiés</strong> — pour les cartes custom
         </span>
       </label>
-      <p class="cdb-option-help">
-        Pour les cartes dont l'effet a été <strong>modifié par un mod custom</strong> (VAACT, Project Ignis, fan-made…), garde l'effet original du <code>.cdb</code> et ajoute la traduction officielle en dessous. Chaque bloc est étiqueté :
-        <br>
-        <code>[Traducteur] &lt;effet original&gt;</code><br>
-        <code>[Vérificateur] &lt;effet officiel FR&gt;</code>
-        <br><em>S'applique uniquement à la traduction .cdb.</em>
-      </p>
 
       <!-- ===== Option Fallback Yugipedia ===== -->
       <label class="cdb-option" id="cdb-yugipedia-wrap" style="margin-top:20px;">
         <input type="checkbox" id="cdb-yugipedia-mode">
         <span class="cdb-option-label">
-          <strong>Fallback Yugipedia</strong> — pour les cartes absentes de la base locale
+          <strong>Fallback Yugipedia</strong> — Interroge l'API Yugipedia (1 req/s max) pour récupérer les traductions FR absentes de YGOPRODeck.
         </span>
       </label>
-      <p class="cdb-option-help">
-        Interroge l'API Yugipedia (<strong>1 req/s max</strong>) pour récupérer les traductions FR des cartes récentes absentes de YGOPRODeck.
-        <strong>Lent</strong> sur de gros .cdb. Les résultats sont mis en cache 30 jours.
-      </p>
 
       <div class="actions-row hidden" id="cdb-actions">
         <button class="btn-primary" id="cdb-translate" type="button">⚙️ Lancer</button>
