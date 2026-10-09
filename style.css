@@ -500,6 +500,29 @@ body {
 }
 
 /* ============================================================
+   DRAPEAUX — images SVG (compatibles Windows)
+   ============================================================ */
+.flag {
+  width: 18px;
+  height: 13px;
+  object-fit: cover;
+  border-radius: 2px;
+  display: inline-block;
+  vertical-align: -2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+
+.lang-chip .flag {
+  vertical-align: -2px;
+  margin-right: 2px;
+}
+
+.results-lang .flag {
+  margin-right: 2px;
+}
+
+/* ============================================================
    SEARCH OPTION (checkbox générique : Yugipedia, etc.)
    ============================================================ */
 .search-option {
@@ -1418,6 +1441,10 @@ body {
   text-align: center;
   color: var(--text);
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 /* ============================================================
@@ -1522,7 +1549,7 @@ body {
 }
 
 /* ============================================================
-   CDB — OPTION MODE VAACT / YUGIPEDIA
+   CDB — OPTIONS
    ============================================================ */
 .cdb-option {
   display: flex;
