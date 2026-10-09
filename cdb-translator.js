@@ -16,11 +16,8 @@
 //
 // Mode "Préserver les effets modifiés" (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par un mod
-//   custom (VAACT, Project Ignis, fan-made…). On garde alors l'effet original
-//   du .cdb, puis on ajoute en dessous l'effet officiel FR. Chaque bloc est
-//   étiqueté avec un tag universel configurable :
-//       [Traducteur] <effet original>
-//       [Vérificateur] <effet officiel>
+//   custom (VAACT, Project Ignis, fan-made…). On garde alors l'effet ORIGINAL
+//   du .cdb tel quel, et seul le NOM est traduit en FR.
 //
 // Fallback Yugipedia (option, traduction uniquement, désactivé par défaut) :
 //   Si une carte est en anglais dans la base locale mais qu'une VF existe sur
@@ -39,17 +36,6 @@
   const MAX_REPORT_LINES = 250;
   const YIELD_EVERY = 200;
   const YUGI_CONFIRM_THRESHOLD = 50;
-
-  // --------------------------------------------------------------------------
-  // TAGS UNIVERSELS — utilisés quand un effet custom est détecté
-  // --------------------------------------------------------------------------
-  // Modifie ces valeurs pour t'adapter à ton workflow.
-  //   - TAG_TRAD  : étiquette du bloc d'effet ORIGINAL (le .cdb custom)
-  //   - TAG_VERIF : étiquette du bloc d'effet OFFICIEL (base locale / Yugipedia)
-  // --------------------------------------------------------------------------
-  const TAG_TRAD  = "[Traducteur]";
-  const TAG_VERIF = "[Vérificateur]";
-  const TAG_SEPARATOR = "\n\n";
 
   // ==========================================================================
   // ÉTAT
@@ -194,18 +180,6 @@
   }
 
   // ==========================================================================
-  // HELPERS — construction du texte à deux blocs taggés
-  // ==========================================================================
-
-  function buildTaggedDesc(originalDesc, officialDesc) {
-    return (
-      `${TAG_TRAD} ${originalDesc || ""}` +
-      TAG_SEPARATOR +
-      `${TAG_VERIF} ${officialDesc || ""}`
-    );
-  }
-
-  // ==========================================================================
   // RÉSOLUTION DE CARTE (pour la TRADUCTION uniquement)
   // ==========================================================================
 
@@ -232,7 +206,7 @@
           return {
             status: "translated",
             name: frById.name,
-            desc: buildTaggedDesc(localDesc, frById.desc),
+            desc: localDesc || "",
             modified: true,
             card: frById,
             source: "local",
@@ -263,7 +237,7 @@
                 return {
                   status: "translated",
                   name: frName,
-                  desc: buildTaggedDesc(localDesc, frDesc || enMatch.desc),
+                  desc: localDesc || "",
                   modified: true,
                   card: enMatch,
                   source: "yugipedia",
@@ -309,7 +283,7 @@
             return {
               status: "translated",
               name: frName,
-              desc: buildTaggedDesc(localDesc, frDesc),
+              desc: localDesc || "",
               modified: true,
               card: exact,
               source: "yugipedia",
@@ -354,7 +328,7 @@
       return {
         status: "translated",
         name: frName,
-        desc: buildTaggedDesc(localDesc, frDesc),
+        desc: localDesc || "",
         modified: true,
         card: exact,
         source: "yugipedia",
