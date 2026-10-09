@@ -14,10 +14,13 @@
 //                    4. Yugipedia (si activé)
 //                    5. Infos du .cdb (dernier recours)
 //
-// Mode VAACT (option, traduction uniquement) :
-//   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par VAACT.
-//   On garde alors l'effet original (anglais VAACT) puis on ajoute en dessous
-//   l'effet officiel FR, préfixé de "(VAACT) ".
+// Mode "Préserver les effets modifiés" (option, traduction uniquement) :
+//   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par un mod
+//   custom (VAACT, Project Ignis, fan-made…). On garde alors l'effet original
+//   du .cdb, puis on ajoute en dessous l'effet officiel FR. Chaque bloc est
+//   étiqueté avec un tag universel configurable :
+//       [Traducteur] <effet original>
+//       [Vérificateur] <effet officiel>
 //
 // Fallback Yugipedia (option, traduction uniquement, désactivé par défaut) :
 //   Si une carte est en anglais dans la base locale mais qu'une VF existe sur
@@ -36,6 +39,17 @@
   const MAX_REPORT_LINES = 250;
   const YIELD_EVERY = 200;
   const YUGI_CONFIRM_THRESHOLD = 50;
+
+  // --------------------------------------------------------------------------
+  // TAGS UNIVERSELS — utilisés quand un effet custom est détecté
+  // --------------------------------------------------------------------------
+  // Modifie ces valeurs pour t'adapter à ton workflow.
+  //   - TAG_TRAD  : étiquette du bloc d'effet ORIGINAL (le .cdb custom)
+  //   - TAG_VERIF : étiquette du bloc d'effet OFFICIEL (base locale / Yugipedia)
+  // --------------------------------------------------------------------------
+  const TAG_TRAD  = "[Traducteur]";
+  const TAG_VERIF = "[Vérificateur]";
+  const TAG_SEPARATOR = "\n\n";
 
   // ==========================================================================
   // ÉTAT
@@ -73,7 +87,7 @@
     actionTranslate: $("cdb-action-translate"),
     actionJson:      $("cdb-action-json"),
 
-    vaactMode:    $("cdb-vaact-mode"),
+    customMode:   $("cdb-custom-mode"),
     yugiMode:     $("cdb-yugipedia-mode"),
 
     progressWrap: $("cdb-progress-wrap"),
@@ -162,7 +176,7 @@
   }
 
   // ==========================================================================
-  // COMPARAISON D'EFFETS (VAACT)
+  // COMPARAISON D'EFFETS (détection de mod custom)
   // ==========================================================================
 
   function cleanDesc(s) {
@@ -180,10 +194,22 @@
   }
 
   // ==========================================================================
+  // HELPERS — construction du texte à deux blocs taggés
+  // ==========================================================================
+
+  function buildTaggedDesc(originalDesc, officialDesc) {
+    return (
+      `${TAG_TRAD} ${originalDesc || ""}` +
+      TAG_SEPARATOR +
+      `${TAG_VERIF} ${officialDesc || ""}`
+    );
+  }
+
+  // ==========================================================================
   // RÉSOLUTION DE CARTE (pour la TRADUCTION uniquement)
   // ==========================================================================
 
-  async function resolveCard(localName, localDesc, vaactMode, allowYugipedia) {
+  async function resolveCard(localName, localDesc, customMode, allowYugipedia) {
     const key = normalize(localName);
     if (!key) return { status: "not_found" };
 
@@ -202,13 +228,12 @@
     if (enMatch) {
       const frById = window.memCacheFr.get(String(enMatch.id));
       if (frById) {
-        const modified = vaactMode && descDiffers(localDesc, enMatch.desc);
-        if (modified) {
+        if (customMode && descDiffers(localDesc, enMatch.desc)) {
           return {
             status: "translated",
             name: frById.name,
-            desc: `(VAACT) ${localDesc || ""}\n\n${frById.desc || ""}`,
-            vaact: true,
+            desc: buildTaggedDesc(localDesc, frById.desc),
+            modified: true,
             card: frById,
             source: "local",
           };
@@ -234,13 +259,12 @@
             const frDesc = exact._descs?.fr || "";
 
             if (frName && frName !== enMatch.name) {
-              const modified = vaactMode && descDiffers(localDesc, enMatch.desc);
-              if (modified) {
+              if (customMode && descDiffers(localDesc, enMatch.desc)) {
                 return {
                   status: "translated",
                   name: frName,
-                  desc: `(VAACT) ${localDesc || ""}\n\n${frDesc || enMatch.desc || ""}`,
-                  vaact: true,
+                  desc: buildTaggedDesc(localDesc, frDesc || enMatch.desc),
+                  modified: true,
                   card: enMatch,
                   source: "yugipedia",
                 };
@@ -281,14 +305,12 @@
           const frDesc = exact._descs?.fr || exact.desc || localDesc;
           const enDesc = exact._descs?.en || "";
 
-          const modified = vaactMode && enDesc && descDiffers(localDesc, enDesc);
-
-          if (modified) {
+          if (customMode && enDesc && descDiffers(localDesc, enDesc)) {
             return {
               status: "translated",
               name: frName,
-              desc: `(VAACT) ${localDesc || ""}\n\n${frDesc || ""}`,
-              vaact: true,
+              desc: buildTaggedDesc(localDesc, frDesc),
+              modified: true,
               card: exact,
               source: "yugipedia",
             };
@@ -315,7 +337,7 @@
   // RÉSOLUTION DE CARTE AVEC DONNÉES YUGIPEDIA PRÉ-CHARGÉES (batch)
   // ==========================================================================
 
-  function resolveCardFromYugiCache(localName, localDesc, vaactMode, yugiCards) {
+  function resolveCardFromYugiCache(localName, localDesc, customMode, yugiCards) {
     const key = normalize(localName);
     if (!key) return { status: "not_found" };
     if (!yugiCards || !yugiCards.length) return { status: "not_found" };
@@ -328,14 +350,12 @@
     const frDesc = exact._descs?.fr || exact.desc || localDesc;
     const enDesc = exact._descs?.en || "";
 
-    const modified = vaactMode && enDesc && descDiffers(localDesc, enDesc);
-
-    if (modified) {
+    if (customMode && enDesc && descDiffers(localDesc, enDesc)) {
       return {
         status: "translated",
         name: frName,
-        desc: `(VAACT) ${localDesc || ""}\n\n${frDesc || ""}`,
-        vaact: true,
+        desc: buildTaggedDesc(localDesc, frDesc),
+        modified: true,
         card: exact,
         source: "yugipedia",
       };
@@ -443,10 +463,10 @@
       dom.statMissingLbl.textContent = isJson ? "—" : "Pas de trad. FR";
     }
 
-    if (dom.vaactMode) {
-      dom.vaactMode.disabled = isJson;
-      if (isJson) dom.vaactMode.checked = false;
-      const wrap = dom.vaactMode.closest(".cdb-option");
+    if (dom.customMode) {
+      dom.customMode.disabled = isJson;
+      if (isJson) dom.customMode.checked = false;
+      const wrap = dom.customMode.closest(".cdb-option");
       if (wrap) wrap.style.opacity = isJson ? "0.4" : "1";
     }
     if (dom.yugiMode) {
@@ -479,7 +499,7 @@
   }
 
   // ==========================================================================
-  // ACTION 1 : TRADUIRE LE .CDB (inchangé)
+  // ACTION 1 : TRADUIRE LE .CDB
   // ==========================================================================
 
   async function runTranslation() {
@@ -495,7 +515,7 @@
       return;
     }
 
-    const vaactMode = dom.vaactMode ? dom.vaactMode.checked : false;
+    const customMode = dom.customMode ? dom.customMode.checked : false;
     const yugiMode = dom.yugiMode ? dom.yugiMode.checked : false;
 
     state.cancelled = false;
@@ -530,26 +550,54 @@
       let done = 0;
       let doneYugi = 0;
       let missing = 0;
-      let vaactCount = 0;
+      let modifiedCount = 0;
 
       for (let i = 0; i < rows.length; i++) {
         const [localId, localName, localDesc] = rows[i];
 
-        const resolved = await resolveCard(localName, localDesc, vaactMode, false);
+        // ⚡ Fallback tilde : nom EN entre ~...~ dans la desc
+        let enNameFromTilde = null;
+        if (localDesc) {
+          const tildeMatch = localDesc.match(/~([^~]+)~/);
+          if (tildeMatch && tildeMatch[1]) {
+            enNameFromTilde = tildeMatch[1].trim();
+          }
+        }
+
+        // 1er essai : nom local
+        let resolved = await resolveCard(localName, localDesc, customMode, false);
+
+        // 2e essai : nom tilde (si différent et 1er essai échoué)
+        if (
+          resolved.status === "not_found" &&
+          enNameFromTilde &&
+          normalize(enNameFromTilde) !== normalize(localName)
+        ) {
+          resolved = await resolveCard(enNameFromTilde, localDesc, customMode, false);
+          if (resolved.status === "translated") {
+            console.log(`[CDB] ✅ Trad. via ~nom~ : "${enNameFromTilde}"`);
+          }
+        }
 
         if (resolved.status === "translated") {
           updates.push({ id: localId, name: resolved.name, desc: resolved.desc });
           done++;
-          if (resolved.vaact) vaactCount++;
+          if (resolved.modified) modifiedCount++;
           pushReport(report, reportIndex, {
             id: localId,
             name: resolved.name,
             status: "ok",
-            vaact: !!resolved.vaact,
+            modified: !!resolved.modified,
             source: resolved.source,
           });
         } else if (resolved.status === "en_only") {
+          // ⚡ Bug fix : on envoie AUSSI les "en_only" au batch Yugipedia
           missing++;
+          missingCards.push({
+            id: localId,
+            name: enNameFromTilde || localName,
+            desc: localDesc,
+          });
           pushReport(report, reportIndex, {
             id: localId,
             name: resolved.name,
@@ -557,7 +605,11 @@
           });
         } else {
           missing++;
-          missingCards.push({ id: localId, name: localName, desc: localDesc });
+          missingCards.push({
+            id: localId,
+            name: enNameFromTilde || localName,
+            desc: localDesc,
+          });
           pushReport(report, reportIndex, {
             id: localId,
             name: localName,
@@ -619,20 +671,21 @@
 
             if (yugiCards.length > 0) {
               const resolved = resolveCardFromYugiCache(
-                card.name, card.desc, vaactMode, yugiCards
+                card.name, card.desc, customMode, yugiCards
               );
 
               if (resolved.status === "translated") {
                 updates.push({ id: card.id, name: resolved.name, desc: resolved.desc });
                 done++;
                 doneYugi++;
-                if (resolved.vaact) vaactCount++;
+                missing--;                          // ← BUG FIX compteur
+                if (resolved.modified) modifiedCount++;
 
                 updateReport(reportIndex, card.id, {
                   name: resolved.name,
                   status: "ok",
                   source: "yugipedia",
-                  vaact: !!resolved.vaact,
+                  modified: !!resolved.modified,
                 });
 
                 yugiResolved++;
@@ -657,7 +710,7 @@
       if (state.cancelled) {
         applyUpdates(state.sqlite, updates);
         state.patched = state.sqlite.export();
-        renderResults(report, { total, done, missing, vaactCount, doneYugi });
+        renderResults(report, { total, done, missing, modifiedCount, doneYugi });
         dom.downloads.classList.remove("hidden");
         showTranslateDownloadsOnly();
         if (state.missingNames.length > 0) {
@@ -674,7 +727,7 @@
       state.patched = state.sqlite.export();
 
       setProgress(100, "Terminé !");
-      renderResults(report, { total, done, missing, vaactCount, doneYugi });
+      renderResults(report, { total, done, missing, modifiedCount, doneYugi });
       dom.downloads.classList.remove("hidden");
       showTranslateDownloadsOnly();
       if (state.missingNames.length > 0) {
@@ -682,7 +735,7 @@
       }
 
       const parts = [];
-      if (vaactMode && vaactCount > 0) parts.push(`${vaactCount} VAACT`);
+      if (customMode && modifiedCount > 0) parts.push(`${modifiedCount} effet(s) modifié(s)`);
       if (doneYugi > 0) parts.push(`${doneYugi} via Yugipedia`);
       const suffix = parts.length ? ` · ${parts.join(" · ")}` : "";
 
@@ -915,6 +968,14 @@
 
       console.log(`[CDB] JSON : ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundYugi} via Yugipedia, ${foundCdb} via .cdb seul`);
 
+      // ⚡ BUG FIX : sortir AVANT la phase 2 si annulation demandée
+      if (state.cancelled) {
+        console.warn("[CDB] Génération JSON annulée par l'utilisateur");
+        setStatus("⚠️ Génération interrompue.");
+        toast("Génération interrompue", "info");
+        return;
+      }
+
       // ======================================================================
       // PHASE 2 : Génération des JSON + CSV
       // ======================================================================
@@ -959,7 +1020,7 @@
       }
 
       setProgress(100, "Terminé !");
-      renderResults(report, { total, done, missing: 0, vaactCount: 0, doneYugi: 0 });
+      renderResults(report, { total, done, missing: 0, modifiedCount: 0, doneYugi: 0 });
       dom.downloads.classList.remove("hidden");
       showJsonDownloadsOnly();
 
