@@ -872,7 +872,7 @@ async function search(query) {
       return;
     }
     resultsCountEl.textContent = `${cards.length} résultat${cards.length > 1 ? "s" : ""}`;
-    resultsLangEl.textContent = source === "yugipedia"
+    resultsLangEl.innerHTML = source === "yugipedia"
       ? "🟣 trouvés sur Yugipedia"
       : langBadge(usedLanguage);
     resultsLangEl.classList.remove("hidden");
@@ -888,12 +888,15 @@ async function search(query) {
 }
 
 function langBadge(lang) {
-  const flags = { fr: "🇫🇷", en: "🇬🇧", ja: "🇯🇵", de: "🇩🇪", it: "🇮🇹", pt: "🇵🇹" };
+  const codes = { fr: "fr", en: "gb", ja: "jp", de: "de", it: "it", pt: "pt" };
   const names = { fr: "FR", en: "EN", ja: "JA", de: "DE", it: "IT", pt: "PT" };
-  const flag = flags[lang] || "🌐";
+  const code = codes[lang];
   const name = names[lang] || lang.toUpperCase();
-  if (lang === "en") return `${flag} trouvés en ${name} (pas de trad. FR)`;
-  return `${flag} trouvés en ${name}`;
+  const flagImg = code
+    ? `<img class="flag" src="https://flagcdn.com/${code}.svg" alt="">`
+    : "🌐";
+  if (lang === "en") return `${flagImg} trouvés en ${name} (pas de trad. FR)`;
+  return `${flagImg} trouvés en ${name}`;
 }
 
 // ============================================================================
