@@ -11,7 +11,7 @@
 //                    1. Nom FR base locale
 //                    2. Nom EN base locale
 //                    3. Nom EN entre ~...~ dans la desc
-//                    4. Yugipedia (si activé)
+//                    4. Yugipedia (si activé) — en BATCH, pas carte par carte
 //                    5. Infos du .cdb (dernier recours)
 //
 // Mode "Préserver les effets modifiés" (option, traduction uniquement) :
@@ -741,7 +741,12 @@
   }
 
   // ==========================================================================
-  // ACTION 2 : GÉNÉRER LES JSON — Recherche multi-fallback
+  // ACTION 2 : GÉNÉRER LES JSON — Recherche multi-fallback OPTIMISÉE
+  // ==========================================================================
+  // Structure en 3 passes :
+  //   PASSE 1   : Recherche locale (FR/EN) + tilde → rapide, pas d'API
+  //   PASSE 1.5 : BATCH Yugipedia (1 requête pour 50 titres)
+  //   PASSE 2   : Génération des JSON + CSV
   // ==========================================================================
 
   async function runJsonGeneration() {
@@ -767,6 +772,7 @@
     dom.btnCancelYugi.classList.add("hidden");
     dom.btnExportMissing.classList.add("hidden");
     setProgress(0, "Préparation de l'index…");
+    if (window.resetYugipediaCancel) window.resetYugipediaCancel();
 
     try {
       // ⚡ Construit les index FR/EN depuis la base locale
@@ -802,8 +808,12 @@
       let foundYugi = 0;
       let foundCdb = 0;
 
+      // ⚡ File d'attente pour le batch Yugipedia (AUCUN appel ici)
+      const pendingYugi = [];
+
       // ======================================================================
-      // PHASE 1 : Recherche multi-fallback
+      // PASSE 1 : Recherche locale (FR/EN) + fallback tilde ~nom~
+      //           Les non-trouvées sont mises en attente pour le batch
       // ======================================================================
       for (let i = 0; i < rows.length; i++) {
         const [
@@ -840,57 +850,17 @@
           }
         }
 
-        // ⚡ 3. Fallback : Yugipedia (si activé)
-        if (!matched && window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
-          const searchQuery = enNameFromTilde || localName;
-          try {
-            const yugiCards = await window.yugipediaSearch(searchQuery);
-            if (yugiCards && yugiCards.length) {
-              const exact = yugiCards.find((c) =>
-                normalize(c._names?.en || "") === normalize(searchQuery)
-              ) || yugiCards.find((c) =>
-                normalize(c.name) === normalize(searchQuery)
-              ) || yugiCards[0];
-
-              if (exact) {
-                matched = {
-                  id: exact.id || localId,
-                  name: exact.name,
-                  desc: exact.desc || localDesc,
-                  type: exact.type || "Effect Monster",
-                  frameType: exact.frameType || "effect",
-                  atk: exact.atk ?? 0,
-                  def: exact.def ?? 0,
-                  level: exact.level ?? 0,
-                  race: exact.race || "Warrior",
-                  attribute: exact.attribute || "DARK",
-                  card_images: exact.card_images || [],
-                };
-                matchedSource = "yugipedia";
-                console.log(`[CDB] 🟣 Trouvé via Yugipedia : "${exact.name}"`);
-              }
-            }
-          } catch (err) {
-            if (err.message === "Annulé par l'utilisateur") throw err;
-            console.warn(`[CDB] Yugipedia échoué pour "${searchQuery}"`, err.message);
-          }
-        }
-
+        // ⚡ Construire la carte (par défaut = infos du .cdb)
         let card;
-
         if (matched) {
-          // ✅ Trouvé → vraies infos (image, atk, type…)
           card = {
             ...matched,
-            // Override nom + desc avec ceux du .cdb (pour garder l'effet original)
             name: localName,
             desc: localDesc,
           };
           if (matchedSource === "local") foundLocal++;
           else if (matchedSource === "tilde") foundTilde++;
-          else if (matchedSource === "yugipedia") foundYugi++;
         } else {
-          // ❌ Pas trouvé → infos du .cdb + image YGOPRODeck par ID
           const frameType = detectFrameType(dbType);
           const isSpell = (dbType & 0x2) !== 0;
           const isTrap  = (dbType & 0x4) !== 0;
@@ -912,6 +882,20 @@
             }],
           };
           foundCdb++;
+
+          // ⚡ 3. Si Yugipedia activé → enregistrer pour le BATCH (pas d'appel HTTP)
+          if (window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
+            const searchQuery = enNameFromTilde || localName;
+            if (searchQuery && searchQuery.length >= 3) {
+              pendingYugi.push({
+                index: state.resolvedCards.length,  // index futur dans resolvedCards
+                searchQuery,
+                localId,
+                localName,
+                localDesc,
+              });
+            }
+          }
         }
 
         state.resolvedCards.push({
@@ -931,7 +915,7 @@
 
         if (i % YIELD_EVERY === 0 || i === rows.length - 1) {
           setProgress(
-            5 + Math.round((i / total) * 70),
+            5 + Math.round((i / total) * 60),
             `Analyse ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`
           );
           await nextFrame();
@@ -940,7 +924,78 @@
         if (state.cancelled) break;
       }
 
-      console.log(`[CDB] JSON : ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundYugi} via Yugipedia, ${foundCdb} via .cdb seul`);
+      console.log(`[CDB] JSON passe 1 : ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundCdb} via .cdb seul · ${pendingYugi.length} à chercher sur Yugipedia`);
+
+      // ======================================================================
+      // PASSE 1.5 : BATCH YUGIPEDIA (1 requête pour 50 titres)
+      // ======================================================================
+      if (pendingYugi.length > 0 && !state.cancelled) {
+        const uniqueQueries = [...new Set(pendingYugi.map((p) => p.searchQuery))];
+        console.log(`[CDB] ⚡ BATCH Yugipedia : ${uniqueQueries.length} noms uniques pour ${pendingYugi.length} cartes`);
+
+        dom.yugiProgressWrap.classList.add("visible");
+        dom.btnCancelYugi.classList.remove("hidden");
+        setYugiProgress(0, `Yugipedia batch (${uniqueQueries.length} noms)…`);
+
+        let batchResults;
+        try {
+          batchResults = await window.yugipediaSearchBatch(uniqueQueries);
+        } catch (err) {
+          console.error("[CDB] Erreur batch", err);
+          batchResults = new Map();
+        }
+
+        let yugiResolved = 0;
+
+        for (let j = 0; j < pendingYugi.length; j++) {
+          if (state.cancelled) break;
+
+          const p = pendingYugi[j];
+          const yugiCards = batchResults.get(p.searchQuery) || [];
+
+          if (yugiCards.length > 0) {
+            const exact = yugiCards.find((c) =>
+              normalize(c._names?.en || "") === normalize(p.searchQuery)
+            ) || yugiCards.find((c) =>
+              normalize(c.name) === normalize(p.searchQuery)
+            ) || yugiCards[0];
+
+            if (exact) {
+              const item = state.resolvedCards[p.index];
+              // On remplace les infos de base par celles de Yugipedia,
+              // mais on garde nom + desc du .cdb (effet original)
+              item.card = {
+                ...item.card,
+                ...exact,
+                id: exact.id || p.localId,
+                name: p.localName,
+                desc: p.localDesc,
+                card_images: exact.card_images || item.card.card_images,
+              };
+              item.source = "yugipedia";
+
+              foundYugi++;
+              if (foundCdb > 0) foundCdb--;  // Retire du compteur ".cdb seul"
+              yugiResolved++;
+
+              updateReport(reportIndex, p.localId, { source: "yugipedia" });
+            }
+          }
+
+          if (j % 50 === 0 || j === pendingYugi.length - 1) {
+            const pct = Math.round(((j + 1) / pendingYugi.length) * 100);
+            setYugiProgress(
+              pct,
+              `Yugipedia ${j + 1} / ${pendingYugi.length}… (${yugiResolved} OK)`
+            );
+            await nextFrame();
+          }
+        }
+
+        dom.btnCancelYugi.classList.add("hidden");
+        dom.yugiProgressWrap.classList.remove("visible");
+        console.log(`[CDB] JSON passe 1.5 : ${yugiResolved} cartes enrichies via Yugipedia (batch)`);
+      }
 
       // ⚡ BUG FIX : sortir AVANT la phase 2 si annulation demandée
       if (state.cancelled) {
@@ -951,7 +1006,7 @@
       }
 
       // ======================================================================
-      // PHASE 2 : Génération des JSON + CSV
+      // PASSE 2 : Génération des JSON + CSV
       // ======================================================================
       setProgress(80, "Génération des JSON…");
 
