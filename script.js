@@ -1277,7 +1277,7 @@ function buildEffectText(card) {
   let text = card.desc || "";
 
   // ⚡ Séparateurs → puce ●
-  text = text.replace(/^[#=*\-_\s]{3,}$/gm, " ● ");
+  text = text.replace(/^[#=*\-_\s]{3,}$/gm, " ◆ ◆ ◆ ");
 
   // ⚡ Sauts de ligne → espace (supprimés)
   text = text.replace(/\r\n/g, " ");
