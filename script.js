@@ -1849,7 +1849,12 @@ function buildCsvRow(card) {
   const isLink = baseFrame === "link";
   const links = buildLinkMarkers(card);
   const img = card.card_images && card.card_images[0];
-  const imgUrl = img ? (img.image_url_cropped || img.image_url) : "";
+  const rawImgUrl = img ? (img.image_url_cropped || img.image_url) : "";
+  // ⚡ Proxy CORS (weserv.nl) pour que le générateur ygopro.org
+  //    puisse exporter les cartes en masse sans "tainted canvas"
+  const imgUrl = rawImgUrl
+    ? `https://images.weserv.nl/?url=${encodeURIComponent(rawImgUrl.replace(/^https?:\/\//, ""))}`
+    : "";
 
   const values = {
     Format: "tcg",
