@@ -16,6 +16,15 @@
 //   3. BATCH : plusieurs titres en 1 requête (max 50 par appel)
 //   4. Cache mémoire + IndexedDB (30 jours)
 //
+// ⚡ NOUVEAU — Recherche en 2 passes :
+//   PASSE 1 : teste plusieurs variantes de titre ("Nom", "Nom (anime)",
+//             "Nom (card)", "Nom (manga)", "Nom (Duel_Links)", "Nom (video_game)")
+//             → toutes envoyées en 1 seul batch → rapide.
+//   PASSE 2 : pour les cartes encore introuvables, utilise list=search de
+//             MediaWiki (intitle:"Nom") → trouve TOUTES les pages dont le
+//             titre contient ce nom, peu importe le suffixe. Lent (1 req/s)
+//             mais exhaustif.
+//
 // Règles de politesse (obligatoires) :
 //   • Max 1 requête / seconde
 //   • Cache obligatoire (30 jours)
@@ -70,6 +79,15 @@
     "Video game card",
     "OCG card",
     "TCG card",
+  ];
+
+  // ⚡ Suffixes probables à tester sur Yugipedia (passe 1 du batch)
+  const TITLE_SUFFIXES = [
+    "anime",
+    "manga",
+    "card",
+    "Duel_Links",
+    "video_game",
   ];
 
   // ==========================================================================
@@ -490,30 +508,81 @@
   }
 
   // ==========================================================================
-  // RECHERCHE YUGIPEDIA (SIMPLE — UN TITRE)
+  // ⚡ VARIANTES DE TITRE — teste les suffixes probables (anime, manga, card…)
   // ==========================================================================
 
-  function buildTitleCandidates(query) {
+  function buildTitleVariants(query) {
     const q = String(query || "").trim();
     if (!q) return [];
 
-    const candidates = new Set();
-    candidates.add(q);
-    candidates.add(q.replace(/\s+/g, "_"));
-    candidates.add(
-      q.split(/\s+/)
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-        .join(" ")
-    );
-    candidates.add(
-      q.replace(/\s+/g, "_")
-        .split("_")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-        .join("_")
-    );
+    const variants = new Set();
+    variants.add(q);                       // Nom exact
+    variants.add(q.replace(/\s+/g, "_"));  // Nom avec underscores
 
-    return [...candidates];
+    for (const s of TITLE_SUFFIXES) {
+      variants.add(`${q} (${s})`);
+      variants.add(`${q.replace(/\s+/g, "_")}_(${s})`);
+    }
+
+    return [...variants];
   }
+
+  // Backward compat — l'ancien nom reste exposé
+  function buildTitleCandidates(query) {
+    return buildTitleVariants(query);
+  }
+
+  // ==========================================================================
+  // ⚡ RECHERCHE FLOUE — list=search MediaWiki (trouve peu importe le suffixe)
+  // ==========================================================================
+
+  /**
+   * Utilise list=search de MediaWiki pour trouver les pages dont le titre
+   * CONTIENT le nom cherché, peu importe ce qu'il y a après.
+   * Ex: "Natural Selection" → trouve "Natural Selection (anime)", "(card)"…
+   *
+   * @param {string} query - Nom de carte à chercher
+   * @returns {string[]} - Liste de titres de pages trouvés
+   */
+  async function yugipediaListSearch(query) {
+    const q = String(query || "").trim();
+    if (!q || q.length < 3) return [];
+
+    const safe = q.replace(/"/g, '\\"');
+
+    try {
+      const data = await yugipediaFetch({
+        action: "query",
+        list: "search",
+        srsearch: `intitle:"${safe}"`,
+        srlimit: "15",
+        srnamespace: "0",
+      });
+      const results = data?.query?.search || [];
+      return results.map((r) => r.title);
+    } catch (err) {
+      console.warn(`[Yugipedia] list=search échec pour "${q}":`, err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Choisit le meilleur titre parmi les résultats de list=search.
+   * Priorité : titre commence par le nom cherché > contient > premier.
+   */
+  function pickBestTitle(candidates, query) {
+    if (!candidates || !candidates.length) return null;
+    const normQ = normalize(query);
+    return (
+      candidates.find((t) => normalize(t).startsWith(normQ)) ||
+      candidates.find((t) => normalize(t).includes(normQ)) ||
+      candidates[0]
+    );
+  }
+
+  // ==========================================================================
+  // RECHERCHE YUGIPEDIA (SIMPLE — UN TITRE)
+  // ==========================================================================
 
   async function yugipediaSearch(query) {
     if (!query || query.length < 3) return [];
@@ -539,9 +608,10 @@
 
     try {
       console.log(`[Yugipedia] FETCH: "${query}"`);
-      const candidates = buildTitleCandidates(query);
+      const candidates = buildTitleVariants(query);
       let card = null;
 
+      // Passe 1 : variantes de titre
       for (const title of candidates) {
         if (cancelRequested) break;
         try {
@@ -553,6 +623,23 @@
         } catch (e) {
           if (e.message === "Annulé par l'utilisateur") throw e;
           console.warn(`[Yugipedia] Échec "${title}":`, e.message);
+        }
+      }
+
+      // Passe 2 : list=search si toujours rien
+      if (!card && !cancelRequested) {
+        const titles = await yugipediaListSearch(query);
+        const best = pickBestTitle(titles, query);
+        if (best) {
+          try {
+            card = await fetchCardByTitle(best);
+            if (card) {
+              console.log(`[Yugipedia] ✅ "${query}" → "${best}" (list=search)`);
+            }
+          } catch (e) {
+            if (e.message === "Annulé par l'utilisateur") throw e;
+            console.warn(`[Yugipedia] Échec fetch "${best}":`, e.message);
+          }
         }
       }
 
@@ -628,19 +715,28 @@
   }
 
   // ==========================================================================
-  // ⚡ BATCH : recherche de PLUSIEURS titres en UNE requête
+  // ⚡ BATCH v2 — Passe 1 : variantes | Passe 2 : list=search
   // ==========================================================================
 
   /**
-   * Recherche PLUSIEURS cartes en 1 requête (max 50 par batch).
-   * @param {string[]} queries - Liste de noms à chercher
+   * Recherche PLUSIEURS cartes en un minimum de requêtes.
+   *
+   * Passe 1 (batchée) : envoie toutes les variantes de titres en 1 requête
+   *                     groupée (max 50 titres par appel MediaWiki).
+   * Passe 2 (individuelle) : pour les cartes restées introuvables, lance
+   *                     un list=search par carte (1 req/s max).
+   *
+   * @param {string[]} queries - Noms à chercher
+   * @param {function} [onProgress] - Callback optionnel : ({phase, done, total})
    * @returns {Map<string, object[]>} - Map { query → [cards] }
    */
-  async function yugipediaSearchBatch(queries) {
+  async function yugipediaSearchBatch(queries, onProgress) {
     const results = new Map();
     if (!queries || !queries.length) return results;
 
-    // 1. Filtrer les queries (skip japonais/CJK, déjà en cache, etc.)
+    // -----------------------------------------------------------------------
+    // 0. Filtrage initial : skip japonais/CJK + déjà en cache
+    // -----------------------------------------------------------------------
     const toFetch = [];
     for (const q of queries) {
       if (!q || q.length < 3) {
@@ -661,7 +757,9 @@
 
     if (!toFetch.length) return results;
 
-    // 2. Vérifier le cache IDB
+    // -----------------------------------------------------------------------
+    // 1. Vérifie le cache IndexedDB
+    // -----------------------------------------------------------------------
     const idbKeys = toFetch.map((q) => normalize(q));
     const idbCached = await idbGetMany(IDB_STORE_YUGI_SEARCH, idbKeys);
     const stillToFetch = [];
@@ -678,33 +776,39 @@
 
     if (!stillToFetch.length) return results;
 
-    // 3. Grouper les queries par batch (max 50 par requête)
-    //    On utilise les candidats de titre (ex: "Nom", "Nom_", "Nom avec _")
-    //    Pour économiser, on ne prend QUE le titre exact par query (1 candidat)
-    //    puis on fera un fallback si nécessaire.
-    const titleToQuery = new Map();
+    // -----------------------------------------------------------------------
+    // 2. PASSE 1 — Batch de variantes
+    // -----------------------------------------------------------------------
+    const titleToQueries = new Map();  // normalizedTitle → [queries]
     const allTitles = [];
 
     for (const q of stillToFetch) {
-      // On prend le titre le plus probable : remplace espaces par _
-      const title = q.replace(/\s+/g, "_");
-      if (!titleToQuery.has(title)) {
-        titleToQuery.set(title, []);
-        allTitles.push(title);
+      const variants = buildTitleVariants(q);
+      for (const v of variants) {
+        const key = normalize(v);
+        if (!titleToQueries.has(key)) {
+          titleToQueries.set(key, []);
+          allTitles.push(v);
+        }
+        titleToQueries.get(key).push(q);
       }
-      titleToQuery.get(title).push(q);
     }
 
-    // 4. Envoyer par paquets de BATCH_SIZE
+    console.log(
+      `[Yugipedia] ⚡ Passe 1 : ${allTitles.length} variantes pour ${stillToFetch.length} cartes`
+    );
+
+    const queryToCard = new Map();  // query → card (1er trouvé gagne)
+
     const batches = [];
     for (let i = 0; i < allTitles.length; i += BATCH_SIZE) {
       batches.push(allTitles.slice(i, i + BATCH_SIZE));
     }
 
-    console.log(`[Yugipedia] ⚡ BATCH : ${batches.length} requête(s) pour ${allTitles.length} titre(s)`);
-
-    for (const batch of batches) {
+    for (let b = 0; b < batches.length; b++) {
       if (cancelRequested) break;
+      const batch = batches[b];
+
       try {
         const pageData = await yugipediaFetch({
           action: "query",
@@ -716,20 +820,9 @@
         });
 
         const pages = pageData?.query?.pages || [];
-        const normalizedMap = new Map();
-        const redirectsMap = new Map();
-
-        // MediaWiki renvoie parfois une liste "normalized" et "redirects"
-        // On construit une map des redirections
-        if (pageData?.query?.redirects) {
-          for (const r of pageData.query.redirects) {
-            redirectsMap.set(r.to, r.from);
-          }
-        }
 
         for (const page of pages) {
           if (!page || page.missing) continue;
-          const originalTitle = page.title;
           const wikitext =
             page.revisions?.[0]?.slots?.main?.content ||
             page.revisions?.[0]?.content ||
@@ -739,52 +832,99 @@
           const params = parseCardTable2(wikitext);
           if (!params) continue;
 
-          const card = convertToYgoprodeckFormat(params, originalTitle);
+          const card = convertToYgoprodeckFormat(params, page.title);
           if (!card) continue;
 
-          normalizedMap.set(originalTitle, card);
-          // Aussi associer via redirect si présent
-          if (redirectsMap.has(originalTitle)) {
-            normalizedMap.set(redirectsMap.get(originalTitle), card);
+          // Trouve toutes les queries qui visaient ce titre (ou une variante)
+          const key = normalize(page.title);
+          const queriesForTitle = titleToQueries.get(key) || [];
+          for (const q of queriesForTitle) {
+            if (!queryToCard.has(q)) {
+              queryToCard.set(q, card);
+            }
           }
-        }
 
-        // 5. Distribuer les résultats aux queries
-        for (const [title, queryList] of titleToQuery.entries()) {
-          if (!batch.includes(title)) continue;
-          // Essayer de trouver la carte par titre direct ou via redirect
-          const card = normalizedMap.get(title) || normalizedMap.get(title.replace(/_/g, " "));
-          const cards = card ? [card] : [];
-
-          for (const q of queryList) {
-            const normKey = normalize(q);
-            memCacheSearches.set(normKey, cards);
-            results.set(q, cards);
-            // Ajouter aussi au cache de cartes
-            if (card) {
-              memCacheCards.set(normKey, card);
+          // ⚡ Fallback : associe aussi via le titre sans suffixe
+          //    (utile si l'API a renvoyé "Natural Selection (anime)" alors
+          //     qu'on cherchait "Natural Selection")
+          const baseTitle = page.title.replace(/\s*\([^)]+\)\s*$/, "");
+          const baseKey = normalize(baseTitle);
+          const baseQueries = titleToQueries.get(baseKey) || [];
+          for (const q of baseQueries) {
+            if (!queryToCard.has(q)) {
+              queryToCard.set(q, card);
             }
           }
         }
       } catch (err) {
         console.error("[Yugipedia] Erreur batch", err);
-        // En cas d'erreur, marquer toutes ces queries comme vides
-        for (const title of batch) {
-          const queryList = titleToQuery.get(title) || [];
-          for (const q of queryList) {
-            results.set(q, []);
+      }
+
+      if (onProgress) {
+        onProgress({
+          phase: "variants",
+          done: b + 1,
+          total: batches.length,
+        });
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 3. PASSE 2 — list=search pour les cartes encore introuvables
+    // -----------------------------------------------------------------------
+    const remaining = stillToFetch.filter((q) => !queryToCard.has(q));
+
+    if (remaining.length) {
+      console.log(
+        `[Yugipedia] ⚡ Passe 2 : list=search pour ${remaining.length} carte(s)`
+      );
+
+      let done = 0;
+      for (const q of remaining) {
+        if (cancelRequested) break;
+
+        const titles = await yugipediaListSearch(q);
+        const best = pickBestTitle(titles, q);
+
+        if (best) {
+          try {
+            const card = await fetchCardByTitle(best);
+            if (card) {
+              queryToCard.set(q, card);
+              console.log(`[Yugipedia] ✅ "${q}" → "${best}" (list=search)`);
+            }
+          } catch (err) {
+            if (err.message === "Annulé par l'utilisateur") throw err;
+            console.warn(`[Yugipedia] Échec fetch "${best}":`, err.message);
           }
+        }
+
+        done++;
+        if (onProgress) {
+          onProgress({ phase: "search", done, total: remaining.length });
         }
       }
     }
 
-    // 6. Sauvegarder dans IndexedDB
+    // -----------------------------------------------------------------------
+    // 4. Consolide + cache
+    // -----------------------------------------------------------------------
     const toSave = [];
-    for (const [q, cards] of results.entries()) {
+    for (const q of stillToFetch) {
+      const card = queryToCard.get(q);
+      const cards = card ? [card] : [];
       const normKey = normalize(q);
+      results.set(q, cards);
+      memCacheSearches.set(normKey, cards);
+      if (card) memCacheCards.set(normKey, card);
       toSave.push({ key: normKey, results: cards, ts: Date.now() });
     }
     if (toSave.length) await idbPutMany(IDB_STORE_YUGI_SEARCH, toSave);
+
+    const resolvedCount = stillToFetch.filter((q) => queryToCard.has(q)).length;
+    console.log(
+      `[Yugipedia] 🎯 Résultat : ${resolvedCount} / ${stillToFetch.length} cartes trouvées`
+    );
 
     return results;
   }
@@ -948,7 +1088,7 @@
     isYugipediaEnabled,
     setYugipediaEnabled,
     yugipediaSearch,
-    yugipediaSearchBatch,   // ⚡ NOUVEAU
+    yugipediaSearchBatch,
     fetchCardByTitle,
     clearYugipediaCache,
     cleanExpiredYugipediaCache,
@@ -964,14 +1104,19 @@
     shouldSkipYugipedia,
     looksLikeJapaneseRomaji,
     looksLikeCJK,
+    buildTitleVariants,      // ⚡ NOUVEAU
+    buildTitleCandidates,    // ⚡ Backward compat
+    yugipediaListSearch,     // ⚡ NOUVEAU
+    pickBestTitle,           // ⚡ NOUVEAU
   };
 
   window.yugipediaSearch = yugipediaSearch;
-  window.yugipediaSearchBatch = yugipediaSearchBatch; // ⚡ NOUVEAU
+  window.yugipediaSearchBatch = yugipediaSearchBatch;
+  window.yugipediaListSearch = yugipediaListSearch;  // ⚡ NOUVEAU
   window.cancelYugipedia = cancelYugipedia;
   window.resetYugipediaCancel = resetCancelFlag;
 
   initYugipedia();
 
-  console.log("[Yugipedia] Module chargé ✅");
+  console.log("[Yugipedia] Module chargé ✅ (v2 — variantes + list=search)");
 })();
