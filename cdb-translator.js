@@ -39,7 +39,7 @@
   const MAX_REPORT_LINES = 250;
   const YIELD_EVERY = 200;
   const YUGI_CONFIRM_THRESHOLD = 50;
-  const API_YGO_DELAY = 150;   // entre 2 tentatives de l'API YGOPRODeck
+  const API_YGO_DELAY = 150;   // ms entre 2 tentatives de l'API YGOPRODeck
 
   // ==========================================================================
   // ÉTAT
@@ -374,24 +374,29 @@
   // ==========================================================================
   // Interroge l'API en ligne avec fname= (recherche floue) pour retrouver
   // une carte même si elle n'est pas dans la base locale installée.
-  // ⚡ Nettoyage préalable du nom (retire "Carte Magie :" etc.)
+  //
+  // ⚡ On construit l'URL À LA MAIN avec encodeURIComponent (→ %20)
+  //    au lieu de URL.searchParams (→ +) que l'API YGOPRODeck refuse avec 400.
   // ==========================================================================
 
   async function fetchCardFromYgoprodeckApi(query) {
     const cleaned = cleanNameForApi(query);
+
     const attempts = [
       { fname: cleaned, language: "fr" },
       { fname: cleaned },
       { fname: query, language: "fr" },
       { fname: query },
-      { name: cleaned },
     ];
 
     for (const params of attempts) {
       try {
-        const url = new URL(YGOPRODECK_API);
-        Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-        const res = await fetch(url.toString());
+        const qs = Object.entries(params)
+          .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+          .join("&");
+        const url = `${YGOPRODECK_API}?${qs}`;
+
+        const res = await fetch(url);
         if (!res.ok) {
           await new Promise((r) => setTimeout(r, API_YGO_DELAY));
           continue;
