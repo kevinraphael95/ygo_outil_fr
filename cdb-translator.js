@@ -12,7 +12,9 @@
 //                    2. Nom EN base locale
 //                    3. Nom EN entre ~...~ dans la desc
 //                    4. Yugipedia (si activé) — en BATCH, pas carte par carte
-//                    5. Infos du .cdb (dernier recours) — SANS URL bidon
+//                    5. API YGOPRODeck en ligne (fname=) — pour cartes absentes
+//                       de la base locale installée
+//                    6. Infos du .cdb (dernier recours) — SANS URL bidon
 //
 // Mode "Préserver les effets modifiés" (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par un mod
@@ -33,9 +35,11 @@
   // ==========================================================================
 
   const SQL_CDN = "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3";
+  const YGOPRODECK_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
   const MAX_REPORT_LINES = 250;
   const YIELD_EVERY = 200;
   const YUGI_CONFIRM_THRESHOLD = 50;
+  const API_YGO_DELAY = 150;   // entre 2 tentatives de l'API YGOPRODeck
 
   // ==========================================================================
   // ÉTAT
@@ -177,6 +181,27 @@
     const ca = cleanDesc(a);
     const cb = cleanDesc(b);
     return ca !== cb;
+  }
+
+  // ==========================================================================
+  // ⚡ NETTOYAGE DE NOM — retire les préfixes FR "Carte Magie :" etc.
+  // ==========================================================================
+
+  function cleanNameForApi(name) {
+    let n = String(name || "").trim();
+
+    // Retire les préfixes FR classiques des cartes VAACT / fan-made
+    n = n.replace(/^Carte\s+Magie\s*:\s*/i, "");
+    n = n.replace(/^Carte\s+Pi[eè]ge\s*:\s*/i, "");
+    n = n.replace(/^Carte\s+Magie\s+de\s+/i, "");
+    n = n.replace(/^Carte\s+Pi[eè]ge\s+de\s+/i, "");
+    n = n.replace(/^Magie\s*:\s*/i, "");
+    n = n.replace(/^Pi[eè]ge\s*:\s*/i, "");
+
+    // Retire les suffixes entre parenthèses (souvent "VAACT" etc.)
+    n = n.replace(/\s*\([^)]*\)\s*$/, "");
+
+    return n.trim();
   }
 
   // ==========================================================================
@@ -342,6 +367,45 @@
       card: exact,
       source: "yugipedia",
     };
+  }
+
+  // ==========================================================================
+  // ⚡ FALLBACK YGOPRODECK API — pour cartes absentes de la base locale
+  // ==========================================================================
+  // Interroge l'API en ligne avec fname= (recherche floue) pour retrouver
+  // une carte même si elle n'est pas dans la base locale installée.
+  // ⚡ Nettoyage préalable du nom (retire "Carte Magie :" etc.)
+  // ==========================================================================
+
+  async function fetchCardFromYgoprodeckApi(query) {
+    const cleaned = cleanNameForApi(query);
+    const attempts = [
+      { fname: cleaned, language: "fr" },
+      { fname: cleaned },
+      { fname: query, language: "fr" },
+      { fname: query },
+      { name: cleaned },
+    ];
+
+    for (const params of attempts) {
+      try {
+        const url = new URL(YGOPRODECK_API);
+        Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+        const res = await fetch(url.toString());
+        if (!res.ok) {
+          await new Promise((r) => setTimeout(r, API_YGO_DELAY));
+          continue;
+        }
+        const data = await res.json();
+        if (data.data && data.data.length > 0) {
+          return data.data[0];
+        }
+      } catch (e) {
+        // silencieux, on essaie le suivant
+      }
+      await new Promise((r) => setTimeout(r, API_YGO_DELAY));
+    }
+    return null;
   }
 
   // ==========================================================================
@@ -742,9 +806,10 @@
   // ==========================================================================
   // ACTION 2 : GÉNÉRER LES JSON — Recherche multi-fallback OPTIMISÉE
   // ==========================================================================
-  // Structure en 3 passes :
+  // Structure en 4 passes :
   //   PASSE 1   : Recherche locale (FR/EN) + tilde → rapide, pas d'API
-  //   PASSE 1.5 : BATCH Yugipedia (1 requête pour 50 titres)
+  //   PASSE 1.5 : BATCH Yugipedia (variantes + list=search)
+  //   PASSE 1.7 : API YGOPRODeck en ligne (fname=) pour les cartes orphelines
   //   PASSE 2   : Génération des JSON + CSV
   // ==========================================================================
 
@@ -803,6 +868,7 @@
       let foundLocal = 0;
       let foundTilde = 0;
       let foundYugi = 0;
+      let foundApi = 0;
       let foundCdb = 0;
 
       const pendingYugi = [];
@@ -874,16 +940,14 @@
             level: dbLevel ?? 0,
             race: raceFromCode(dbRace),
             attribute: attributeFromCode(dbAttribute),
-            // ⚡ Pas d'URL bidon : on laisse vide. Le fallback Yugipedia remplira
-            //    si la carte y est trouvée, sinon aucune image (propre).
+            // ⚡ Pas d'URL bidon : on laisse vide. Le fallback Yugipedia / API
+            //    remplira si la carte y est trouvée, sinon aucune image (propre).
             card_images: [],
           };
           foundCdb++;
         }
 
         // ⚡ 4. Fallback Yugipedia UNIQUEMENT si la carte n'a PAS matché
-        //      (donc aucune image YGOPRODeck disponible → 404 probable)
-        //      Les cartes matchées via local/tilde ont déjà une image YGOPRODeck valide.
         if (
           !matched &&
           window.YugipediaAPI &&
@@ -1001,6 +1065,60 @@
         console.log(`[CDB] JSON passe 1.5 : ${yugiResolved} images récupérées via Yugipedia`);
       }
 
+      // ======================================================================
+      // ⚡ PASSE 1.7 : FALLBACK API YGOPRODECK — cartes encore sans image
+      // ======================================================================
+      // Pour toutes les cartes qui n'ont toujours PAS d'image après Yugipedia,
+      // on interroge l'API YGOPRODeck en ligne avec fname= (recherche floue).
+      // L'API comprend le FR donc elle peut retrouver "Salamandra, le Dragon
+      // Volant des Flammes" même si cette carte n'est pas dans la base locale
+      // installée (base incomplète ~11661 FR vs ~13000 en ligne).
+      // ======================================================================
+      const stillNoImage = state.resolvedCards.filter(
+        (item) => !item.card.card_images || item.card.card_images.length === 0
+      );
+
+      if (stillNoImage.length > 0 && !state.cancelled) {
+        console.log(`[CDB] ⚡ Passe 1.7 : Fallback API YGOPRODeck pour ${stillNoImage.length} carte(s)`);
+
+        dom.yugiProgressWrap.classList.add("visible");
+        dom.btnCancelYugi.classList.remove("hidden");
+        setYugiProgress(0, `Fallback API (${stillNoImage.length} cartes)…`);
+
+        let apiResolved = 0;
+        for (let i = 0; i < stillNoImage.length; i++) {
+          if (state.cancelled) break;
+
+          const item = stillNoImage[i];
+          const apiCard = await fetchCardFromYgoprodeckApi(item.name);
+
+          if (apiCard && apiCard.card_images && apiCard.card_images.length > 0) {
+            // ⚡ On ne remplace QUE l'image (le reste reste tel quel)
+            item.card = {
+              ...item.card,
+              card_images: apiCard.card_images,
+            };
+            item.source = (item.source || "cdb") + "+api";
+            apiResolved++;
+            foundApi++;
+            if (foundCdb > 0) foundCdb--;
+          }
+
+          if (i % 5 === 0 || i === stillNoImage.length - 1) {
+            const pct = Math.round(((i + 1) / stillNoImage.length) * 100);
+            setYugiProgress(
+              pct,
+              `API YGOPRODeck ${i + 1} / ${stillNoImage.length}… (${apiResolved} OK)`
+            );
+            await nextFrame();
+          }
+        }
+
+        dom.btnCancelYugi.classList.add("hidden");
+        dom.yugiProgressWrap.classList.remove("visible");
+        console.log(`[CDB] JSON passe 1.7 : ${apiResolved} images via API YGOPRODeck`);
+      }
+
       if (state.cancelled) {
         console.warn("[CDB] Génération JSON annulée par l'utilisateur");
         setStatus("⚠️ Génération interrompue.");
@@ -1057,7 +1175,7 @@
       showJsonDownloadsOnly();
 
       setStatus(
-        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s) · ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundYugi} Yugipedia, ${foundCdb} .cdb seul.`
+        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s) · ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundYugi} Yugipedia, ${foundApi} API, ${foundCdb} .cdb seul.`
       );
       toast(`${state.generatedFiles.length} JSON générés !`, "ok");
     } catch (err) {
