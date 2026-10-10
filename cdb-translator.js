@@ -806,6 +806,7 @@
       let foundCdb = 0;
 
       const pendingYugi = [];
+      const yugiSeen = new Set();   // ⚡ évite les doublons
 
       // ======================================================================
       // PASSE 1 : Recherche locale (FR/EN) + fallback tilde ~nom~
@@ -845,12 +846,12 @@
           }
         }
 
-        // ⚡ Construire la carte
+        // ⚡ 3. Construction de la carte
         let card;
+        let cardIndex = state.resolvedCards.length;
         if (matched) {
           card = {
             ...matched,
-            // ⚡ ID = celui du .cdb (PAS l'ID YGOPRODeck)
             id: localId,
             name: localName,
             desc: localDesc,
@@ -879,18 +880,27 @@
             }],
           };
           foundCdb++;
+        }
 
-          if (window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
-            const searchQuery = enNameFromTilde || localName;
-            if (searchQuery && searchQuery.length >= 3) {
-              pendingYugi.push({
-                index: state.resolvedCards.length,
-                searchQuery,
-                localId,
-                localName,
-                localDesc,
-              });
-            }
+        // ⚡ 4. SI l'ID du .cdb est custom (≥ 9 chiffres) → image probablement 404
+        //      → on pousse AUSSI en pendingYugi pour récupérer l'image Yugipedia
+        const isCustomId = !/^\d{1,8}$/.test(String(localId));
+        if (
+          isCustomId &&
+          window.YugipediaAPI &&
+          window.YugipediaAPI.isYugipediaEnabled() &&
+          !yugiSeen.has(localId)
+        ) {
+          const searchQuery = enNameFromTilde || localName;
+          if (searchQuery && searchQuery.length >= 3) {
+            yugiSeen.add(localId);
+            pendingYugi.push({
+              index: cardIndex,
+              searchQuery,
+              localId,
+              localName,
+              localDesc,
+            });
           }
         }
 
@@ -923,7 +933,7 @@
       console.log(`[CDB] JSON passe 1 : ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundCdb} via .cdb seul · ${pendingYugi.length} à chercher sur Yugipedia`);
 
       // ======================================================================
-      // PASSE 1.5 : BATCH YUGIPEDIA
+      // PASSE 1.5 : BATCH YUGIPEDIA — récupère UNIQUEMENT l'image
       // ======================================================================
       if (pendingYugi.length > 0 && !state.cancelled) {
         const uniqueQueries = [...new Set(pendingYugi.map((p) => p.searchQuery))];
@@ -956,24 +966,24 @@
               normalize(c.name) === normalize(p.searchQuery)
             ) || yugiCards[0];
 
-            if (exact) {
+            if (exact && exact.card_images && exact.card_images.length > 0) {
               const item = state.resolvedCards[p.index];
+              // ⚡ On ne remplace QUE l'image (le reste vient du local YGOPRODeck)
               item.card = {
                 ...item.card,
-                ...exact,
-                // ⚡ ID = celui du .cdb (PAS l'ID Yugipedia)
-                id: p.localId,
-                name: p.localName,
-                desc: p.localDesc,
-                card_images: exact.card_images || item.card.card_images,
+                card_images: exact.card_images,
               };
-              item.source = "yugipedia";
+              // Marque comme "enrichie Yugipedia" sans changer la source métier
+              item.source = (item.source || "cdb") + "+yugi";
 
-              foundYugi++;
-              if (foundCdb > 0) foundCdb--;
+              // Compteurs : si c'était "cdb seul", on bascule en yugipedia
+              if (item.source === "cdb+yugi") {
+                foundYugi++;
+                if (foundCdb > 0) foundCdb--;
+              }
               yugiResolved++;
 
-              updateReport(reportIndex, p.localId, { source: "yugipedia" });
+              updateReport(reportIndex, p.localId, { source: item.source });
             }
           }
 
@@ -981,7 +991,7 @@
             const pct = Math.round(((j + 1) / pendingYugi.length) * 100);
             setYugiProgress(
               pct,
-              `Yugipedia ${j + 1} / ${pendingYugi.length}… (${yugiResolved} OK)`
+              `Yugipedia ${j + 1} / ${pendingYugi.length}… (${yugiResolved} images OK)`
             );
             await nextFrame();
           }
@@ -989,7 +999,7 @@
 
         dom.btnCancelYugi.classList.add("hidden");
         dom.yugiProgressWrap.classList.remove("visible");
-        console.log(`[CDB] JSON passe 1.5 : ${yugiResolved} cartes enrichies via Yugipedia (batch)`);
+        console.log(`[CDB] JSON passe 1.5 : ${yugiResolved} images récupérées via Yugipedia`);
       }
 
       if (state.cancelled) {
