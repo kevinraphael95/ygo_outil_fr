@@ -7,24 +7,17 @@
 // Deux actions supportées :
 //   - "Traduire" : remplace noms + effets par leur VF. Sortie : .cdb_fr
 //   - "JSON"     : génère un JSON par carte (ZIP) + CSV Manager.
-//                  ⚡ Recherche multi-fallback :
-//                    1. Nom FR base locale
-//                    2. Nom EN base locale
-//                    3. Nom EN entre ~...~ dans la desc
-//                    4. Yugipedia (si activé) — en BATCH, pas carte par carte
-//                    5. API YGOPRODeck en ligne (fname=) — pour cartes absentes
-//                       de la base locale installée
-//                    6. Infos du .cdb (dernier recours) — SANS URL bidon
+//                  ⚡ Recherche multi-fallback (ordre optimisé) :
+//                    1. Nom FR / EN dans la base locale
+//                    2. Nom EN entre ~...~ dans la desc
+//                    3. API YGOPRODeck en ligne (PARALLÈLE ×5) — FR puis EN
+//                    4. Yugipedia en BATCH — FR puis EN
+//                    5. Infos du .cdb (dernier recours) — SANS URL bidon
 //
 // Mode "Préserver les effets modifiés" (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par un mod
 //   custom (VAACT, Project Ignis, fan-made…). On garde alors l'effet ORIGINAL
 //   du .cdb tel quel, et seul le NOM est traduit en FR.
-//
-// Fallback Yugipedia (option, traduction uniquement, désactivé par défaut) :
-//   Si une carte est en anglais dans la base locale mais qu'une VF existe sur
-//   Yugipedia, on récupère la VF. Sinon, on interroge Yugipedia uniquement
-//   pour les cartes introuvables.
 // ============================================================================
 
 (() => {
@@ -39,7 +32,8 @@
   const MAX_REPORT_LINES = 250;
   const YIELD_EVERY = 200;
   const YUGI_CONFIRM_THRESHOLD = 50;
-  const API_YGO_DELAY = 150;   // ms entre 2 tentatives de l'API YGOPRODeck
+  const API_YGO_DELAY = 150;      // ms entre 2 tentatives YGOPRODeck
+  const API_YGO_PARALLEL = 5;     // nb de requêtes API en parallèle
 
   // ==========================================================================
   // ÉTAT
@@ -189,19 +183,75 @@
 
   function cleanNameForApi(name) {
     let n = String(name || "").trim();
-
-    // Retire les préfixes FR classiques des cartes VAACT / fan-made
     n = n.replace(/^Carte\s+Magie\s*:\s*/i, "");
     n = n.replace(/^Carte\s+Pi[eè]ge\s*:\s*/i, "");
     n = n.replace(/^Carte\s+Magie\s+de\s+/i, "");
     n = n.replace(/^Carte\s+Pi[eè]ge\s+de\s+/i, "");
     n = n.replace(/^Magie\s*:\s*/i, "");
     n = n.replace(/^Pi[eè]ge\s*:\s*/i, "");
-
-    // Retire les suffixes entre parenthèses (souvent "VAACT" etc.)
     n = n.replace(/\s*\([^)]*\)\s*$/, "");
-
     return n.trim();
+  }
+
+  // ==========================================================================
+  // ⚡ FALLBACK API YGOPRODECK
+  // ==========================================================================
+  // Cherche en FR (language=fr) puis sans filtre (trouve l'EN).
+  // ⚡ encodeURIComponent (→ %20) au lieu de URL.searchParams (→ +).
+  // ==========================================================================
+
+  async function fetchCardFromYgoprodeckApi(query) {
+    const cleaned = cleanNameForApi(query);
+    const attempts = [
+      { fname: cleaned, language: "fr" },  // 1. FR
+      { fname: cleaned },                  // 2. Toutes langues (EN)
+      { fname: query, language: "fr" },    // 3. Nom brut FR
+      { fname: query },                    // 4. Nom brut toutes langues
+    ];
+
+    for (const params of attempts) {
+      try {
+        const qs = Object.entries(params)
+          .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+          .join("&");
+        const res = await fetch(`${YGOPRODECK_API}?${qs}`);
+        if (!res.ok) {
+          await new Promise((r) => setTimeout(r, API_YGO_DELAY));
+          continue;
+        }
+        const data = await res.json();
+        if (data.data && data.data.length > 0) return data.data[0];
+      } catch (e) { /* silencieux */ }
+      await new Promise((r) => setTimeout(r, API_YGO_DELAY));
+    }
+    return null;
+  }
+
+  // ==========================================================================
+  // ⚡ PARALLÉLISATION — lance N tâches async en parallèle, max `limit`
+  // ==========================================================================
+
+  async function parallelLimit(items, limit, worker, onProgress) {
+    const results = new Array(items.length);
+    let index = 0;
+    let completed = 0;
+
+    async function run() {
+      while (index < items.length) {
+        const i = index++;
+        try {
+          results[i] = await worker(items[i], i);
+        } catch (e) {
+          results[i] = null;
+        }
+        completed++;
+        if (onProgress) onProgress(completed, items.length);
+      }
+    }
+
+    const workers = Array.from({ length: Math.min(limit, items.length) }, run);
+    await Promise.all(workers);
+    return results;
   }
 
   // ==========================================================================
@@ -370,50 +420,6 @@
   }
 
   // ==========================================================================
-  // ⚡ FALLBACK YGOPRODECK API — pour cartes absentes de la base locale
-  // ==========================================================================
-  // Interroge l'API en ligne avec fname= (recherche floue) pour retrouver
-  // une carte même si elle n'est pas dans la base locale installée.
-  //
-  // ⚡ On construit l'URL À LA MAIN avec encodeURIComponent (→ %20)
-  //    au lieu de URL.searchParams (→ +) que l'API YGOPRODeck refuse avec 400.
-  // ==========================================================================
-
-  async function fetchCardFromYgoprodeckApi(query) {
-    const cleaned = cleanNameForApi(query);
-
-    const attempts = [
-      { fname: cleaned, language: "fr" },
-      { fname: cleaned },
-      { fname: query, language: "fr" },
-      { fname: query },
-    ];
-
-    for (const params of attempts) {
-      try {
-        const qs = Object.entries(params)
-          .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-          .join("&");
-        const url = `${YGOPRODECK_API}?${qs}`;
-
-        const res = await fetch(url);
-        if (!res.ok) {
-          await new Promise((r) => setTimeout(r, API_YGO_DELAY));
-          continue;
-        }
-        const data = await res.json();
-        if (data.data && data.data.length > 0) {
-          return data.data[0];
-        }
-      } catch (e) {
-        // silencieux, on essaie le suivant
-      }
-      await new Promise((r) => setTimeout(r, API_YGO_DELAY));
-    }
-    return null;
-  }
-
-  // ==========================================================================
   // CHARGEMENT FICHIER
   // ==========================================================================
 
@@ -512,7 +518,6 @@
       const wrap = dom.customMode.closest(".cdb-option");
       if (wrap) wrap.style.opacity = isJson ? "0.4" : "1";
     }
-    // ⚡ Yugipedia disponible en JSON ET en traduction
     if (dom.yugiMode) {
       dom.yugiMode.disabled = false;
       const wrap = dom.yugiMode.closest("#cdb-yugipedia-wrap");
@@ -551,10 +556,7 @@
       return;
     }
     if (!window.memCacheFr || !window.memCacheEn) {
-      toast(
-        "La base locale n'est pas installée. Installe-la dans l'onglet Nom de carte.",
-        "err"
-      );
+      toast("La base locale n'est pas installée. Installe-la dans l'onglet Nom de carte.", "err");
       return;
     }
 
@@ -598,7 +600,6 @@
       for (let i = 0; i < rows.length; i++) {
         const [localId, localName, localDesc] = rows[i];
 
-        // ⚡ Fallback tilde : nom EN entre ~...~ dans la desc
         let enNameFromTilde = null;
         if (localDesc) {
           const tildeMatch = localDesc.match(/~([^~]+)~/);
@@ -607,10 +608,8 @@
           }
         }
 
-        // 1er essai : nom local
         let resolved = await resolveCard(localName, localDesc, customMode, false);
 
-        // 2e essai : nom tilde (si différent et 1er essai échoué)
         if (
           resolved.status === "not_found" &&
           enNameFromTilde &&
@@ -627,35 +626,24 @@
           done++;
           if (resolved.modified) modifiedCount++;
           pushReport(report, reportIndex, {
-            id: localId,
-            name: resolved.name,
-            status: "ok",
-            modified: !!resolved.modified,
-            source: resolved.source,
+            id: localId, name: resolved.name, status: "ok",
+            modified: !!resolved.modified, source: resolved.source,
           });
         } else if (resolved.status === "en_only") {
           missing++;
           missingCards.push({
-            id: localId,
-            name: enNameFromTilde || localName,
-            desc: localDesc,
+            id: localId, name: enNameFromTilde || localName, desc: localDesc,
           });
           pushReport(report, reportIndex, {
-            id: localId,
-            name: resolved.name,
-            status: "warn",
+            id: localId, name: resolved.name, status: "warn",
           });
         } else {
           missing++;
           missingCards.push({
-            id: localId,
-            name: enNameFromTilde || localName,
-            desc: localDesc,
+            id: localId, name: enNameFromTilde || localName, desc: localDesc,
           });
           pushReport(report, reportIndex, {
-            id: localId,
-            name: localName,
-            status: "warn",
+            id: localId, name: localName, status: "warn",
           });
         }
 
@@ -666,7 +654,6 @@
           );
           await nextFrame();
         }
-
         if (state.cancelled) break;
       }
 
@@ -707,29 +694,21 @@
 
           for (let i = 0; i < missingCards.length; i++) {
             if (state.cancelled) break;
-
             const card = missingCards[i];
             const yugiCards = batchResults.get(card.name) || [];
 
             if (yugiCards.length > 0) {
-              const resolved = resolveCardFromYugiCache(
-                card.name, card.desc, customMode, yugiCards
-              );
-
+              const resolved = resolveCardFromYugiCache(card.name, card.desc, customMode, yugiCards);
               if (resolved.status === "translated") {
                 updates.push({ id: card.id, name: resolved.name, desc: resolved.desc });
                 done++;
                 doneYugi++;
                 missing--;
                 if (resolved.modified) modifiedCount++;
-
                 updateReport(reportIndex, card.id, {
-                  name: resolved.name,
-                  status: "ok",
-                  source: "yugipedia",
-                  modified: !!resolved.modified,
+                  name: resolved.name, status: "ok",
+                  source: "yugipedia", modified: !!resolved.modified,
                 });
-
                 yugiResolved++;
               } else {
                 state.missingNames.push(card.name);
@@ -737,14 +716,9 @@
             } else {
               state.missingNames.push(card.name);
             }
-
             const pct = Math.round(((i + 1) / totalMissing) * 100);
-            setYugiProgress(
-              pct,
-              `Yugipedia ${i + 1} / ${totalMissing}… (${yugiResolved} OK)`
-            );
+            setYugiProgress(pct, `Yugipedia ${i + 1} / ${totalMissing}… (${yugiResolved} OK)`);
           }
-
           dom.btnCancelYugi.classList.add("hidden");
         }
       }
@@ -764,10 +738,8 @@
 
       setProgress(88, "Application des traductions…");
       applyUpdates(state.sqlite, updates);
-
       setProgress(96, "Génération du fichier…");
       state.patched = state.sqlite.export();
-
       setProgress(100, "Terminé !");
       renderResults(report, { total, done, missing, modifiedCount, doneYugi });
       dom.downloads.classList.remove("hidden");
@@ -781,9 +753,7 @@
       if (doneYugi > 0) parts.push(`${doneYugi} via Yugipedia`);
       const suffix = parts.length ? ` · ${parts.join(" · ")}` : "";
 
-      setStatus(
-        `✅ Terminé : ${done.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")} carte(s) traduite(s)${suffix}.`
-      );
+      setStatus(`✅ Terminé : ${done.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")} carte(s) traduite(s)${suffix}.`);
       toast("Traduction terminée !", "ok");
     } catch (err) {
       console.error("[CDB] Erreur traduction", err);
@@ -812,10 +782,10 @@
   // ACTION 2 : GÉNÉRER LES JSON — Recherche multi-fallback OPTIMISÉE
   // ==========================================================================
   // Structure en 4 passes :
-  //   PASSE 1   : Recherche locale (FR/EN) + tilde → rapide, pas d'API
-  //   PASSE 1.5 : BATCH Yugipedia (variantes + list=search)
-  //   PASSE 1.7 : API YGOPRODeck en ligne (fname=) pour les cartes orphelines
-  //   PASSE 2   : Génération des JSON + CSV
+  //   PASSE 1 : Recherche locale (FR/EN) + tilde
+  //   PASSE 2 : API YGOPRODeck (×5 parallèle) — FR puis EN
+  //   PASSE 3 : Yugipedia (batch) — FR puis EN
+  //   PASSE 4 : Génération JSON + CSV
   // ==========================================================================
 
   async function runJsonGeneration() {
@@ -844,24 +814,15 @@
     if (window.resetYugipediaCancel) window.resetYugipediaCancel();
 
     try {
-      if (window.memCacheFr && window.memCacheEn) {
-        buildNameIndexes();
-      }
+      if (window.memCacheFr && window.memCacheEn) buildNameIndexes();
       await nextFrame();
 
       setProgress(5, "Lecture du .cdb…");
 
       const rows = state.sqlite.exec(`
-        SELECT 
-          t.id AS id,
-          t.name AS name,
-          t.desc AS desc,
-          d.type AS type,
-          d.atk AS atk,
-          d.def AS def,
-          d.level AS level,
-          d.race AS race,
-          d.attribute AS attribute
+        SELECT t.id AS id, t.name AS name, t.desc AS desc,
+          d.type AS type, d.atk AS atk, d.def AS def,
+          d.level AS level, d.race AS race, d.attribute AS attribute
         FROM texts t
         LEFT JOIN datas d ON t.id = d.id
       `)[0].values;
@@ -870,14 +831,10 @@
       const report = [];
       const reportIndex = new Map();
       let done = 0;
-      let foundLocal = 0;
-      let foundTilde = 0;
-      let foundYugi = 0;
-      let foundApi = 0;
-      let foundCdb = 0;
+      let foundLocal = 0, foundTilde = 0, foundYugi = 0, foundApi = 0, foundCdb = 0;
 
-      const pendingYugi = [];
-      const yugiSeen = new Set();   // ⚡ évite les doublons
+      const pending = [];
+      const yugiSeen = new Set();
 
       // ======================================================================
       // PASSE 1 : Recherche locale (FR/EN) + fallback tilde ~nom~
@@ -888,7 +845,6 @@
           dbType, dbAtk, dbDef, dbLevel, dbRace, dbAttribute
         ] = rows[i];
 
-        // ⚡ 1. Recherche par nom dans la base locale (FR puis EN)
         const key = normalize(localName);
         let matched = null;
         let matchedSource = null;
@@ -900,7 +856,6 @@
           if (matched) matchedSource = "local";
         }
 
-        // ⚡ 2. Fallback : nom EN entre ~...~ dans la desc
         let enNameFromTilde = null;
         if (!matched && localDesc) {
           const tildeMatch = localDesc.match(/~([^~]+)~/);
@@ -917,211 +872,158 @@
           }
         }
 
-        // ⚡ 3. Construction de la carte
         let card;
-        let cardIndex = state.resolvedCards.length;
+        const cardIndex = state.resolvedCards.length;
+
         if (matched) {
-          card = {
-            ...matched,
-            id: localId,
-            name: localName,
-            desc: localDesc,
-          };
+          card = { ...matched, id: localId, name: localName, desc: localDesc };
           if (matchedSource === "local") foundLocal++;
           else if (matchedSource === "tilde") foundTilde++;
         } else {
           const frameType = detectFrameType(dbType);
           const isSpell = (dbType & 0x2) !== 0;
           const isTrap  = (dbType & 0x4) !== 0;
-
           card = {
-            id: localId,
-            name: localName,
-            desc: localDesc,
+            id: localId, name: localName, desc: localDesc,
             type: isSpell ? "Spell Card" : isTrap ? "Trap Card" : "Effect Monster",
-            frameType: frameType,
-            atk: dbAtk ?? 0,
-            def: dbDef ?? 0,
-            level: dbLevel ?? 0,
-            race: raceFromCode(dbRace),
-            attribute: attributeFromCode(dbAttribute),
-            // ⚡ Pas d'URL bidon : on laisse vide. Le fallback Yugipedia / API
-            //    remplira si la carte y est trouvée, sinon aucune image (propre).
+            frameType, atk: dbAtk ?? 0, def: dbDef ?? 0, level: dbLevel ?? 0,
+            race: raceFromCode(dbRace), attribute: attributeFromCode(dbAttribute),
             card_images: [],
           };
           foundCdb++;
         }
 
-        // ⚡ 4. Fallback Yugipedia UNIQUEMENT si la carte n'a PAS matché
-        if (
-          !matched &&
-          window.YugipediaAPI &&
-          window.YugipediaAPI.isYugipediaEnabled() &&
-          !yugiSeen.has(localId)
-        ) {
-          const searchQuery = enNameFromTilde || localName;
-          if (searchQuery && searchQuery.length >= 3) {
-            yugiSeen.add(localId);
-            pendingYugi.push({
-              index: cardIndex,
-              searchQuery,
-              localId,
-              localName,
-              localDesc,
-            });
-          }
+        if (!matched) {
+          pending.push({
+            index: cardIndex,
+            localId,
+            name: localName,
+            enName: enNameFromTilde || null,
+          });
         }
 
         state.resolvedCards.push({
-          localId,
-          name: localName,
-          desc: localDesc,
-          card: card,
+          localId, name: localName,
+          enName: enNameFromTilde || null,
+          desc: localDesc, card,
           source: matchedSource || "cdb",
         });
+
         done++;
         pushReport(report, reportIndex, {
-          id: localId,
-          name: localName,
-          status: "ok",
+          id: localId, name: localName, status: "ok",
           source: matchedSource || "cdb",
         });
 
         if (i % YIELD_EVERY === 0 || i === rows.length - 1) {
-          setProgress(
-            5 + Math.round((i / total) * 60),
-            `Analyse ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`
-          );
+          setProgress(5 + Math.round((i / total) * 60),
+            `Analyse ${i.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")}…`);
           await nextFrame();
         }
-
         if (state.cancelled) break;
       }
 
-      console.log(`[CDB] JSON passe 1 : ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundCdb} via .cdb seul · ${pendingYugi.length} à chercher sur Yugipedia`);
+      console.log(`[CDB] Passe 1 : ${foundLocal} locales, ${foundTilde} ~nom~, ${foundCdb} .cdb · ${pending.length} à chercher`);
 
       // ======================================================================
-      // PASSE 1.5 : BATCH YUGIPEDIA — récupère UNIQUEMENT l'image
+      // PASSE 2 : API YGOPRODECK (parallèle ×5) — FR puis EN
       // ======================================================================
-      if (pendingYugi.length > 0 && !state.cancelled) {
-        const uniqueQueries = [...new Set(pendingYugi.map((p) => p.searchQuery))];
-        console.log(`[CDB] ⚡ BATCH Yugipedia : ${uniqueQueries.length} noms uniques pour ${pendingYugi.length} cartes`);
-
+      if (pending.length > 0 && !state.cancelled) {
+        console.log(`[CDB] ⚡ Passe 2 : API YGOPRODeck (×${API_YGO_PARALLEL}) pour ${pending.length} carte(s)`);
         dom.yugiProgressWrap.classList.add("visible");
         dom.btnCancelYugi.classList.remove("hidden");
-        setYugiProgress(0, `Yugipedia batch (${uniqueQueries.length} noms)…`);
+        setYugiProgress(0, `API YGOPRODeck (${pending.length})…`);
 
-        let batchResults;
+        let apiResolved = 0;
+
+        await parallelLimit(
+          pending,
+          API_YGO_PARALLEL,
+          async (p) => {
+            if (state.cancelled) return null;
+            let apiCard = await fetchCardFromYgoprodeckApi(p.name);
+            if (!apiCard && p.enName) {
+              apiCard = await fetchCardFromYgoprodeckApi(p.enName);
+            }
+            if (apiCard && apiCard.card_images && apiCard.card_images.length > 0) {
+              const item = state.resolvedCards[p.index];
+              item.card = { ...item.card, card_images: apiCard.card_images };
+              item.source = (item.source || "cdb") + "+api";
+              p.resolved = true;
+              apiResolved++;
+              foundApi++;
+              if (foundCdb > 0) foundCdb--;
+            }
+            return apiCard;
+          },
+          (c, t) => {
+            setYugiProgress(Math.round((c / t) * 100),
+              `API YGOPRODeck ${c} / ${t}… (${apiResolved} OK)`);
+          }
+        );
+
+        console.log(`[CDB] Passe 2 : ${apiResolved} images via API`);
+        dom.btnCancelYugi.classList.add("hidden");
+        dom.yugiProgressWrap.classList.remove("visible");
+      }
+
+      // ======================================================================
+      // PASSE 3 : YUGIPEDIA (batch) — pour ce qui reste
+      // ======================================================================
+      const stillLeft = pending.filter((p) => !p.resolved);
+      if (stillLeft.length > 0 && !state.cancelled &&
+          window.YugipediaAPI && window.YugipediaAPI.isYugipediaEnabled()) {
+
+        console.log(`[CDB] ⚡ Passe 3 : Yugipedia (batch) pour ${stillLeft.length} carte(s)`);
+        dom.yugiProgressWrap.classList.add("visible");
+        dom.btnCancelYugi.classList.remove("hidden");
+        setYugiProgress(0, `Yugipedia batch (${stillLeft.length})…`);
+
+        const allQueries = new Set();
+        for (const p of stillLeft) {
+          if (p.name) allQueries.add(p.name);
+          if (p.enName) allQueries.add(p.enName);
+        }
+        const uniqueQueries = [...allQueries];
+
+        let batchResults = new Map();
         try {
           batchResults = await window.yugipediaSearchBatch(uniqueQueries);
         } catch (err) {
           console.error("[CDB] Erreur batch", err);
-          batchResults = new Map();
         }
 
         let yugiResolved = 0;
-
-        for (let j = 0; j < pendingYugi.length; j++) {
+        for (let i = 0; i < stillLeft.length; i++) {
           if (state.cancelled) break;
+          const p = stillLeft[i];
 
-          const p = pendingYugi[j];
-          const yugiCards = batchResults.get(p.searchQuery) || [];
+          let yugiCards = batchResults.get(p.name) || [];
+          if (!yugiCards.length && p.enName) {
+            yugiCards = batchResults.get(p.enName) || [];
+          }
 
           if (yugiCards.length > 0) {
-            const exact = yugiCards.find((c) =>
-              normalize(c._names?.en || "") === normalize(p.searchQuery)
-            ) || yugiCards.find((c) =>
-              normalize(c.name) === normalize(p.searchQuery)
-            ) || yugiCards[0];
-
+            const exact = yugiCards[0];
             if (exact && exact.card_images && exact.card_images.length > 0) {
               const item = state.resolvedCards[p.index];
-              // ⚡ On ne remplace QUE l'image (le reste vient du local YGOPRODeck)
-              item.card = {
-                ...item.card,
-                card_images: exact.card_images,
-              };
-              // Marque comme "enrichie Yugipedia" sans changer la source métier
+              item.card = { ...item.card, card_images: exact.card_images };
               item.source = (item.source || "cdb") + "+yugi";
-
-              // Compteurs : si c'était "cdb seul", on bascule en yugipedia
-              if (item.source === "cdb+yugi") {
-                foundYugi++;
-                if (foundCdb > 0) foundCdb--;
-              }
               yugiResolved++;
-
-              updateReport(reportIndex, p.localId, { source: item.source });
+              foundYugi++;
+              if (foundCdb > 0) foundCdb--;
             }
           }
 
-          if (j % 50 === 0 || j === pendingYugi.length - 1) {
-            const pct = Math.round(((j + 1) / pendingYugi.length) * 100);
-            setYugiProgress(
-              pct,
-              `Yugipedia ${j + 1} / ${pendingYugi.length}… (${yugiResolved} images OK)`
-            );
+          if (i % 20 === 0 || i === stillLeft.length - 1) {
+            setYugiProgress(Math.round(((i + 1) / stillLeft.length) * 100),
+              `Yugipedia ${i + 1} / ${stillLeft.length}… (${yugiResolved} OK)`);
             await nextFrame();
           }
         }
-
+        console.log(`[CDB] Passe 3 : ${yugiResolved} images via Yugipedia`);
         dom.btnCancelYugi.classList.add("hidden");
         dom.yugiProgressWrap.classList.remove("visible");
-        console.log(`[CDB] JSON passe 1.5 : ${yugiResolved} images récupérées via Yugipedia`);
-      }
-
-      // ======================================================================
-      // ⚡ PASSE 1.7 : FALLBACK API YGOPRODECK — cartes encore sans image
-      // ======================================================================
-      // Pour toutes les cartes qui n'ont toujours PAS d'image après Yugipedia,
-      // on interroge l'API YGOPRODeck en ligne avec fname= (recherche floue).
-      // L'API comprend le FR donc elle peut retrouver "Salamandra, le Dragon
-      // Volant des Flammes" même si cette carte n'est pas dans la base locale
-      // installée (base incomplète ~11661 FR vs ~13000 en ligne).
-      // ======================================================================
-      const stillNoImage = state.resolvedCards.filter(
-        (item) => !item.card.card_images || item.card.card_images.length === 0
-      );
-
-      if (stillNoImage.length > 0 && !state.cancelled) {
-        console.log(`[CDB] ⚡ Passe 1.7 : Fallback API YGOPRODeck pour ${stillNoImage.length} carte(s)`);
-
-        dom.yugiProgressWrap.classList.add("visible");
-        dom.btnCancelYugi.classList.remove("hidden");
-        setYugiProgress(0, `Fallback API (${stillNoImage.length} cartes)…`);
-
-        let apiResolved = 0;
-        for (let i = 0; i < stillNoImage.length; i++) {
-          if (state.cancelled) break;
-
-          const item = stillNoImage[i];
-          const apiCard = await fetchCardFromYgoprodeckApi(item.name);
-
-          if (apiCard && apiCard.card_images && apiCard.card_images.length > 0) {
-            // ⚡ On ne remplace QUE l'image (le reste reste tel quel)
-            item.card = {
-              ...item.card,
-              card_images: apiCard.card_images,
-            };
-            item.source = (item.source || "cdb") + "+api";
-            apiResolved++;
-            foundApi++;
-            if (foundCdb > 0) foundCdb--;
-          }
-
-          if (i % 5 === 0 || i === stillNoImage.length - 1) {
-            const pct = Math.round(((i + 1) / stillNoImage.length) * 100);
-            setYugiProgress(
-              pct,
-              `API YGOPRODeck ${i + 1} / ${stillNoImage.length}… (${apiResolved} OK)`
-            );
-            await nextFrame();
-          }
-        }
-
-        dom.btnCancelYugi.classList.add("hidden");
-        dom.yugiProgressWrap.classList.remove("visible");
-        console.log(`[CDB] JSON passe 1.7 : ${apiResolved} images via API YGOPRODeck`);
       }
 
       if (state.cancelled) {
@@ -1132,7 +1034,7 @@
       }
 
       // ======================================================================
-      // PASSE 2 : Génération des JSON + CSV
+      // PASSE 4 : Génération des JSON + CSV
       // ======================================================================
       setProgress(80, "Génération des JSON…");
 
@@ -1145,14 +1047,8 @@
 
       for (let i = 0; i < totalResolved; i++) {
         if (state.cancelled) break;
-
         const item = state.resolvedCards[i];
-
-        const mergedCard = {
-          ...item.card,
-          name: item.name,
-          desc: item.desc,
-        };
+        const mergedCard = { ...item.card, name: item.name, desc: item.desc };
 
         try {
           const json = await window.generateJsonForCard(mergedCard, item.name);
@@ -1166,10 +1062,8 @@
         }
 
         if (i % 100 === 0 || i === totalResolved - 1) {
-          setProgress(
-            80 + Math.round(((i + 1) / totalResolved) * 18),
-            `JSON ${i + 1} / ${totalResolved}…`
-          );
+          setProgress(80 + Math.round(((i + 1) / totalResolved) * 18),
+            `JSON ${i + 1} / ${totalResolved}…`);
           await nextFrame();
         }
       }
@@ -1180,7 +1074,7 @@
       showJsonDownloadsOnly();
 
       setStatus(
-        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON généré(s) sur ${total.toLocaleString("fr-FR")} carte(s) · ${foundLocal} locales, ${foundTilde} via ~nom~, ${foundYugi} Yugipedia, ${foundApi} API, ${foundCdb} .cdb seul.`
+        `✅ Terminé : ${state.generatedFiles.length.toLocaleString("fr-FR")} JSON · ${foundLocal} locales, ${foundTilde} ~nom~, ${foundApi} API, ${foundYugi} Yugipedia, ${foundCdb} .cdb seul.`
       );
       toast(`${state.generatedFiles.length} JSON générés !`, "ok");
     } catch (err) {
@@ -1195,7 +1089,7 @@
   }
 
   // ==========================================================================
-  // ⚡ HELPERS — Décodage des codes numériques du .cdb
+  // HELPERS — Décodage des codes numériques du .cdb
   // ==========================================================================
 
   function detectFrameType(type) {
@@ -1270,7 +1164,6 @@
 
     const columns = getColumns(db, "texts");
     const hasDesc = columns.includes("desc");
-
     const setClauses = hasDesc ? ["name = ?", "desc = ?"] : ["name = ?"];
 
     const stmt = db.prepare(
@@ -1283,12 +1176,10 @@
         const name = String(u.name ?? "");
         const desc = String(u.desc ?? "");
         const id = parseInt(u.id, 10);
-
         if (isNaN(id)) {
           console.warn("[CDB] id invalide, skip:", u.id);
           continue;
         }
-
         const params = hasDesc ? [name, desc, id] : [name, id];
         stmt.run(params);
       }
