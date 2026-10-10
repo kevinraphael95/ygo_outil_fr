@@ -1898,7 +1898,10 @@ function buildManagerCsv(cards) {
 }
 function downloadManagerCsv(cards) {
   const csv = buildManagerCsv(cards);
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  // ⚡ BOM UTF-8 → LibreOffice/Excel détectent automatiquement l'encodage
+  //    et affichent correctement les accents (é, è, à…)
+  const BOM = "\uFEFF";
+  const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8" });
   downloadBlob(blob, "cartes-ygopro-manager.csv");
 }
 
