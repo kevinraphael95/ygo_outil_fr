@@ -443,11 +443,11 @@
       const wrap = dom.customMode.closest(".cdb-option");
       if (wrap) wrap.style.opacity = isJson ? "0.4" : "1";
     }
+    // ⚡ Yugipedia disponible en JSON ET en traduction
     if (dom.yugiMode) {
-      dom.yugiMode.disabled = isJson;
-      if (isJson) dom.yugiMode.checked = false;
+      dom.yugiMode.disabled = false;
       const wrap = dom.yugiMode.closest("#cdb-yugipedia-wrap");
-      if (wrap) wrap.style.opacity = isJson ? "0.4" : "1";
+      if (wrap) wrap.style.opacity = "1";
     }
 
     if (dom.downloads) dom.downloads.classList.add("hidden");
