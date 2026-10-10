@@ -882,11 +882,11 @@
           foundCdb++;
         }
 
-        // ⚡ 4. SI l'ID du .cdb est custom (≥ 9 chiffres) → image probablement 404
-        //      → on pousse AUSSI en pendingYugi pour récupérer l'image Yugipedia
-        const isCustomId = !/^\d{1,8}$/.test(String(localId));
+        // ⚡ 4. Fallback Yugipedia UNIQUEMENT si la carte n'a PAS matché
+        //      (donc aucune image YGOPRODeck disponible → 404 probable)
+        //      Les cartes matchées via local/tilde ont déjà une image YGOPRODeck valide.
         if (
-          isCustomId &&
+          !matched &&
           window.YugipediaAPI &&
           window.YugipediaAPI.isYugipediaEnabled() &&
           !yugiSeen.has(localId)
