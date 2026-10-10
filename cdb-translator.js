@@ -12,7 +12,7 @@
 //                    2. Nom EN base locale
 //                    3. Nom EN entre ~...~ dans la desc
 //                    4. Yugipedia (si activé) — en BATCH, pas carte par carte
-//                    5. Infos du .cdb (dernier recours)
+//                    5. Infos du .cdb (dernier recours) — SANS URL bidon
 //
 // Mode "Préserver les effets modifiés" (option, traduction uniquement) :
 //   Si l'effet du .cdb ≠ effet officiel EN → l'effet a été modifié par un mod
@@ -874,10 +874,9 @@
             level: dbLevel ?? 0,
             race: raceFromCode(dbRace),
             attribute: attributeFromCode(dbAttribute),
-            card_images: [{
-              image_url: `https://images.ygoprodeck.com/images/cards/${localId}.jpg`,
-              image_url_cropped: `https://images.ygoprodeck.com/images/cards_cropped/${localId}.jpg`,
-            }],
+            // ⚡ Pas d'URL bidon : on laisse vide. Le fallback Yugipedia remplira
+            //    si la carte y est trouvée, sinon aucune image (propre).
+            card_images: [],
           };
           foundCdb++;
         }
