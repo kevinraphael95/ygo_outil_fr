@@ -1,10 +1,12 @@
 // ============================================================================
-// YGO -> ygopro.org Card Maker JSON generator (v7 — JSON local)
+// YGO -> ygopro.org Card Maker JSON generator (v8 — JSON local + .ydk)
 // ============================================================================
 // L'app charge 2 fichiers JSON locaux :
 //   • data/cards-db.json      → YGOPRODeck (EN + FR)
 //   • data/yugipedia-db.json  → Yugipedia (anime, manga…)
 // Aucune requête API au démarrage. Fallback API direct si JSON absents.
+//
+// NOUVEAU v8 : génération de fichiers .ydk pour EDOPro / YGOPro
 // ============================================================================
 
 const API_BASE = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
@@ -23,6 +25,27 @@ const TOAST_MAX_LENGTH = 200;
 // --- Chemins des fichiers JSON ---
 const JSON_CARDS_DB = "data/cards-db.json";
 const JSON_YUGIPEDIA_DB = "data/yugipedia-db.json";
+
+// ----------------------------------------------------------------------------
+// IDs CUSTOM — Cartes anime / non officielles
+// ----------------------------------------------------------------------------
+// Ces passcodes sont utilisés par les extensions EDOPro (Project Ignis, KCG…).
+// Format : "nom normalisé (minuscules, sans accents, sans espaces)" : "passcode"
+// ----------------------------------------------------------------------------
+const CUSTOM_IDS = {
+  // ─── Magies / Pièges classiques de l'anime ───
+  "potde cupidite": "55144522",
+  "pot of greed": "55144522",
+  "charitegracieuse": "79571449",
+  "graceful charity": "79571449",
+
+  // ─── Deck Amnael / Lyman Banner (GX) ───
+  // (Les cartes réelles ont déjà leur ID dans cards-db.json.
+  //  Ajoute ici uniquement celles qui n'y sont pas.)
+
+  // ─── Ajoute tes autres cartes anime ici ───
+  // "nom de la carte": "passcode",
+};
 
 // ----------------------------------------------------------------------------
 // DOM
@@ -46,6 +69,7 @@ const deckStatusEl = document.getElementById("deck-status");
 const deckResultsEl = document.getElementById("deck-results");
 const deckDownloadZipBtn = document.getElementById("deck-download-zip");
 const deckDownloadCsvBtn = document.getElementById("deck-download-csv");
+const deckDownloadYdkBtn = document.getElementById("deck-download-ydk");
 const deckDownloadsRow = document.getElementById("deck-downloads");
 const progressWrap = document.getElementById("progress-wrap");
 const progressFill = document.getElementById("progress-fill");
@@ -54,6 +78,7 @@ const progressPct = document.getElementById("progress-pct");
 
 const deckActionJsonRadio = document.getElementById("deck-action-json");
 const deckActionTranslateRadio = document.getElementById("deck-action-translate");
+const deckActionYdkRadio = document.getElementById("deck-action-ydk");
 const deckTranslateOptions = document.getElementById("deck-translate-options");
 
 const translationResultEl = document.getElementById("translation-result");
@@ -447,7 +472,7 @@ document.querySelectorAll(".tab").forEach((tab) => {
 function toast(msg, kind = "info") {
   const el = document.createElement("div");
   el.className = "toast " + kind;
-  const icon = kind === "ok" ? "✅" : kind === "err" ? "❌" : "ℹ️";
+  const icon = kind === "ok" ? "✅" : kind === "err" ? "❌" : kind === "warn" ? "⚠️" : "ℹ️";
   const text = String(msg);
   const truncated = text.length > TOAST_MAX_LENGTH ? text.slice(0, TOAST_MAX_LENGTH) + "…" : text;
   el.innerHTML = `<span>${icon}</span><span>${escapeHtml(truncated)}</span>`;
@@ -879,11 +904,18 @@ function copyTextToClipboard(text, buttonEl, resetLabel) {
 }
 
 // ============================================================================
-// DECKLIST
+// DECKLIST — GESTION DES ACTIONS
 // ============================================================================
-function isDeckActionTranslate() { return deckActionTranslateRadio && deckActionTranslateRadio.checked; }
+function getDeckAction() {
+  const r = document.querySelector('input[name="deck-action"]:checked');
+  return r ? r.value : "json";
+}
+
 function updateDeckActionUI() {
-  const isTranslate = isDeckActionTranslate();
+  const action = getDeckAction();
+  const isTranslate = action === "translate";
+  const isYdk = action === "ydk";
+
   if (deckTranslateOptions) deckTranslateOptions.classList.toggle("hidden", !isTranslate);
   if (translationResultEl) translationResultEl.classList.add("hidden");
   if (translationActionsEl) translationActionsEl.classList.add("hidden");
@@ -891,13 +923,24 @@ function updateDeckActionUI() {
   if (deckResultsEl) deckResultsEl.innerHTML = "";
   if (deckStatusEl) deckStatusEl.textContent = "";
   if (progressWrap) progressWrap.classList.remove("visible");
-  if (deckGenerateBtn) deckGenerateBtn.textContent = isTranslate ? "🌐 Traduire" : "⚙️ Générer les JSON";
+
+  if (deckGenerateBtn) {
+    if (isTranslate) deckGenerateBtn.textContent = "🌐 Traduire";
+    else if (isYdk) deckGenerateBtn.textContent = "📦 Générer le .ydk";
+    else deckGenerateBtn.textContent = "⚙️ Générer les JSON";
+  }
 }
+
 if (deckActionJsonRadio) deckActionJsonRadio.addEventListener("change", updateDeckActionUI);
 if (deckActionTranslateRadio) deckActionTranslateRadio.addEventListener("change", updateDeckActionUI);
+if (deckActionYdkRadio) deckActionYdkRadio.addEventListener("change", updateDeckActionUI);
 updateDeckActionUI();
 
+// ============================================================================
+// PARSING DE DECKLIST
+// ============================================================================
 const DECK_LINE_RE = /^(\d+)\s*x?\s+(.+)$/i;
+
 function parseDecklist(text) {
   const names = [];
   text.split("\n").forEach((rawLine) => {
@@ -911,12 +954,43 @@ function parseDecklist(text) {
   });
   return names;
 }
+
+/**
+ * Parse la decklist en conservant les sections (main / extra / side).
+ * Utilisé par la génération .ydk.
+ */
+function parseDecklistWithSections(text) {
+  const main = [], extra = [], side = [];
+  let currentSection = main;
+
+  text.split("\n").forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) return;
+
+    if (/^main\s*deck\s*:?$/i.test(line)) { currentSection = main; return; }
+    if (/^extra\s*deck\s*:?$/i.test(line)) { currentSection = extra; return; }
+    if (/^side\s*deck\s*:?$/i.test(line)) { currentSection = side; return; }
+
+    const match = line.match(DECK_LINE_RE);
+    const name = match ? match[2].trim() : line;
+    const count = match ? parseInt(match[1], 10) : 1;
+
+    for (let i = 0; i < count; i++) currentSection.push(name);
+  });
+
+  return { main, extra, side };
+}
+
 function setDeckItemStatus(li, statusClass, text) {
   const badge = li.querySelector(".badge");
   if (!badge) return;
   badge.className = `badge ${statusClass}`;
   badge.textContent = text;
 }
+
+// ============================================================================
+// BOUTONS EXEMPLE / EFFACER
+// ============================================================================
 document.getElementById("deck-fill-example").addEventListener("click", () => {
   deckInput.value = `Main Deck:
 1 Dark Magician
@@ -929,6 +1003,7 @@ Extra Deck:
 Side Deck:
 1 Fissure`;
 });
+
 document.getElementById("deck-clear").addEventListener("click", () => {
   deckInput.value = "";
   deckResultsEl.innerHTML = "";
@@ -939,6 +1014,10 @@ document.getElementById("deck-clear").addEventListener("click", () => {
   if (translationActionsEl) translationActionsEl.classList.add("hidden");
   lastTranslationResult = null;
 });
+
+// ============================================================================
+// RECHERCHE DE CARTE PAR NOM
+// ============================================================================
 async function findCardByName(name, lang) {
   const { cards } = await searchCards(name, lang, true);
   if (!cards.length) return null;
@@ -946,11 +1025,20 @@ async function findCardByName(name, lang) {
   const exact = cards.find((c) => normalizeForSearch(c.name) === normalizedTarget);
   return exact || cards[0];
 }
+
+// ============================================================================
+// DISPATCHER DE L'ACTION
+// ============================================================================
 deckGenerateBtn.addEventListener("click", async () => {
-  if (isDeckActionTranslate()) await runDeckTranslation();
+  const action = getDeckAction();
+  if (action === "translate") await runDeckTranslation();
+  else if (action === "ydk") await runYdkGeneration();
   else await runDeckJsonGeneration();
 });
 
+// ============================================================================
+// ACTION 1 : GÉNÉRATION JSON
+// ============================================================================
 async function runDeckJsonGeneration() {
   const names = parseDecklist(deckInput.value);
   if (!names.length) { toast("Colle d'abord une decklist.", "err"); return; }
@@ -1019,11 +1107,136 @@ async function runDeckJsonGeneration() {
   progressFill.style.width = "100%";
   if (generatedFiles.length) {
     deckDownloadsRow.classList.remove("hidden");
+    // On masque le bouton .ydk si on est en mode JSON
+    if (deckDownloadYdkBtn) deckDownloadYdkBtn.classList.add("hidden");
+    if (deckDownloadZipBtn) deckDownloadZipBtn.classList.remove("hidden");
+    if (deckDownloadCsvBtn) deckDownloadCsvBtn.classList.remove("hidden");
     deckDownloadZipBtn.onclick = () => downloadAsZip(generatedFiles);
     deckDownloadCsvBtn.onclick = () => downloadManagerCsv(generatedCards);
   }
 }
 
+// ============================================================================
+// ACTION 2 : GÉNÉRATION .YDK (EDOPro / YGOPro / YGO Omega)
+// ============================================================================
+async function runYdkGeneration() {
+  const { main, extra, side } = parseDecklistWithSections(deckInput.value);
+  const allCards = [...main, ...extra, ...side];
+  if (!allCards.length) { toast("Colle d'abord une decklist.", "err"); return; }
+
+  deckGenerateBtn.disabled = true;
+  deckResultsEl.innerHTML = "";
+  deckDownloadsRow.classList.add("hidden");
+  translationResultEl.classList.add("hidden");
+  translationActionsEl.classList.add("hidden");
+  progressWrap.classList.add("visible");
+  progressFill.style.width = "0%";
+  progressPct.textContent = "0%";
+  deckStatusEl.textContent = appState.dbReady ? "Résolution des cartes…" : "Résolution via API…";
+
+  const uniqueNames = [...new Set(allCards)];
+  const resolvedMap = new Map();       // nomOriginal → passcode
+  const unresolved = [];
+  const sourceInfo = new Map();        // nomOriginal → "custom" | "local" | "yugi"
+
+  let done = 0;
+  for (const n of uniqueNames) {
+    const key = normalizeForSearch(n).replace(/[^a-z0-9]/g, "");
+
+    // 1. Dictionnaire custom (cartes anime) en priorité
+    let passcode = CUSTOM_IDS[key] || null;
+    let source = passcode ? "custom" : null;
+
+    // 2. Sinon chercher dans la base
+    if (!passcode) {
+      try {
+        const card = await findCardByName(n, "auto");
+        if (card && card.id && !String(card.id).startsWith("yugi-")) {
+          passcode = String(card.id);
+          source = "local";
+        }
+      } catch (err) { console.warn(`Échec "${n}"`, err); }
+    }
+
+    if (passcode) {
+      resolvedMap.set(n, passcode);
+      sourceInfo.set(n, source);
+    } else {
+      unresolved.push(n);
+    }
+
+    done++;
+    const pct = Math.round((done / uniqueNames.length) * 80);
+    progressFill.style.width = pct + "%";
+    progressPct.textContent = pct + "%";
+    progressLabel.textContent = `Résolution ${done} / ${uniqueNames.length}…`;
+  }
+
+  // 3. Construire le contenu .ydk
+  let ydk = "#created by YGO Card Maker JSON\n";
+
+  function appendSection(header, list) {
+    ydk += header + "\n";
+    list.forEach((name) => {
+      const id = resolvedMap.get(name);
+      if (id) {
+        ydk += id + "\n";
+      } else {
+        ydk += "# " + name + " (ID introuvable)\n";
+      }
+    });
+  }
+  appendSection("#main", main);
+  appendSection("#extra", extra);
+  appendSection("!side", side);
+
+  // 4. Afficher le résumé dans la liste
+  allCards.forEach((name) => {
+    const li = document.createElement("li");
+    li.className = "gen-item";
+    const id = resolvedMap.get(name);
+    const src = sourceInfo.get(name);
+    if (id) {
+      const srcBadge = src === "custom" ? "🟣 custom" : "✅";
+      li.innerHTML = `<span>✅</span><span class="name serif">${escapeHtml(name)}</span><span class="badge ok">${id} · ${srcBadge}</span>`;
+    } else {
+      li.innerHTML = `<span>❌</span><span class="name serif">${escapeHtml(name)}</span><span class="badge err">Introuvable</span>`;
+    }
+    deckResultsEl.appendChild(li);
+  });
+
+  // 5. Fin
+  progressFill.style.width = "100%";
+  progressPct.textContent = "100%";
+  const total = allCards.length;
+  const ok = total - unresolved.length;
+  progressLabel.textContent = `Terminé : ${ok} / ${total}`;
+  deckStatusEl.textContent = `✅ ${ok} carte(s) résolue(s) · ${unresolved.length} introuvable(s)`;
+  deckDownloadsRow.classList.remove("hidden");
+
+  // Afficher UNIQUEMENT le bouton .ydk
+  if (deckDownloadZipBtn) deckDownloadZipBtn.classList.add("hidden");
+  if (deckDownloadCsvBtn) deckDownloadCsvBtn.classList.add("hidden");
+  if (deckDownloadYdkBtn) {
+    deckDownloadYdkBtn.classList.remove("hidden");
+    deckDownloadYdkBtn.onclick = () => {
+      const blob = new Blob([ydk], { type: "text/plain;charset=utf-8" });
+      downloadBlob(blob, "deck.ydk");
+      toast(".ydk téléchargé !", "ok");
+    };
+  }
+
+  deckGenerateBtn.disabled = false;
+  if (unresolved.length) {
+    toast(`${unresolved.length} carte(s) sans ID (voir la liste)`, "warn");
+  } else {
+    toast("Fichier .ydk généré avec succès !", "ok");
+  }
+}
+
+// ============================================================================
+// ACTION 3 : TRADUCTION DE DECKLIST
+// ============================================================================
 function getTranslateSrc() { const r = document.querySelector('input[name="translate-src"]:checked'); return r ? r.value : "auto"; }
 function getTranslateDst() { const r = document.querySelector('input[name="translate-dst"]:checked'); return r ? r.value : "fr"; }
 
@@ -1126,6 +1339,9 @@ async function runDeckTranslation() {
   toast("Traduction terminée !", "ok");
 }
 
+// ============================================================================
+// ZIP
+// ============================================================================
 async function downloadAsZip(files) {
   if (typeof JSZip === "undefined") { toast("JSZip non chargé.", "err"); return; }
   const zip = new JSZip();
@@ -1143,6 +1359,9 @@ async function downloadAsZip(files) {
   downloadBlob(blob, "cartes-ygopro.zip");
 }
 
+// ============================================================================
+// BOUTONS DE TRADUCTION
+// ============================================================================
 if (translateCopyBtn) {
   translateCopyBtn.addEventListener("click", () => {
     if (!lastTranslationResult) return;
@@ -1160,7 +1379,7 @@ if (translateDownloadTxtBtn) {
 }
 if (translateDownloadYdkBtn) {
   translateDownloadYdkBtn.addEventListener("click", () => {
-    toast("Export .ydk non supporté en traduction.", "info");
+    toast("Utilise plutôt « Générer le .ydk » dans l'onglet Decklist.", "info");
   });
 }
 function buildTranslatedDecklist({ results }) {
@@ -1251,11 +1470,9 @@ function buildCsvRow(card) {
   const links = buildLinkMarkers(card);
   const img = card.card_images && card.card_images[0];
   const rawImgUrl = img ? (img.image_url_cropped || img.image_url) : "";
-  // ⚡ Placeholder "PLACEHOLDER IMAGE" du card maker (hébergé sur Imgur)
   const PLACEHOLDER_RAW = "https://kevinraphael95.github.io/ygo_outil_fr/placeholder.png";
-  // Même domaine que le card maker → pas besoin de proxy
   const PLACEHOLDER_PROXIED = PLACEHOLDER_RAW;
-  
+
   const imgUrl = rawImgUrl
     ? `https://images.weserv.nl/?url=${encodeURIComponent(rawImgUrl.replace(/^https?:\/\//, ""))}`
     : PLACEHOLDER_PROXIED;
@@ -1336,6 +1553,8 @@ window.searchCards = searchCards;
 window.toast = toast;
 window.downloadBlob = downloadBlob;
 window.escapeHtml = escapeHtml;
+window.normalizeForSearch = normalizeForSearch;
+window.CUSTOM_IDS = CUSTOM_IDS;
 
 // ============================================================================
 // MODAL DE CONFIRMATION CUSTOM
