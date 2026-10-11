@@ -86,7 +86,7 @@
 
       <label class="search-option">
         <input type="checkbox" id="search-yugipedia">
-        <span>🟣 <strong>Fallback Yugipedia</strong> — si aucune carte n'est trouvée dans la base locale, interroger Yugipedia (1 req/s, cache 30 j)</span>
+        <span>🟣 <strong>Fallback Yugipedia</strong> — utiliser le cache local (data/yugipedia-db.json) pour les cartes absentes de la base locale</span>
       </label>
 
       <div class="hint">
@@ -124,7 +124,7 @@ Side Deck:
 
       <label class="search-option">
         <input type="checkbox" id="deck-yugipedia">
-        <span>🟣 <strong>Fallback Yugipedia</strong> — pour les cartes absentes de la base locale</span>
+        <span>🟣 <strong>Fallback Yugipedia</strong> — cache local (data/yugipedia-db.json)</span>
       </label>
 
       <!-- ===== Sélecteur d'action ===== -->
@@ -264,11 +264,11 @@ Side Deck:
         </span>
       </label>
 
-      <!-- ===== Option Fallback Yugipedia ===== -->
+      <!-- ===== Option Fallback Yugipedia (cache local) ===== -->
       <label class="cdb-option" id="cdb-yugipedia-wrap" style="margin-top:20px;">
         <input type="checkbox" id="cdb-yugipedia-mode">
         <span class="cdb-option-label">
-          <strong>Fallback Yugipedia</strong> — Interroge l'API Yugipedia (1 req/s max) pour récupérer les traductions FR absentes de YGOPRODeck.
+          <strong>Fallback Yugipedia</strong> — utilise le cache local (data/yugipedia-db.json) pour récupérer les traductions FR absentes de YGOPRODeck.
         </span>
       </label>
 
@@ -292,7 +292,7 @@ Side Deck:
         </div>
         <div class="progress-bar"><div class="progress-fill" id="cdb-yugi-fill"></div></div>
         <div class="actions-row" style="margin-top:10px;">
-          <button class="btn hidden" id="cdb-cancel-yugi" type="button">⏹️ Annuler Yugipedia</button>
+          <button class="btn hidden" id="cdb-cancel-yugi" type="button">⏹️ Annuler</button>
         </div>
       </div>
 
@@ -347,8 +347,12 @@ Side Deck:
       <p>Cet outil permet de rechercher des cartes Yu-Gi-Oh! par leur nom dans plusieurs langues, de générer un <strong>JSON compatible avec l'éditeur ygopro.org</strong>, de télécharger les illustrations officielles, de traduire des decklists entières, et de convertir des fichiers .cdb EDOPro/YGO Pro en JSON ou en .cdb traduit.</p>
 
       <h3>💾 Base de cartes locale</h3>
-      <p>Pour des recherches instantanées et zéro requête API, l'app peut télécharger <strong>toute la base de cartes</strong> (~30 Mo) dans le navigateur (IndexedDB). Une seule fois. Ensuite, tout fonctionne hors-ligne.</p>
-      <p>Utilise le bouton 🔄 du header pour synchroniser si une nouvelle version est disponible.</p>
+      <p>L'app charge automatiquement 2 fichiers JSON locaux :</p>
+      <ul>
+        <li><code>data/cards-db.json</code> — toute la base YGOPRODeck (EN + FR, ~14 500 cartes)</li>
+        <li><code>data/yugipedia-db.json</code> — base Yugipedia (anime, manga, ~13 000 cartes)</li>
+      </ul>
+      <p>Aucune requête API au démarrage, tout est instantané et fonctionne hors-ligne.</p>
 
       <h3>📦 Traitement .cdb</h3>
       <p>Dépose un fichier <code>.cdb</code> (base SQLite EDOPro/YGO Pro) dans l'onglet dédié. Tu peux ensuite :</p>
@@ -356,11 +360,11 @@ Side Deck:
         <li><strong>Le traduire</strong> — les noms et effets passent en français. Sortie : <code>_fr.cdb</code>.</li>
         <li><strong>Le convertir en JSON</strong> — un JSON par carte (ZIP) + CSV Manager, prêt pour l'éditeur ygopro.org.</li>
       </ul>
-      <p><strong>Préserver les effets modifiés :</strong> pour les cartes dont l'effet a été modifié par un mod custom (VAACT, Project Ignis, fan-made…), conserve l'effet original du <code>.cdb</code> et ajoute la traduction officielle française en dessous. Chaque bloc est étiqueté avec un tag universel : <code>[Traducteur]</code> pour l'effet original, <code>[Vérificateur]</code> pour l'effet officiel. Les tags sont configurables dans le code (<code>TAG_TRAD</code> / <code>TAG_VERIF</code>). S'applique uniquement à la sortie <code>.cdb</code>.</p>
+      <p><strong>Préserver les effets modifiés :</strong> pour les cartes dont l'effet a été modifié par un mod custom (VAACT, Project Ignis, fan-made…), conserve l'effet original du <code>.cdb</code> tel quel.</p>
 
-      <h3>🟣 Fallback Yugipedia</h3>
-      <p>Pour les cartes absentes de la base locale (cartes récentes, errata, etc.), l'app peut interroger l'API de <a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia</a> pour récupérer la traduction française officielle.</p>
-      <p><strong>Important :</strong> cette option est <strong>désactivée par défaut</strong> et respecte strictement la politique d'utilisation de Yugipedia (1 requête/seconde, User-Agent descriptif, cache 30 jours). Une fois activée, ton choix est mémorisé.</p>
+      <h3>🟣 Fallback Yugipedia (cache local)</h3>
+      <p>Pour les cartes absentes de la base YGOPRODeck (cartes récentes, anime, manga…), l'app utilise le fichier <code>data/yugipedia-db.json</code> chargé localement.</p>
+      <p>Aucune requête réseau n'est effectuée : tout est instantané.</p>
 
       <h3>🌐 Langues supportées</h3>
       <p>La recherche accepte les noms de cartes dans toutes les langues gérées par l'API YGOPRODeck :</p>
@@ -394,9 +398,8 @@ Side Deck:
       <h3>⚠️ Limitations</h3>
       <ul>
         <li>Toutes les cartes n'ont pas de traduction française officielle ; dans ce cas, le nom anglais est conservé.</li>
-        <li>Les cartes custom (VAACT, Project Ignis, fan-made) ne sont <strong>pas</strong> sur Yugipedia — le fallback ne les résoudra pas.</li>
+        <li>Les cartes custom VAACT pures (jamais éditées) ne sont ni dans YGOPRODeck ni dans Yugipedia — elles n'auront pas d'image.</li>
         <li>Le champ <code>serial</code> (numéro de set) n'est pas fourni par l'API — laisse vide ou clique RANDOMIZE dans l'éditeur.</li>
-        <li>Les images ne sont pas stockées localement — elles sont chargées depuis images.ygoprodeck.com (mise en cache navigateur).</li>
       </ul>
 
       <h3>⚖️ Mentions</h3>
