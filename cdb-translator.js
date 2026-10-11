@@ -1,12 +1,15 @@
 // ============================================================================
 // CDB TRANSLATOR — Version batchée (YGOPRODeck API + Yugipedia cache local)
 // ============================================================================
-// ⚡ Changements v3 :
-//   • Passe 3 utilise le CACHE LOCAL (window.yugiCache) au lieu de l'API
-//     → Chargé depuis data/yugipedia-db.json par script.js
-//     → 0 requête Yugipedia, instantané
-//   • Passe 2 : Batch YGOPRODeck via name= (40 noms/req)
+// Architecture :
+//   • Passe 1 : Base locale (FR/EN) + tilde ~EN~
+//   • Passe 2 : Batch YGOPRODeck via name= (40 noms/requête)
+//   • Passe 3 : Cache Yugipedia local (window.yugiCache)
 //   • Passe 3.5 : Re-batch YGOPRODeck avec les noms EN trouvés
+//   • Passe 4 : Génération JSON + CSV
+//
+// ⚡ window.yugiCache est chargé par script.js depuis data/yugipedia-db.json
+//    0 requête Yugipedia au runtime.
 // ============================================================================
 
 (() => {
@@ -16,7 +19,6 @@
   const YGOPRODECK_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
   const MAX_REPORT_LINES = 250;
   const YIELD_EVERY = 200;
-  const YUGI_CONFIRM_THRESHOLD = 50;
 
   const state = {
     file: null, sqlite: null, patched: null, sqlLib: null, sqlReady: false,
@@ -44,6 +46,9 @@
     btnCancelYugi: $("cdb-cancel-yugi"),
   };
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // UTILITAIRES
+  // ═══════════════════════════════════════════════════════════════════════
   async function ensureSqlLoaded() {
     if (state.sqlReady) return state.sqlLib;
     if (typeof window.initSqlJs !== "function") throw new Error("sql.js non chargé.");
@@ -89,7 +94,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ⚡ BATCH name= — jusqu'à 40 cartes par requête YGOPRODeck
+  // BATCH YGOPRODECK — name= (40 noms par requête)
   // ═══════════════════════════════════════════════════════════════════════
   async function fetchCardsByNamesBatch(names, language) {
     const results = new Map();
@@ -121,10 +126,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ⚡ CACHE YUGIPEDIA LOCAL (remplace l'API)
-  // ═══════════════════════════════════════════════════════════════════════
-  // window.yugiCache est une Map { nomFR_normalisé → { fr, en, img, ... } }
-  // Chargée par script.js depuis data/yugipedia-db.json
+  // CACHE YUGIPEDIA LOCAL
   // ═══════════════════════════════════════════════════════════════════════
   function lookupYugiCache(name) {
     if (!window.yugiCache || !name) return null;
@@ -133,9 +135,9 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Résolution locale (traduction)
+  // RÉSOLUTION DE CARTE (locale)
   // ═══════════════════════════════════════════════════════════════════════
-  async function resolveCard(localName, localDesc, customMode, allowYugipedia) {
+  async function resolveCard(localName, localDesc, customMode) {
     const key = normalize(localName);
     if (!key) return { status: "not_found" };
     const frMatch = state.nameIndexFr.get(key);
@@ -166,7 +168,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Chargement fichier
+  // CHARGEMENT FICHIER
   // ═══════════════════════════════════════════════════════════════════════
   function bindDropZone() {
     if (!dom.drop) return;
@@ -232,7 +234,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // TRADUCTION (locale + cache Yugipedia)
+  // ACTION 1 : TRADUIRE LE .CDB
   // ═══════════════════════════════════════════════════════════════════════
   async function runTranslation() {
     if (!state.sqlite) { toast("Charge un .cdb.", "err"); return; }
@@ -247,7 +249,7 @@
       buildNameIndexes(); await nextFrame();
       const rows = state.sqlite.exec("SELECT id, name, desc FROM texts")[0].values;
       const total = rows.length;
-      const updates = [], report = [], reportIndex = new Map(), missingCards = [];
+      const updates = [], missingCards = [];
       let done = 0, doneYugi = 0, missing = 0, modifiedCount = 0;
 
       for (let i = 0; i < rows.length; i++) {
@@ -257,9 +259,9 @@
           const m = localDesc.match(/~([^~]+)~/);
           if (m && m[1]) enNameFromTilde = m[1].trim();
         }
-        let resolved = await resolveCard(localName, localDesc, customMode, false);
+        let resolved = await resolveCard(localName, localDesc, customMode);
         if (resolved.status === "not_found" && enNameFromTilde) {
-          resolved = await resolveCard(enNameFromTilde, localDesc, customMode, false);
+          resolved = await resolveCard(enNameFromTilde, localDesc, customMode);
         }
         if (resolved.status === "translated") {
           updates.push({ id: localId, name: resolved.name, desc: resolved.desc });
@@ -276,7 +278,7 @@
         if (state.cancelled) break;
       }
 
-      // ⚡ Passe 2 : Cache Yugipedia local
+      // Passe 2 : Cache Yugipedia local
       if (yugiMode && missingCards.length > 0 && window.yugiCache) {
         let yugiResolved = 0;
         for (const card of missingCards) {
@@ -292,14 +294,12 @@
           } else state.missingNames.push(card.name);
         }
         console.log(`[CDB] Cache Yugipedia : ${yugiResolved} cartes trouvées`);
-      } else if (yugiMode && missingCards.length > 0) {
-        console.warn("[CDB] Cache Yugipedia indisponible (window.yugiCache)");
       }
 
       applyUpdates(state.sqlite, updates);
       state.patched = state.sqlite.export();
       setProgress(100, "Terminé !");
-      renderResults(report, { total, done, missing, modifiedCount, doneYugi });
+      renderResults({ total, done, missing, modifiedCount, doneYugi });
       dom.downloads.classList.remove("hidden");
       showTranslateDownloadsOnly();
       setStatus(`✅ ${done} / ${total} traduite(s)${doneYugi > 0 ? ` · ${doneYugi} via cache Yugipedia` : ""}.`);
@@ -325,7 +325,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ⚡ JSON — Version batchée optimisée
+  // ACTION 2 : GÉNÉRER LES JSON
   // ═══════════════════════════════════════════════════════════════════════
   // PASSE 1 : Locale (FR/EN) + tilde
   // PASSE 2 : Batch YGOPRODeck (name= 40/req) — 3 sous-étapes
@@ -343,7 +343,6 @@
     dom.yugiProgressWrap.classList.remove("visible");
     dom.btnCancelYugi.classList.add("hidden");
     setProgress(0, "Préparation…");
-    if (window.resetYugipediaCancel) window.resetYugipediaCancel();
 
     try {
       if (window.memCacheFr && window.memCacheEn) buildNameIndexes();
@@ -357,7 +356,6 @@
       `)[0].values;
       const total = rows.length;
 
-      const report = [], reportIndex = new Map();
       let done = 0;
       let foundLocal = 0, foundTilde = 0, foundYugi = 0, foundApi = 0, foundCdb = 0;
       const pending = [];
@@ -407,7 +405,6 @@
         }
         state.resolvedCards.push({ localId, name: localName, enName: enNameFromTilde || null, desc: localDesc, card, source: matchedSource || "cdb" });
         done++;
-        pushReport(report, reportIndex, { id: localId, name: localName, status: "ok", source: matchedSource || "cdb" });
         if (i % YIELD_EVERY === 0 || i === rows.length - 1) {
           setProgress(5 + Math.round((i / total) * 55), `Analyse ${i + 1} / ${total}…`);
           await nextFrame();
@@ -486,10 +483,8 @@
       }
 
       // ═══ PASSE 3 : CACHE YUGIPEDIA LOCAL ═══
-      // ⚡ Plus d'appel API — on utilise window.yugiCache chargé depuis
-      //    data/yugipedia-db.json par script.js
       const stillLeft = pending.filter((p) => !p.resolved);
-      const yugiEnByIndex = new Map(); // index → nom EN trouvé via Yugipedia
+      const yugiEnByIndex = new Map();
       if (stillLeft.length > 0 && !state.cancelled && window.yugiCache) {
         console.log(`[CDB] ⚡ Passe 3 : Cache Yugipedia pour ${stillLeft.length} carte(s)`);
         dom.yugiProgressWrap.classList.add("visible");
@@ -501,15 +496,12 @@
           if (state.cancelled) break;
           const p = stillLeft[i];
 
-          // Cherche par nom FR puis par nom EN du tilde
           let yugiCard = lookupYugiCache(p.name);
           if (!yugiCard && p.enName) yugiCard = lookupYugiCache(p.enName);
 
           if (yugiCard) {
-            // Mémorise le nom EN pour le re-batch YGOPRODeck (passe 3.5)
             if (yugiCard.en) yugiEnByIndex.set(p.index, yugiCard.en);
 
-            // Image
             const img = yugiCard.img || yugiCard.img_en;
             if (img) {
               const item = state.resolvedCards[p.index];
@@ -548,7 +540,7 @@
             improved++;
           }
         }
-        console.log(`[CDB] Passe 3.5 : ${improved} image(s) améliorée(s) (YGOPRODeck > Yugipedia)`);
+        console.log(`[CDB] Passe 3.5 : ${improved} image(s) améliorée(s)`);
       }
 
       if (state.cancelled) {
@@ -578,7 +570,7 @@
       }
 
       setProgress(100, "Terminé !");
-      renderResults(report, { total, done, missing: 0, modifiedCount: 0, doneYugi: 0 });
+      renderResults({ total, done, missing: 0, modifiedCount: 0, doneYugi: 0 });
       dom.downloads.classList.remove("hidden");
       showJsonDownloadsOnly();
 
@@ -624,8 +616,6 @@
     return "DARK";
   }
 
-  function pushReport(r, ri, e) { if (r.length < MAX_REPORT_LINES) { r.push(e); ri.set(e.id, e); } }
-  function updateReport(ri, id, u) { const i = ri.get(id); if (i) Object.assign(i, u); }
   function nextFrame() { return new Promise((r) => setTimeout(r, 0)); }
 
   function applyUpdates(db, updates) {
@@ -678,7 +668,7 @@
     dom.info.classList.remove("hidden");
     dom.info.innerHTML = `<strong>📦 ${escapeHtml(file.name)}</strong><br>${(file.size / 1024).toFixed(1)} Ko · ${total} entrées`;
   }
-  function renderResults(report, stats) {
+  function renderResults(stats) {
     dom.statTotal.textContent = stats.total;
     dom.statDone.textContent = stats.done;
     dom.statMissing.textContent = stats.missing;
@@ -727,7 +717,6 @@
     if (dom.btnDownloadCsv) dom.btnDownloadCsv.addEventListener("click", downloadCsv);
     if (dom.btnCancelYugi) dom.btnCancelYugi.addEventListener("click", () => {
       state.cancelled = true;
-      if (window.cancelYugipedia) window.cancelYugipedia();
       toast("Annulation…", "info");
     });
     if (dom.btnExportMissing) dom.btnExportMissing.addEventListener("click", exportMissing);
