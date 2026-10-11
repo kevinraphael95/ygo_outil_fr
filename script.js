@@ -1252,8 +1252,9 @@ function buildCsvRow(card) {
   const img = card.card_images && card.card_images[0];
   const rawImgUrl = img ? (img.image_url_cropped || img.image_url) : "";
   // ⚡ Placeholder "PLACEHOLDER IMAGE" du card maker (hébergé sur Imgur)
-  const PLACEHOLDER_RAW = "https://i.imgur.com/jjtCuG5.png";
-  const PLACEHOLDER_PROXIED = `https://images.weserv.nl/?url=${encodeURIComponent(PLACEHOLDER_RAW.replace(/^https?:\/\//, ""))}`;
+  const PLACEHOLDER_RAW = "https://kevinraphael95.github.io/ygo_outil_fr/placeholder.png";
+  // Même domaine que le card maker → pas besoin de proxy
+  const PLACEHOLDER_PROXIED = PLACEHOLDER_RAW;
   
   const imgUrl = rawImgUrl
     ? `https://images.weserv.nl/?url=${encodeURIComponent(rawImgUrl.replace(/^https?:\/\//, ""))}`
