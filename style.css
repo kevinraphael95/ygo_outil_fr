@@ -1069,6 +1069,143 @@ body {
 .gen-item .name { flex: 1; font-weight: 600; }
 
 /* ============================================================
+   RÉSULTATS COMPACTS DE DECKLIST (JSON / .ydk / Traduction)
+   ============================================================ */
+.gen-summary {
+  list-style: none;
+  margin-bottom: 4px;
+}
+
+.gen-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.gen-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
+.gen-summary-item strong { font-weight: 800; color: var(--text); }
+
+.gen-summary-item.ok {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.gen-summary-item.ok strong { color: var(--success); }
+
+.gen-summary-item.warn {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.gen-summary-item.warn strong { color: var(--warning); }
+
+.gen-summary-item.err {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.gen-summary-item.err strong { color: var(--danger); }
+
+.gen-summary-item.total {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.gen-summary-item.total strong { color: var(--gold); }
+
+.gen-summary-item.custom {
+  background: var(--yugi-soft);
+  color: var(--yugi);
+}
+.gen-summary-item.custom strong { color: var(--yugi); }
+
+.gen-summary-item.info {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* Bouton "Voir le détail" */
+.gen-details-toggle {
+  list-style: none;
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.gen-details-toggle .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Header "Cartes non résolues" */
+.gen-failed-header {
+  list-style: none;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--danger);
+  padding-left: 4px;
+}
+
+/* Grille compacte des échecs */
+.gen-failed-grid {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.gen-failed-chip {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  border: 1px solid rgba(224, 122, 122, 0.25);
+  color: var(--danger);
+  font-size: 0.78rem;
+  font-weight: 600;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.gen-failed-chip:hover {
+  background: var(--danger);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+[data-theme="light"] .gen-failed-chip {
+  background: rgba(195, 58, 58, 0.10);
+  border-color: rgba(195, 58, 58, 0.3);
+}
+
+[data-theme="light"] .gen-failed-chip:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ============================================================
    TRADUCTION
    ============================================================ */
 .translation-result {
@@ -1162,6 +1299,7 @@ body {
 
 .toast.ok   { border-left: 3px solid var(--success); }
 .toast.err  { border-left: 3px solid var(--danger); }
+.toast.warn { border-left: 3px solid var(--warning); }
 .toast.info { border-left: 3px solid var(--gold); }
 
 @keyframes toastIn {
@@ -1537,6 +1675,25 @@ body {
   }
   .output-option-title { font-size: 0.88rem; }
   .output-option-desc { font-size: 0.76rem; }
+
+  /* Rendu compact sur mobile */
+  .gen-summary-bar {
+    padding: 10px 12px;
+    gap: 6px;
+  }
+  .gen-summary-item {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+  }
+  .gen-summary-item.info {
+    margin-left: 0;
+    flex-basis: 100%;
+    justify-content: center;
+  }
+  .gen-failed-chip {
+    max-width: 100%;
+    flex: 1 1 calc(50% - 6px);
+  }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
