@@ -1251,7 +1251,13 @@ function buildCsvRow(card) {
   const links = buildLinkMarkers(card);
   const img = card.card_images && card.card_images[0];
   const rawImgUrl = img ? (img.image_url_cropped || img.image_url) : "";
-  const imgUrl = rawImgUrl ? `https://images.weserv.nl/?url=${encodeURIComponent(rawImgUrl.replace(/^https?:\/\//, ""))}` : "";
+  // ⚡ Placeholder "PLACEHOLDER IMAGE" du card maker (hébergé sur Imgur)
+  const PLACEHOLDER_RAW = "https://i.imgur.com/jjtCuG5.png";
+  const PLACEHOLDER_PROXIED = `https://images.weserv.nl/?url=${encodeURIComponent(PLACEHOLDER_RAW.replace(/^https?:\/\//, ""))}`;
+  
+  const imgUrl = rawImgUrl
+    ? `https://images.weserv.nl/?url=${encodeURIComponent(rawImgUrl.replace(/^https?:\/\//, ""))}`
+    : PLACEHOLDER_PROXIED;
   const values = {
     Format: "tcg",
     Frame: buildLayout(baseFrame).toLowerCase(),
