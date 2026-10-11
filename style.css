@@ -162,7 +162,7 @@ body {
 .icon-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* ============================================================
-   BADGE BASE LOCALE
+   BADGE BASE YGOPRODECK
    ============================================================ */
 .db-badge {
   display: inline-flex;
@@ -176,59 +176,6 @@ body {
   font-size: 0.78rem;
   font-weight: 600;
   white-space: nowrap;
-}
-
-/* ============================================================
-   BANDEAU (install / progression)
-   ============================================================ */
-.db-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 18px 22px;
-  margin-bottom: 24px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--gold-soft), transparent);
-  border: 1px solid var(--gold-soft);
-  position: relative;
-  box-shadow: var(--shadow-sm);
-}
-
-.db-banner::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 16px;
-  padding: 1px;
-  background: linear-gradient(135deg, var(--gold-soft), transparent 50%, var(--gold-soft));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-.db-banner-icon {
-  font-size: 2rem;
-  line-height: 1;
-  flex-shrink: 0;
-  filter: drop-shadow(0 2px 6px var(--gold-glow));
-}
-
-.db-banner-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.db-banner-body p { margin: 0 0 6px; color: var(--text); font-size: 0.9rem; }
-.db-banner-body p:last-child { margin-bottom: 0; }
-
-.db-banner-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-self: center;
-  flex-shrink: 0;
 }
 
 /* ============================================================
@@ -523,77 +470,6 @@ body {
 }
 
 /* ============================================================
-   SEARCH OPTION (checkbox générique)
-   ============================================================ */
-.search-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  font-size: 0.84rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.18s ease;
-  user-select: none;
-  position: relative;
-  z-index: 1;
-}
-
-.search-option:hover {
-  border-color: var(--yugi);
-  background: var(--yugi-soft);
-  color: var(--text);
-}
-
-.search-option input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  border: 2px solid var(--border-strong);
-  background: var(--surface);
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
-  transition: all 0.15s ease;
-  margin: 0;
-}
-
-.search-option input[type="checkbox"]:hover {
-  border-color: var(--yugi);
-}
-
-.search-option input[type="checkbox"]:checked {
-  background: linear-gradient(135deg, var(--yugi), #8a5ac0);
-  border-color: var(--yugi);
-  box-shadow: 0 0 10px var(--yugi-soft);
-}
-
-.search-option input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute;
-  top: 1px;
-  left: 5px;
-  width: 5px;
-  height: 9px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.search-option input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--yugi);
-  outline-offset: 2px;
-}
-
-.search-option strong { color: var(--text); }
-
-/* ============================================================
    OUTPUT SECTION — sélecteur d'action
    ============================================================ */
 .output-section {
@@ -866,16 +742,6 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: 2.3em;
-}
-
-.card-tile-alt {
-  font-size: 0.72rem;
-  font-style: italic;
-  color: rgba(26, 20, 8, 0.7);
-  margin-bottom: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .card-tile-meta {
@@ -1201,7 +1067,6 @@ body {
 }
 
 .gen-item .name { flex: 1; font-weight: 600; }
-.gen-item .alt { color: var(--text-muted); font-size: 0.8rem; font-style: italic; }
 
 /* ============================================================
    TRADUCTION
@@ -1405,23 +1270,6 @@ body {
   border-radius: 4px;
   font-size: 0.82rem;
   color: var(--gold-light);
-}
-
-#yugi-cache-stats {
-  color: var(--yugi) !important;
-  font-weight: 600;
-}
-
-#clear-yugi-cache {
-  border-color: var(--yugi);
-  color: var(--yugi);
-}
-
-#clear-yugi-cache:hover {
-  background: var(--yugi-soft);
-  border-color: var(--yugi);
-  color: var(--yugi);
-  box-shadow: 0 0 10px var(--yugi-soft);
 }
 
 .lang-grid {
@@ -1652,35 +1500,10 @@ body {
   color: var(--yugi);
 }
 
-.cdb-option-help {
-  margin: 0 0 18px;
-  padding: 0 4px;
-  font-size: 0.8rem;
-  line-height: 1.55;
-  color: var(--text-muted);
-}
-
-.cdb-option-help strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.cdb-option-help code {
-  background: var(--code-bg);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 0.78rem;
-  color: var(--gold-light);
-}
-
 /* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 720px) {
-  .db-banner { flex-direction: column; }
-  .db-banner-actions { align-self: stretch; }
-  .db-banner-actions .btn,
-  .db-banner-actions .btn-primary { flex: 1; justify-content: center; }
   .db-badge { display: none; }
 }
 
@@ -1700,12 +1523,10 @@ body {
   .actions-row .btn,
   .actions-row .btn-primary { width: 100%; justify-content: center; }
 
-  .search-option,
   .cdb-option {
     padding: 10px 12px;
     font-size: 0.8rem;
   }
-  .search-option span,
   .cdb-option-label {
     font-size: 0.82rem;
   }
