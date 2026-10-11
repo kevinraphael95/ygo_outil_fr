@@ -25,7 +25,6 @@
     <div id="db-badge" class="db-badge hidden"></div>
 
     <div class="header-actions">
-      <button class="icon-btn" id="db-sync" title="Synchroniser la base locale (Shift+clic ou clic droit pour forcer)" aria-label="Synchroniser la base locale">🔄</button>
       <button class="icon-btn" id="theme-toggle" title="Changer de thème" aria-label="Changer de thème">🌙</button>
       <button class="icon-btn" id="about-btn" title="À propos" aria-label="À propos">ℹ️</button>
     </div>
@@ -33,18 +32,6 @@
 </header>
 
 <div class="container">
-
-  <!-- ============================== BANDEAU INSTALLATION BASE ============================== -->
-  <div id="db-banner" class="db-banner hidden">
-    <div class="db-banner-icon">📥</div>
-    <div class="db-banner-body" id="db-banner-body">
-      <!-- Rempli par JS -->
-    </div>
-    <div class="db-banner-actions">
-      <button class="btn-primary" id="db-install" type="button">📥 Télécharger la base</button>
-      <button class="btn" id="db-skip" type="button">Plus tard</button>
-    </div>
-  </div>
 
   <!-- ============================== HERO ============================== -->
   <section class="hero">
@@ -84,11 +71,6 @@
         </div>
       </div>
 
-      <label class="search-option">
-        <input type="checkbox" id="search-yugipedia">
-        <span>🟣 <strong>Fallback Yugipedia</strong> — utiliser le cache local (data/yugipedia-db.json) pour les cartes absentes de la base locale</span>
-      </label>
-
       <div class="hint">
         <span class="ico">💡</span>
         <div><strong>Mode Auto :</strong> la recherche essaie d'abord en français, puis bascule automatiquement en anglais si rien n'est trouvé. Tu peux forcer une langue avec les pilules ci-dessus.</div>
@@ -105,7 +87,7 @@
     <div class="results-grid" id="results-grid"></div>
   </section>
 
-  <!-- ============================== PANEL : DECKLIST (fusion Deck + Traduire) ============================== -->
+  <!-- ============================== PANEL : DECKLIST ============================== -->
   <section class="panel" id="panel-deck">
     <div class="card">
       <h2 class="card-title">📋 Traiter une decklist</h2>
@@ -121,11 +103,6 @@ Extra Deck:
 
 Side Deck:
 1 Fissure"></textarea>
-
-      <label class="search-option">
-        <input type="checkbox" id="deck-yugipedia">
-        <span>🟣 <strong>Fallback Yugipedia</strong> — cache local (data/yugipedia-db.json)</span>
-      </label>
 
       <!-- ===== Sélecteur d'action ===== -->
       <div class="output-section">
@@ -155,7 +132,7 @@ Side Deck:
         </div>
       </div>
 
-      <!-- ===== Options de traduction (affichées seulement si action = translate) ===== -->
+      <!-- ===== Options de traduction ===== -->
       <div id="deck-translate-options" class="hidden" style="margin-top: 18px;">
         <div class="lang-row">
           <span class="lang-label">Source</span>
@@ -192,7 +169,7 @@ Side Deck:
       <p id="deck-status" class="status-line"></p>
       <ul class="gen-list" id="deck-results"></ul>
 
-      <!-- Résultat de traduction (affiché seulement si action = translate) -->
+      <!-- Résultat de traduction -->
       <div class="translation-result hidden" id="translation-result"></div>
 
       <!-- Téléchargements JSON -->
@@ -210,7 +187,7 @@ Side Deck:
     </div>
   </section>
 
-  <!-- ============================== PANEL : CDB (fusion Traduire + JSON) ============================== -->
+  <!-- ============================== PANEL : CDB ============================== -->
   <section class="panel" id="panel-cdb">
     <div class="card">
       <h2 class="card-title">📦 Traiter un fichier .cdb (EDOPro / YGO Pro)</h2>
@@ -256,7 +233,7 @@ Side Deck:
         </div>
       </div>
 
-      <!-- ===== Option : préserver les effets modifiés (cartes custom) ===== -->
+      <!-- ===== Option : préserver les effets modifiés ===== -->
       <label class="cdb-option" id="cdb-custom-wrap" style="margin-top:20px;">
         <input type="checkbox" id="cdb-custom-mode">
         <span class="cdb-option-label">
@@ -264,9 +241,9 @@ Side Deck:
         </span>
       </label>
 
-      <!-- ===== Option Fallback Yugipedia (cache local) ===== -->
+      <!-- ===== Option Fallback Yugipedia ===== -->
       <label class="cdb-option" id="cdb-yugipedia-wrap" style="margin-top:20px;">
-        <input type="checkbox" id="cdb-yugipedia-mode">
+        <input type="checkbox" id="cdb-yugipedia-mode" checked>
         <span class="cdb-option-label">
           <strong>Fallback Yugipedia</strong> — utilise le cache local (data/yugipedia-db.json) pour récupérer les traductions FR absentes de YGOPRODeck.
         </span>
@@ -287,7 +264,7 @@ Side Deck:
 
       <div class="progress-wrap" id="cdb-yugi-progress-wrap">
         <div class="progress-info">
-          <span id="cdb-yugi-label">Enrichissement Yugipedia…</span>
+          <span id="cdb-yugi-label">Cache Yugipedia…</span>
           <span id="cdb-yugi-pct">0%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="cdb-yugi-fill"></div></div>
@@ -350,7 +327,7 @@ Side Deck:
       <p>L'app charge automatiquement 2 fichiers JSON locaux :</p>
       <ul>
         <li><code>data/cards-db.json</code> — toute la base YGOPRODeck (EN + FR, ~14 500 cartes)</li>
-        <li><code>data/yugipedia-db.json</code> — base Yugipedia (anime, manga, ~13 000 cartes)</li>
+        <li><code>data/yugipedia-db.json</code> — base Yugipedia (anime, manga)</li>
       </ul>
       <p>Aucune requête API au démarrage, tout est instantané et fonctionne hors-ligne.</p>
 
@@ -381,19 +358,13 @@ Side Deck:
       <h3>🔗 Liens utiles</h3>
       <ul>
         <li><a href="https://ygoprodeck.com/api-guide/" target="_blank" rel="noopener">Documentation de l'API YGOPRODeck</a></li>
-        <li><a href="https://yugipedia.com/api.php" target="_blank" rel="noopener">API Yugipedia (MediaWiki)</a></li>
+        <li><a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia (wiki)</a></li>
         <li><a href="https://ygopro.org/yugioh-card-maker/" target="_blank" rel="noopener">Éditeur de cartes ygopro.org</a></li>
         <li><a href="https://github.com/maYayoh/ygo-cardmaker" target="_blank" rel="noopener">Repo du card maker (format JSON de référence)</a></li>
       </ul>
 
       <h3>📄 Format JSON généré</h3>
       <p>Le JSON suit le schéma <code>compatible-card</code> du card maker ygopro.org : version, name, level, type, icon, effect, atk, def, serial, copyright, attribute, id, rarity, pendulum, variant, link, layout, boxSize.</p>
-
-      <h3>🧹 Cache Yugipedia</h3>
-      <p>
-        <button class="btn" id="clear-yugi-cache" type="button">🗑️ Vider le cache Yugipedia</button>
-        <span id="yugi-cache-stats" style="margin-left:10px; color:var(--text-muted); font-size:0.82rem;"></span>
-      </p>
 
       <h3>⚠️ Limitations</h3>
       <ul>
@@ -403,7 +374,7 @@ Side Deck:
       </ul>
 
       <h3>⚖️ Mentions</h3>
-      <p>Données fournies par l'API <a href="https://ygoprodeck.com" target="_blank" rel="noopener">YGOPRODeck</a> et <a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia</a>. Yu-Gi-Oh! est une marque de Konami. Cet outil est non officiel et à usage personnel.</p>
+      <p>Données fournies par <a href="https://ygoprodeck.com" target="_blank" rel="noopener">YGOPRODeck</a> et <a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia</a>. Yu-Gi-Oh! est une marque de Konami. Cet outil est non officiel et à usage personnel.</p>
     </div>
   </div>
 </div>
@@ -429,7 +400,6 @@ Side Deck:
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="yugipedia-api.js"></script>
 <script src="script.js"></script>
 <script src="cdb-translator.js"></script>
 </body>
