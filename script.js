@@ -188,9 +188,10 @@ async function initDatabase() {
 
 function updateDbBadge(countEn, countFr) {
   if (!dbBadge) return;
+  const countYugi = window.yugiCache ? window.yugiCache.size : 0;
   dbBadge.classList.remove("hidden");
-  dbBadge.innerHTML = `🟢 Base YGOPRODeck · ${countEn.toLocaleString("fr-FR")} cartes`;
-  dbBadge.title = `${countEn} cartes EN, ${countFr} cartes FR`;
+  dbBadge.innerHTML = `🟢 YGOPRODeck · ${countEn.toLocaleString("fr-FR")} · 🟣 Yugipedia · ${countYugi.toLocaleString("fr-FR")}`;
+  dbBadge.title = `${countEn} cartes YGOPRODeck (EN), ${countFr} FR, ${countYugi} Yugipedia`;
 }
 
 // ============================================================================
