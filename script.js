@@ -317,8 +317,8 @@ async function searchCards(query, lang = "auto", allowYugipedia = false) {
     if (remote.cards.length) return remote;
   }
   if (allowYugipedia && window.yugiCache && query.length >= 3) {
-    const key = normalizeForSearch(query);
-    const yugiCard = window.yugiCache.get(key);
+      const key = normalizeForSearch(query).replace(/[^a-z0-9]/g, "");
+      const yugiCard = window.yugiCache.get(key);
     if (yugiCard) {
       return {
         cards: [{
