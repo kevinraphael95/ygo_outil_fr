@@ -1,12 +1,14 @@
 // ============================================================================
-// YGO -> ygopro.org Card Maker JSON generator (v8 — JSON local + .ydk)
+// YGO -> ygopro.org Card Maker JSON generator (v9 — JSON local + .ydk + compact)
 // ============================================================================
 // L'app charge 2 fichiers JSON locaux :
 //   • data/cards-db.json      → YGOPRODeck (EN + FR)
 //   • data/yugipedia-db.json  → Yugipedia (anime, manga…)
 // Aucune requête API au démarrage. Fallback API direct si JSON absents.
 //
-// NOUVEAU v8 : génération de fichiers .ydk pour EDOPro / YGOPro
+// NOUVEAU v9 :
+//   • Génération de fichiers .ydk pour EDOPro / YGOPro
+//   • Rendu compact unifié pour les 3 actions (JSON, .ydk, Traduction)
 // ============================================================================
 
 const API_BASE = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
@@ -29,19 +31,12 @@ const JSON_YUGIPEDIA_DB = "data/yugipedia-db.json";
 // ----------------------------------------------------------------------------
 // IDs CUSTOM — Cartes anime / non officielles
 // ----------------------------------------------------------------------------
-// Ces passcodes sont utilisés par les extensions EDOPro (Project Ignis, KCG…).
-// Format : "nom normalisé (minuscules, sans accents, sans espaces)" : "passcode"
-// ----------------------------------------------------------------------------
 const CUSTOM_IDS = {
   // ─── Magies / Pièges classiques de l'anime ───
   "potde cupidite": "55144522",
   "pot of greed": "55144522",
   "charitegracieuse": "79571449",
   "graceful charity": "79571449",
-
-  // ─── Deck Amnael / Lyman Banner (GX) ───
-  // (Les cartes réelles ont déjà leur ID dans cards-db.json.
-  //  Ajoute ici uniquement celles qui n'y sont pas.)
 
   // ─── Ajoute tes autres cartes anime ici ───
   // "nom de la carte": "passcode",
@@ -955,10 +950,6 @@ function parseDecklist(text) {
   return names;
 }
 
-/**
- * Parse la decklist en conservant les sections (main / extra / side).
- * Utilisé par la génération .ydk.
- */
 function parseDecklistWithSections(text) {
   const main = [], extra = [], side = [];
   let currentSection = main;
@@ -981,11 +972,87 @@ function parseDecklistWithSections(text) {
   return { main, extra, side };
 }
 
-function setDeckItemStatus(li, statusClass, text) {
-  const badge = li.querySelector(".badge");
-  if (!badge) return;
-  badge.className = `badge ${statusClass}`;
-  badge.textContent = text;
+// ============================================================================
+// RENDU COMPACT UNIVERSEL (JSON / .ydk / Traduction)
+// ============================================================================
+function renderCompactResults({
+  total,
+  ok = 0,
+  warn = 0,
+  failed = [],
+  custom = 0,
+  type = "json",
+  detailsId = null,
+  detailsLabel = "Voir le détail complet",
+}) {
+  deckResultsEl.innerHTML = "";
+
+  // ─── Ligne de résumé ───
+  const summary = document.createElement("li");
+  summary.className = "gen-summary";
+
+  const parts = [];
+  parts.push(
+    `<span class="gen-summary-item total">📦 <strong>${total}</strong> carte${total > 1 ? "s" : ""}</span>`
+  );
+  if (ok > 0) parts.push(
+    `<span class="gen-summary-item ok">✅ <strong>${ok}</strong> résolue${ok > 1 ? "s" : ""}</span>`
+  );
+  if (warn > 0) parts.push(
+    `<span class="gen-summary-item warn">⚠️ <strong>${warn}</strong> sans trad.</span>`
+  );
+  if (failed.length > 0) parts.push(
+    `<span class="gen-summary-item err">❌ <strong>${failed.length}</strong> introuvable${failed.length > 1 ? "s" : ""}</span>`
+  );
+  if (custom > 0) parts.push(
+    `<span class="gen-summary-item custom">🟣 <strong>${custom}</strong> custom</span>`
+  );
+
+  const actionLabel =
+    type === "ydk" ? "📄 Format .ydk"
+    : type === "translate" ? "🌐 Traduction"
+    : "📄 Format JSON";
+  parts.push(`<span class="gen-summary-item info">${actionLabel}</span>`);
+
+  summary.innerHTML = `<div class="gen-summary-bar">${parts.join("")}</div>`;
+  deckResultsEl.appendChild(summary);
+
+  // ─── Bouton "Voir le détail" (optionnel) ───
+  if (detailsId) {
+    const toggleLi = document.createElement("li");
+    toggleLi.className = "gen-details-toggle";
+    const btn = document.createElement("button");
+    btn.className = "btn";
+    btn.type = "button";
+    btn.textContent = `👁️ ${detailsLabel}`;
+    btn.addEventListener("click", () => {
+      const el = document.getElementById(detailsId);
+      if (!el) return;
+      const nowHidden = el.classList.toggle("hidden");
+      btn.textContent = nowHidden ? `👁️ ${detailsLabel}` : "🙈 Masquer le détail";
+    });
+    toggleLi.appendChild(btn);
+    deckResultsEl.appendChild(toggleLi);
+  }
+
+  // ─── Liste compacte des échecs ───
+  if (failed.length > 0) {
+    const header = document.createElement("li");
+    header.className = "gen-failed-header";
+    header.innerHTML = `<span>❌ Cartes non résolues</span>`;
+    deckResultsEl.appendChild(header);
+
+    const grid = document.createElement("li");
+    grid.className = "gen-failed-grid";
+    failed.forEach((name) => {
+      const chip = document.createElement("span");
+      chip.className = "gen-failed-chip";
+      chip.textContent = name;
+      chip.title = name;
+      grid.appendChild(chip);
+    });
+    deckResultsEl.appendChild(grid);
+  }
 }
 
 // ============================================================================
@@ -1042,6 +1109,7 @@ deckGenerateBtn.addEventListener("click", async () => {
 async function runDeckJsonGeneration() {
   const names = parseDecklist(deckInput.value);
   if (!names.length) { toast("Colle d'abord une decklist.", "err"); return; }
+
   deckGenerateBtn.disabled = true;
   deckResultsEl.innerHTML = "";
   deckDownloadsRow.classList.add("hidden");
@@ -1051,29 +1119,27 @@ async function runDeckJsonGeneration() {
   progressFill.style.width = "0%";
   progressPct.textContent = "0%";
   deckStatusEl.textContent = appState.dbReady ? "Recherche locale…" : "Recherche via API…";
-  const itemEls = names.map((name) => {
-    const li = document.createElement("li");
-    li.className = "gen-item";
-    li.innerHTML = `<span>⏳</span><span class="name serif">${escapeHtml(name)}</span><span class="badge info">En attente…</span>`;
-    deckResultsEl.appendChild(li);
-    return li;
-  });
+
   const generatedFiles = [];
   const generatedCards = [];
   const resolved = new Map();
+  const failed = [];
   const uniqueNames = [...new Set(names)];
   let done = 0;
+
   for (const n of uniqueNames) {
     try {
       const card = await findCardByName(n, "auto");
       if (card) resolved.set(n, card);
-    } catch (err) { console.warn(`Échec "${n}"`, err); }
+      else failed.push(n);
+    } catch (err) { console.warn(`Échec "${n}"`, err); failed.push(n); }
     done++;
     const pct = Math.round((done / uniqueNames.length) * 60);
     progressFill.style.width = pct + "%";
     progressPct.textContent = pct + "%";
     progressLabel.textContent = `Recherche ${done} / ${uniqueNames.length} · ${n.slice(0, 30)}…`;
   }
+
   if (!appState.dbReady) {
     const idsNeedingFr = [];
     for (const card of resolved.values()) {
@@ -1081,33 +1147,39 @@ async function runDeckJsonGeneration() {
     }
     if (idsNeedingFr.length) { try { await getCardsByIds(idsNeedingFr, "fr"); } catch (e) {} }
   }
+
   for (let i = 0; i < names.length; i++) {
     const name = names[i];
-    const li = itemEls[i];
     const found = resolved.get(name);
-    if (!found) setDeckItemStatus(li, "err", "❌ Introuvable");
-    else {
+    if (found) {
       try {
         const json = await generateJsonForCard(found);
         generatedFiles.push({ filename: `${sanitizeFilename(found.name)}.json`, json: JSON.stringify(json, null, 2) });
         const fr = found._source === "yugipedia" ? null : await getCardById(found.id, "fr");
         const structural = found._source === "yugipedia" ? found : (structuralCardCache.get(found.id) || found);
         generatedCards.push({ ...structural, name: (fr && fr.name) || found.name, desc: found.desc, pend_desc: found.pend_desc, monster_desc: found.monster_desc, displayRace: found.race });
-        setDeckItemStatus(li, found._source === "yugipedia" ? "info" : "ok", found._source === "yugipedia" ? "🟣 Yugipedia" : "✅ OK");
-      } catch (err) { console.error(err); setDeckItemStatus(li, "err", "❌ Erreur"); }
+      } catch (err) { console.error(err); }
     }
     const pct = 60 + Math.round(((i + 1) / names.length) * 40);
     progressFill.style.width = pct + "%";
     progressPct.textContent = pct + "%";
     progressLabel.textContent = `Génération ${i + 1} / ${names.length}…`;
   }
+
+  // ═══ RENDU COMPACT ═══
+  renderCompactResults({
+    total: names.length,
+    ok: generatedFiles.length,
+    failed: [...new Set(failed)],
+    type: "json",
+  });
+
   deckGenerateBtn.disabled = false;
   progressLabel.textContent = `Terminé : ${generatedFiles.length} / ${names.length}`;
   progressPct.textContent = "100%";
   progressFill.style.width = "100%";
   if (generatedFiles.length) {
     deckDownloadsRow.classList.remove("hidden");
-    // On masque le bouton .ydk si on est en mode JSON
     if (deckDownloadYdkBtn) deckDownloadYdkBtn.classList.add("hidden");
     if (deckDownloadZipBtn) deckDownloadZipBtn.classList.remove("hidden");
     if (deckDownloadCsvBtn) deckDownloadCsvBtn.classList.remove("hidden");
@@ -1135,19 +1207,16 @@ async function runYdkGeneration() {
   deckStatusEl.textContent = appState.dbReady ? "Résolution des cartes…" : "Résolution via API…";
 
   const uniqueNames = [...new Set(allCards)];
-  const resolvedMap = new Map();       // nomOriginal → passcode
+  const resolvedMap = new Map();
   const unresolved = [];
-  const sourceInfo = new Map();        // nomOriginal → "custom" | "local" | "yugi"
-
+  const sourceInfo = new Map();
   let done = 0;
+
   for (const n of uniqueNames) {
     const key = normalizeForSearch(n).replace(/[^a-z0-9]/g, "");
-
-    // 1. Dictionnaire custom (cartes anime) en priorité
     let passcode = CUSTOM_IDS[key] || null;
     let source = passcode ? "custom" : null;
 
-    // 2. Sinon chercher dans la base
     if (!passcode) {
       try {
         const card = await findCardByName(n, "auto");
@@ -1172,49 +1241,39 @@ async function runYdkGeneration() {
     progressLabel.textContent = `Résolution ${done} / ${uniqueNames.length}…`;
   }
 
-  // 3. Construire le contenu .ydk
+  // ─── Construction du .ydk ───
   let ydk = "#created by YGO Card Maker JSON\n";
-
   function appendSection(header, list) {
     ydk += header + "\n";
     list.forEach((name) => {
       const id = resolvedMap.get(name);
-      if (id) {
-        ydk += id + "\n";
-      } else {
-        ydk += "# " + name + " (ID introuvable)\n";
-      }
+      if (id) ydk += id + "\n";
+      else ydk += "# " + name + " (ID introuvable)\n";
     });
   }
   appendSection("#main", main);
   appendSection("#extra", extra);
   appendSection("!side", side);
 
-  // 4. Afficher le résumé dans la liste
-  allCards.forEach((name) => {
-    const li = document.createElement("li");
-    li.className = "gen-item";
-    const id = resolvedMap.get(name);
-    const src = sourceInfo.get(name);
-    if (id) {
-      const srcBadge = src === "custom" ? "🟣 custom" : "✅";
-      li.innerHTML = `<span>✅</span><span class="name serif">${escapeHtml(name)}</span><span class="badge ok">${id} · ${srcBadge}</span>`;
-    } else {
-      li.innerHTML = `<span>❌</span><span class="name serif">${escapeHtml(name)}</span><span class="badge err">Introuvable</span>`;
-    }
-    deckResultsEl.appendChild(li);
+  // ─── Stats ───
+  const customCount = [...resolvedMap.keys()].filter((n) => sourceInfo.get(n) === "custom").length;
+  const okCount = allCards.length - unresolved.length;
+
+  // ═══ RENDU COMPACT ═══
+  renderCompactResults({
+    total: allCards.length,
+    ok: okCount,
+    failed: [...new Set(unresolved)],
+    custom: customCount,
+    type: "ydk",
   });
 
-  // 5. Fin
   progressFill.style.width = "100%";
   progressPct.textContent = "100%";
-  const total = allCards.length;
-  const ok = total - unresolved.length;
-  progressLabel.textContent = `Terminé : ${ok} / ${total}`;
-  deckStatusEl.textContent = `✅ ${ok} carte(s) résolue(s) · ${unresolved.length} introuvable(s)`;
+  progressLabel.textContent = `Terminé : ${okCount} / ${allCards.length}`;
+  deckStatusEl.textContent = `✅ ${okCount} carte(s) résolue(s) · ${unresolved.length} introuvable(s)`;
   deckDownloadsRow.classList.remove("hidden");
 
-  // Afficher UNIQUEMENT le bouton .ydk
   if (deckDownloadZipBtn) deckDownloadZipBtn.classList.add("hidden");
   if (deckDownloadCsvBtn) deckDownloadCsvBtn.classList.add("hidden");
   if (deckDownloadYdkBtn) {
@@ -1227,11 +1286,8 @@ async function runYdkGeneration() {
   }
 
   deckGenerateBtn.disabled = false;
-  if (unresolved.length) {
-    toast(`${unresolved.length} carte(s) sans ID (voir la liste)`, "warn");
-  } else {
-    toast("Fichier .ydk généré avec succès !", "ok");
-  }
+  if (unresolved.length) toast(`${unresolved.length} carte(s) sans ID`, "warn");
+  else toast("Fichier .ydk généré avec succès !", "ok");
 }
 
 // ============================================================================
@@ -1253,6 +1309,7 @@ async function runDeckTranslation() {
   deckResultsEl.innerHTML = "";
   deckDownloadsRow.classList.add("hidden");
   progressWrap.classList.remove("visible");
+
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const results = [];
   const cardNames = [];
@@ -1266,6 +1323,7 @@ async function runDeckTranslation() {
     cardNames.push(name);
     cardIndexes.push(idx);
   });
+
   const uniqueNames = [...new Set(cardNames)];
   const resolvedMap = new Map();
   let done = 0;
@@ -1274,6 +1332,7 @@ async function runDeckTranslation() {
     done++;
     deckStatusEl.textContent = `Résolution ${done} / ${uniqueNames.length}…`;
   }
+
   const targetLang = dst === "fr" ? "fr" : null;
   if (!appState.dbReady) {
     const idsToResolve = [];
@@ -1282,14 +1341,18 @@ async function runDeckTranslation() {
     }
     if (idsToResolve.length) { try { await getCardsByIds(idsToResolve, targetLang); } catch (e) {} }
   }
+
   let okCount = 0;
+  let warnCount = 0;
   let totalCards = 0;
+  const failedNames = [];
+
   for (const idx of cardIndexes) {
     const r = results[idx];
     const name = r.name;
     const resolved = resolvedMap.get(name);
     totalCards++;
-    if (!resolved) { r.status = "err"; continue; }
+    if (!resolved) { r.status = "err"; failedNames.push(name); continue; }
     if (resolved._source === "yugipedia") {
       r.status = "ok"; r.translated = resolved.name; r.source = "yugipedia"; okCount++; continue;
     }
@@ -1300,16 +1363,21 @@ async function runDeckTranslation() {
       const cache = targetLang === "fr" ? cardFrByIdCache : cardByIdCache;
       target = cache.get(String(resolved.id)) || null;
     }
-    if (!target) { r.status = "warn"; r.translated = resolved.name; continue; }
+    if (!target) { r.status = "warn"; r.translated = resolved.name; warnCount++; continue; }
     const translatedName = target.name;
     const isSame = translatedName.toLowerCase() === name.toLowerCase();
-    if (isSame) { r.status = "warn"; r.translated = translatedName; }
+    if (isSame) { r.status = "warn"; r.translated = translatedName; warnCount++; }
     else { r.status = "ok"; r.translated = translatedName; okCount++; }
   }
+
+  // ─── Panneau détaillé (caché par défaut) ───
   translationResultEl.innerHTML = "";
   results.forEach((r) => {
     if (!r) return;
-    if (r.type === "section") { translationResultEl.innerHTML += `<div class="line section">${escapeHtml(r.label)}</div>`; return; }
+    if (r.type === "section") {
+      translationResultEl.innerHTML += `<div class="line section">${escapeHtml(r.label)}</div>`;
+      return;
+    }
     let badge, translated;
     if (r.status === "err") {
       badge = '<span class="badge err">❌ introuvable</span>';
@@ -1331,7 +1399,19 @@ async function runDeckTranslation() {
         ${badge}
       </div>`;
   });
-  translationResultEl.classList.remove("hidden");
+  translationResultEl.classList.add("hidden");
+
+  // ═══ RENDU COMPACT ═══
+  renderCompactResults({
+    total: totalCards,
+    ok: okCount,
+    warn: warnCount,
+    failed: [...new Set(failedNames)],
+    type: "translate",
+    detailsId: "translation-result",
+    detailsLabel: "Voir la decklist traduite",
+  });
+
   translationActionsEl.classList.remove("hidden");
   deckGenerateBtn.disabled = false;
   deckStatusEl.textContent = `Terminé : ${okCount} / ${totalCards} carte(s) traduite(s).`;
