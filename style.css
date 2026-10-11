@@ -179,7 +179,7 @@ body {
 }
 
 /* ============================================================
-   BANDEAU INSTALLATION
+   BANDEAU (install / progression)
    ============================================================ */
 .db-banner {
   display: flex;
@@ -523,7 +523,7 @@ body {
 }
 
 /* ============================================================
-   SEARCH OPTION (checkbox générique : Yugipedia, etc.)
+   SEARCH OPTION (checkbox générique)
    ============================================================ */
 .search-option {
   display: flex;
@@ -594,7 +594,7 @@ body {
 .search-option strong { color: var(--text); }
 
 /* ============================================================
-   OUTPUT SECTION — sélecteur d'action (Traduire / JSON)
+   OUTPUT SECTION — sélecteur d'action
    ============================================================ */
 .output-section {
   margin: 22px 0 0;
@@ -1170,7 +1170,7 @@ body {
   box-shadow: 0 0 8px var(--gold-glow);
 }
 
-/* 2ᵉ barre de progression (Yugipedia) — variante violette */
+/* 2ᵉ barre de progression (cache Yugipedia) — variante violette */
 #cdb-yugi-progress-wrap .progress-fill {
   background: linear-gradient(90deg, #6a3a9a, var(--yugi), #d8b0f0);
   box-shadow: 0 0 8px var(--yugi-soft);
@@ -1407,7 +1407,6 @@ body {
   color: var(--gold-light);
 }
 
-/* Stats cache Yugipedia dans le modal */
 #yugi-cache-stats {
   color: var(--yugi) !important;
   font-weight: 600;
@@ -1549,7 +1548,7 @@ body {
 }
 
 /* ============================================================
-   CDB — OPTIONS
+   CDB — OPTIONS (checkboxes)
    ============================================================ */
 .cdb-option {
   display: flex;
@@ -1701,7 +1700,6 @@ body {
   .actions-row .btn,
   .actions-row .btn-primary { width: 100%; justify-content: center; }
 
-  /* Options : compactes sur mobile */
   .search-option,
   .cdb-option {
     padding: 10px 12px;
@@ -1712,7 +1710,6 @@ body {
     font-size: 0.82rem;
   }
 
-  /* Sélecteur d'action : compact aussi */
   .output-option {
     padding: 12px 14px;
     gap: 10px;
