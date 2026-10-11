@@ -91,7 +91,7 @@
   <section class="panel" id="panel-deck">
     <div class="card">
       <h2 class="card-title">📋 Traiter une decklist</h2>
-      <p class="card-sub">Colle une liste au format <code>1 Nom de la carte</code>, une par ligne. Les en-têtes <em>Main / Extra / Side Deck</em> sont ignorés.</p>
+      <p class="card-sub">Colle une liste au format <code>1 Nom de la carte</code>, une par ligne. Les sections <em>Main / Extra / Side Deck</em> sont détectées pour le format .ydk.</p>
 
       <textarea class="json-preview" id="deck-input" spellcheck="false" style="min-height:180px;" placeholder="Main Deck:
 1 Dark Magician
@@ -125,6 +125,16 @@ Side Deck:
               <div class="output-option-title">🌐 <strong>Traduire la decklist</strong></div>
               <div class="output-option-desc">
                 Traduit chaque nom de carte (ex: EN → FR) et te donne la decklist traduite.
+              </div>
+            </div>
+          </label>
+
+          <label class="output-option">
+            <input type="radio" name="deck-action" value="ydk" id="deck-action-ydk">
+            <div class="output-option-body">
+              <div class="output-option-title">📦 <strong>Générer un fichier .ydk</strong></div>
+              <div class="output-option-desc">
+                Fichier texte prêt pour EDOPro, YGOPro, YGO Omega, etc. Gère les sections <em>Main</em>, <em>Extra</em> et <em>Side</em>, ainsi que les cartes anime via un dictionnaire d'IDs custom.
               </div>
             </div>
           </label>
@@ -176,6 +186,7 @@ Side Deck:
       <div class="actions-row hidden" id="deck-downloads">
         <button class="btn" id="deck-download-zip" type="button">📦 Télécharger tous les JSON (.zip)</button>
         <button class="btn" id="deck-download-csv" type="button">📑 Télécharger le CSV Manager</button>
+        <button class="btn hidden" id="deck-download-ydk" type="button">📦 Télécharger le .ydk</button>
       </div>
 
       <!-- Téléchargements Traduction -->
@@ -321,7 +332,7 @@ Side Deck:
       <button class="icon-btn" id="about-close" aria-label="Fermer">✕</button>
     </div>
     <div class="modal-body">
-      <p>Cet outil permet de rechercher des cartes Yu-Gi-Oh! par leur nom dans plusieurs langues, de générer un <strong>JSON compatible avec l'éditeur ygopro.org</strong>, de télécharger les illustrations officielles, de traduire des decklists entières, et de convertir des fichiers .cdb EDOPro/YGO Pro en JSON ou en .cdb traduit.</p>
+      <p>Cet outil permet de rechercher des cartes Yu-Gi-Oh! par leur nom dans plusieurs langues, de générer un <strong>JSON compatible avec l'éditeur ygopro.org</strong>, de télécharger les illustrations officielles, de traduire des decklists entières, de générer des fichiers <strong>.ydk</strong> pour EDOPro/YGOPro, et de convertir des fichiers .cdb EDOPro/YGO Pro en JSON ou en .cdb traduit.</p>
 
       <h3>💾 Base de cartes locale</h3>
       <p>L'app charge automatiquement 2 fichiers JSON locaux :</p>
@@ -330,6 +341,13 @@ Side Deck:
         <li><code>data/yugipedia-db.json</code> — base Yugipedia (anime, manga)</li>
       </ul>
       <p>Aucune requête API au démarrage, tout est instantané et fonctionne hors-ligne.</p>
+
+      <h3>📋 Decklist — 3 actions possibles</h3>
+      <ul>
+        <li><strong>Transformer en JSON</strong> — un JSON par carte (ZIP) + CSV Manager.</li>
+        <li><strong>Traduire la decklist</strong> — traduit chaque nom (ex: EN → FR) et donne la decklist traduite.</li>
+        <li><strong>Générer un fichier .ydk</strong> — format texte prêt pour EDOPro, YGOPro, YGO Omega. Les sections <em>Main</em>, <em>Extra</em> et <em>Side</em> sont automatiquement détectées. Les cartes anime sont résolues via le dictionnaire <code>CUSTOM_IDS</code> dans <code>script.js</code>.</li>
+      </ul>
 
       <h3>📦 Traitement .cdb</h3>
       <p>Dépose un fichier <code>.cdb</code> (base SQLite EDOPro/YGO Pro) dans l'onglet dédié. Tu peux ensuite :</p>
@@ -366,10 +384,20 @@ Side Deck:
       <h3>📄 Format JSON généré</h3>
       <p>Le JSON suit le schéma <code>compatible-card</code> du card maker ygopro.org : version, name, level, type, icon, effect, atk, def, serial, copyright, attribute, id, rarity, pendulum, variant, link, layout, boxSize.</p>
 
+      <h3>📦 Format .ydk généré</h3>
+      <p>Le fichier .ydk suit le format standard utilisé par EDOPro, YGOPro et YGO Omega :</p>
+      <ul>
+        <li><code>#main</code> — cartes du Main Deck</li>
+        <li><code>#extra</code> — cartes de l'Extra Deck</li>
+        <li><code>!side</code> — cartes du Side Deck</li>
+      </ul>
+      <p>Chaque carte est identifiée par son <strong>passcode</strong> (ID numérique). Les cartes introuvables sont écrites en commentaire (<code># Nom (ID introuvable)</code>).</p>
+
       <h3>⚠️ Limitations</h3>
       <ul>
         <li>Toutes les cartes n'ont pas de traduction française officielle ; dans ce cas, le nom anglais est conservé.</li>
         <li>Les cartes custom VAACT pures (jamais éditées) ne sont ni dans YGOPRODeck ni dans Yugipedia — elles n'auront pas d'image.</li>
+        <li>Pour les cartes anime (comme <em>Pot of Greed</em>), ajoute leur passcode dans le dictionnaire <code>CUSTOM_IDS</code> de <code>script.js</code>.</li>
         <li>Le champ <code>serial</code> (numéro de set) n'est pas fourni par l'API — laisse vide ou clique RANDOMIZE dans l'éditeur.</li>
       </ul>
 
