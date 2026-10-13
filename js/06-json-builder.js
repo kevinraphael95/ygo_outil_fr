@@ -5,8 +5,13 @@
 // ============================================================================
 // 🔮 PENDULE — sépare "effet Pendule" et "effet de Monstre"
 // ============================================================================
-const PEND_HEAD = /[\[\vert{}]\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*[\]|]/i;
-const MON_HEAD = /[\[\vert{}]\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*[\]|]/i;
+// La base (cards-db.json) ne fournit que `desc` : l'effet Pendule et l'effet de
+// monstre y sont collés. On les coupe ici pour remplir pendulum.effect (Pendule)
+// et effect (Monstre). Gère aussi les cartes venant d'un .cdb (échelle cachée
+// dans le level, frameType sans "pendulum").
+// ============================================================================
+const PEND_HEAD = /\[\s*(?:Pendulum Effect|Effet Pendule|Effet de Pendule)\s*\]/i;
+const MON_HEAD = /\[\s*(?:Monster Effect|Flavor Text|Effet de Monstre|Effet Monstre|Texte d['’]ambiance)\s*\]/i;
 const SCALE_RE = /(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*(\d+)/i;
 
 function cleanPendPart(s) {
@@ -14,9 +19,9 @@ function cleanPendPart(s) {
     .replace(/^[-=_\s]{5,}$/gm, " ")
     .replace(/(?:\s*◆\s*){3}/g, " ")
     .replace(/(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*\d+/gi, "")
-    .replace(/[\[\vert{}]\s*(?:VAACT\vert{}VAN\vert{}VNM\vert{}VSYN\vert{}VXYZ\vert{}VLINK\vert{}VRIT)\s*[\]|]/gi, "")
-    .replace(/[\[\vert{}]\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*[\]|]\s*:?/gi, "")
-    .replace(/[\[\vert{}]\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*[\]|]\s*:?/gi, "")
+    .replace(/\[\s*(?:VAACT|VAN|VNM|VSYN|VXYZ|VLINK|VRIT)\s*\]/gi, "")
+    .replace(/\[\s*(?:Pendulum Effect|Effet Pendule|Effet de Pendule)\s*\]\s*:?/gi, "")
+    .replace(/\[\s*(?:Monster Effect|Flavor Text|Effet de Monstre|Effet Monstre|Texte d['’]ambiance)\s*\]\s*:?/gi, "")
     .replace(/^[\s|:-]+/, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -33,6 +38,7 @@ function splitPendulumDesc(desc) {
   let monText = "";
 
   if (pm) {
+    // Cas normal : en-têtes [ Effet Pendule ] / [ Effet de Monstre ]
     const mm = desc.match(MON_HEAD);
     const pendStart = pm.index + pm[0].length;
     if (mm && mm.index > pm.index) {
@@ -42,19 +48,14 @@ function splitPendulumDesc(desc) {
       pendText = desc.slice(pendStart);
     }
   } else {
-    const paragraphs = desc.split(/\r?\n\s*\r?\n/).filter(Boolean);
+    // Sans en-têtes : on coupe seulement s'il y a un vrai saut de paragraphe.
+    // Sinon on ne devine pas : tout va dans l'effet de monstre.
+    const paragraphs = desc.split(/\r?\n\s*\r?\n/).filter((x) => x.trim());
     if (paragraphs.length >= 2) {
       pendText = paragraphs[0];
       monText = paragraphs.slice(1).join("\n\n");
     } else {
-      const sentences = desc.split(/(?<=\.)\s+/);
-      if (sentences.length >= 2) {
-        pendText = sentences[0];
-        monText = sentences.slice(1).join(" ");
-      } else {
-        pendText = desc;
-        monText = desc;
-      }
+      monText = desc;
     }
   }
 
@@ -66,11 +67,12 @@ function normalizePendulum(card) {
 
   const frame = card.frameType || "";
   const levelRaw = typeof card.level === "number" ? card.level : parseInt(card.level, 10);
-  const levelHasScale = Number.isFinite(levelRaw) && levelRaw > 255;
+  const levelHasScale = Number.isFinite(levelRaw) && levelRaw > 255; // .cdb : échelles dans les bits hauts
 
   const isPend =
     frame.includes("pendulum") ||
     String(card.type || "").includes("Pendulum") ||
+    PEND_HEAD.test(String(card.desc || "")) ||
     levelHasScale;
 
   if (!isPend) return card;
@@ -142,7 +144,7 @@ function cacheStructural(id, card) {
 }
 
 function buildYgoproJson(card) {
-  card = normalizePendulum(card);
+  card = normalizePendulum(card); // 🔮 sépare effet Pendule / effet Monstre
   const isSpell = card.type === "Spell Card";
   const isTrap = card.type === "Trap Card";
   const [baseFrame, pendulumSuffix] = (card.frameType || "").split("_");
@@ -227,6 +229,7 @@ function buildTypeLine(card) {
     line = `${displayRace}/${translateAbilities(abilities).join("/")}`;
   }
 
+  // 🔮 Pendule : ajoute "Pendule" → Magicien/Synchro/Pendule/Effet
   const isPend =
     String(card.frameType || "").includes("pendulum") ||
     String(card.type || "").includes("Pendulum");
@@ -259,8 +262,8 @@ function buildAttribute(card) {
 }
 
 function buildEffectText(card) {
+  // Carte Pendule : monster_desc est déjà propre. Autres cartes : texte brut d'origine.
   let text = card.monster_desc || card.desc || "";
-  text = cleanPendPart(text);
   text = text.replace(/^[#=*\-_\s]{3,}$/gm, " ◆ ◆ ◆ ");
   text = text.replace(/\r\n/g, " ").replace(/\n/g, " ").replace(/\r/g, " ");
   text = text.replace(/\s+/g, " ");
