@@ -73,6 +73,32 @@ async function initDatabase() {
       console.warn("[DB] yugipedia-db.json indisponible :", e.message);
     }
 
+    // ─── 2b. Yugipedia → illustration YGOPRODeck (retrouvée par le nom anglais) ───
+    // Yugipedia ne fournit que le SCAN de la carte entière (cadre + nom). Quand la
+    // carte existe aussi dans YGOPRODeck (même nom anglais), on utilise plutôt son
+    // illustration recadrée. Le scan d'origine est gardé dans `img_scan`.
+    try {
+      const strip = (n) => normalizeForSearch(n).replace(/[^a-z0-9]/g, "");
+      const croppedByEnName = new Map();
+      for (const c of memCacheEn.values()) {
+        const url = c.card_images && c.card_images[0] && c.card_images[0].image_url_cropped;
+        if (c.name && url) croppedByEnName.set(strip(c.name), url);
+      }
+      let swapped = 0;
+      for (const card of window.yugiCache.values()) {
+        if (!card.en) continue;
+        const url = croppedByEnName.get(strip(card.en));
+        if (!url) continue;
+        if (!card.img_scan) card.img_scan = card.img || card.img_en || "";
+        card.img = url;
+        card.img_en = url;
+        swapped++;
+      }
+      console.log(`[DB] 🖼️ ${swapped} illustration(s) YGOPRODeck utilisées à la place du scan Yugipedia`);
+    } catch (e) {
+      console.warn("[DB] Association illustrations Yugipedia → YGOPRODeck échouée :", e.message);
+    }
+
     // ─── 3. Exposition ───
     window.memCacheEn = memCacheEn;
     window.memCacheFr = memCacheFr;
