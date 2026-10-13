@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>YGOPRO Archétypes — Traducteur multi-langues v6</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         max-width: 1100px; margin: 0 auto; padding: 20px;
+         background: #f5f6f8; color: #1a1a1a; }
+  h1 { font-size: 20px; margin-bottom: 6px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 20px; }
+  .panel { background: #fff; border: 1px solid #e0e4e8; border-radius: 10px;
+           padding: 16px; margin-bottom: 16px; }
+  textarea { width: 100%; height: 160px; font-family: 'SF Mono', Consolas, monospace;
+             font-size: 12px; padding: 10px; border: 1px solid #d0d5dc;
+             border-radius: 8px; resize: vertical; }
+  select { padding: 9px 12px; border: 1px solid #d0d5dc; border-radius: 8px;
+           font-size: 14px; font-family: inherit; background: #fff; color: inherit;
+           cursor: pointer; }
+  select:focus { outline: none; border-color: #4a7fd6;
+                 box-shadow: 0 0 0 3px rgba(74, 127, 214, 0.15); }
+  button { padding: 10px 18px; background: #4a7fd6; color: #fff; border: none;
+           border-radius: 8px; font-size: 14px; font-weight: 600;
+           cursor: pointer; font-family: inherit; }
+  button:hover:not(:disabled) { background: #3a6fc6; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.secondary { background: #fff; color: #555; border: 1px solid #d0d5dc; }
+  button.secondary:hover:not(:disabled) { background: #f7f8fa; border-color: #4a7fd6; color: #4a7fd6; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .progress { flex: 1; height: 8px; background: #eef0f4; border-radius: 4px; overflow: hidden; }
+  .progress > div { height: 100%; background: #4a7fd6; width: 0%; transition: width .2s; }
+  .stats { font-size: 13px; color: #555; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px;
+          font-family: 'SF Mono', Consolas, monospace; }
+  th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #eef0f4; }
+  th { background: #f7f8fa; font-weight: 700; font-size: 11px;
+       text-transform: uppercase; letter-spacing: .5px; color: #777;
+       position: sticky; top: 0; }
+  tr.ok td:nth-child(3) { color: #1a7a3a; font-weight: 600; }
+  tr.miss td:nth-child(3) { color: #a0a0b0; font-style: italic; }
+  tr.err td:nth-child(3) { color: #c0392b; }
+  .table-wrap { max-height: 400px; overflow: auto; border: 1px solid #e0e4e8;
+                border-radius: 8px; }
+  .legend { font-size: 11px; color: #777; margin-top: 8px; }
+  .legend span { display: inline-block; margin-right: 14px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+         margin-right: 4px; vertical-align: middle; }
+  pre { background: #1a1a24; color: #c0c0d0; padding: 12px; border-radius: 8px;
+        font-size: 11px; overflow: auto; max-height: 300px; margin-top: 10px;
+        font-family: 'SF Mono', Consolas, monospace; white-space: pre-wrap;
+        word-break: break-all; }
+  .diag-ok { color: #1a7a3a; font-weight: 600; }
+  .diag-warn { color: #c08020; font-weight: 600; }
+  .diag-err { color: #c0392b; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>YGOPRO — Traducteur d'archétypes <span style="font-size:12px;color:#888;">v6 · multi-langues</span></h1>
+<div class="sub">
+  Choisis la langue cible, charge ton <code>cardinfo_english.txt</code>, récupère un <code>##setname</code> traduit.
+</div>
+
+<div class="panel">
+  <div class="row">
+    <strong>🌐 Langue cible</strong>
+    <select id="langSelect">
+      <option value="french">Français</option>
+      <option value="german">Deutsch</option>
+      <option value="spanish">Español</option>
+      <option value="italian">Italiano</option>
+      <option value="portuguese">Português</option>
+    </select>
+    <span id="langHint" style="font-size:12px;color:#888;">
+      Champ « fr_name » dans les infoboxes Yugipedia.
+    </span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row" style="margin-bottom:10px;">
+    <strong>🔬 Diagnostic API</strong>
+    <button id="diagBtn" class="secondary">Tester « Blue-Eyes »</button>
+    <span id="diagStatus" style="font-size:13px;color:#888;">en attente…</span>
+  </div>
+  <pre id="diagOut" style="display:none;"></pre>
+</div>
+
+<div class="panel">
+  <div class="row" style="margin-bottom:10px;">
+    <strong>📄 Ton fichier cardinfo_english.txt</strong>
+    <input type="file" id="fileInput" accept=".txt">
+    <span style="font-size:12px;color:#888;">ou colle-le ci-dessous</span>
+  </div>
+  <textarea id="input" placeholder="Colle ton cardinfo_english.txt ici…"></textarea>
+  <div class="stats" id="parseStats"></div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <button id="startBtn">▶ Lancer le scraping</button>
+    <button id="exportBtn" class="secondary" disabled>⬇ Exporter</button>
+    <button id="stopBtn" class="secondary" disabled>⏹ Stop</button>
+  </div>
+  <div class="row" style="margin-top:12px;">
+    <div class="progress"><div id="bar"></div></div>
+    <span id="counter" style="font-size:12px;color:#666;min-width:80px;text-align:right;">0 / 0</span>
+  </div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div class="panel">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Hex</th><th>Nom EN</th><th>Traduction</th><th>Statut</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:#1a7a3a"></span>Traduit</span>
+    <span><span class="dot" style="background:#a0a0b0"></span>Pas de trad → garde EN</span>
+    <span><span class="dot" style="background:#c0392b"></span>Erreur</span>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// CONFIG
+// ============================================================================
+// Les infoboxes d'archétypes sur Yugipedia utilisent le template
+// {{Infobox archseries}} avec des champs préfixés par le code de langue :
+// fr_name, de_name, es_name, it_name, pt_name.
+// (Pas "french", "german"… qui n'existent pas dans ce template.)
+const YUGIPEDIA_API = 'https://yugipedia.com/api.php';
+const CONCURRENCY = 5;
+const BATCH_DELAY_MS = 150;
+const MAX_RETRIES = 3;
+
+const LANGS = {
+  french:     { field: 'fr_name', ext: 'fr', label: 'Français' },
+  german:     { field: 'de_name', ext: 'de', label: 'Deutsch' },
+  spanish:    { field: 'es_name', ext: 'es', label: 'Español' },
+  italian:    { field: 'it_name', ext: 'it', label: 'Italiano' },
+  portuguese: { field: 'pt_name', ext: 'pt', label: 'Português' },
+};
+
+let parsedEntries = [];
+let results = [];
+let stopRequested = false;
+
+// Lu depuis le DOM à chaque appel — pas de désync possible.
+function getLangConfig() {
+  const sel = document.getElementById('langSelect');
+  const code = sel ? sel.value : 'french';
+  return LANGS[code] || LANGS.french;
+}
+
+// ============================================================================
+// DIAGNOSTIC
+// ============================================================================
+async function runDiagnostic() {
+  const status = document.getElementById('diagStatus');
+  const out = document.getElementById('diagOut');
+  const cfg = getLangConfig();
+
+  status.textContent = `⏳ test du champ "${cfg.field}"…`;
+  status.className = '';
+  out.style.display = 'block';
+  out.textContent = '';
+
+  try {
+    const params = new URLSearchParams({
+      action: 'parse', format: 'json', origin: '*',
+      page: 'Blue-Eyes', prop: 'wikitext', redirects: '1',
+    });
+    const url = `${YUGIPEDIA_API}?${params}`;
+    out.textContent += `Langue : ${cfg.label} (champ "${cfg.field}")\n`;
+    out.textContent += `URL : ${url}\n\n`;
+
+    const res = await fetch(url);
+    out.textContent += `HTTP ${res.status}\n\n`;
+    const data = await res.json();
+
+    if (data.error) {
+      out.textContent += `ERREUR API : ${data.error.code} — ${data.error.info}\n`;
+      status.innerHTML = '<span class="diag-err">❌ Erreur API.</span>';
+      return;
+    }
+
+    const wt = data?.parse?.wikitext?.['*'];
+    out.textContent += `wikitext : ${wt ? wt.length + ' caractères' : 'VIDE'}\n\n`;
+
+    if (wt) {
+      // Cherche tous les champs de langue disponibles sur cette page.
+      const found = [];
+      for (const code in LANGS) {
+        const field = LANGS[code].field;
+        const re = new RegExp(`\\|\\s*${field}\\s*=\\s*([^\\n|]+)`, 'i');
+        const m = wt.match(re);
+        if (m) found.push(`${LANGS[code].label} (${field}) = ${m[1].trim()}`);
+      }
+      if (found.length) {
+        out.textContent += `Champs de langue trouvés :\n  ${found.join('\n  ')}\n\n`;
+      } else {
+        out.textContent += `Aucun champ *_name trouvé dans cette page.\n\n`;
+      }
+
+      const idx = wt.toLowerCase().indexOf(cfg.field.toLowerCase());
+      out.textContent += `Position de "${cfg.field}" : ${idx}\n\n`;
+
+      if (idx >= 0) {
+        const ctx = wt.slice(Math.max(0, idx - 60), idx + 150);
+        out.textContent += `Contexte :\n...${ctx}...\n`;
+        status.innerHTML = `<span class="diag-ok">✅ Champ "${cfg.field}" trouvé. Scraping possible.</span>`;
+      } else {
+        out.textContent += `Extrait :\n${wt.slice(0, 500)}\n`;
+        status.innerHTML = `<span class="diag-warn">⚠️ Champ "${cfg.field}" absent de cette page.</span>`;
+      }
+    } else {
+      status.innerHTML = '<span class="diag-err">❌ Wikitexte vide.</span>';
+    }
+  } catch (e) {
+    status.innerHTML = `<span class="diag-err">❌ ${escapeHtml(e.message)}</span>`;
+    out.textContent += `ERREUR : ${e.message}\n${e.stack}`;
+  }
+}
+
+// ============================================================================
+// PARSING
+// ============================================================================
+function parseSetname(text) {
+  const lines = text.split('\n');
+  const entries = [];
+  let inSetname = false;
+  for (const raw of lines) {
+    const line = raw.replace(/\r$/, '');
+    if (line.startsWith('##')) { inSetname = line.trim() === '##setname'; continue; }
+    if (line.trim() === '#end') break;
+    if (!inSetname || !line.trim()) continue;
+    const m = line.match(/^(-?\d+|0x[0-9a-fA-F]+)[\t ]+(.+)$/);
+    if (!m) continue;
+    entries.push({ hex: m[1], label: m[2].trim() });
+  }
+  return entries;
+}
+
+// ============================================================================
+// EXTRACTION DU CHAMP DE LANGUE
+// ============================================================================
+function extractLang(wikitext) {
+  if (!wikitext) return null;
+  const cfg = getLangConfig();
+
+  // Essaie plusieurs variantes de nom (le préfixe du template peut varier
+  // légèrement selon l'ancienneté de l'infobox).
+  const names = [
+    cfg.field,                     // ex: fr_name
+    cfg.field.replace('_name', ''), // ex: fr
+    cfg.field.replace('_name', '_name_'), // garde-fou
+  ];
+
+  let raw = null;
+  for (const n of names) {
+    if (!n) continue;
+    const re = new RegExp(`\\|\\s*${n}\\s*=\\s*([^\\n|]+)`, 'i');
+    const m = wikitext.match(re);
+    if (m) { raw = m[1]; break; }
+  }
+  if (!raw) return null;
+
+  let val = raw.trim();
+  val = val.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2');
+  val = val.replace(/\[\[([^\]]+)\]\]/g, '$1');
+  val = val.replace(/<ref[^>]*>.*?<\/ref>/gi, '');
+  val = val.replace(/<br\s*\/?>/gi, '\n');
+  val = val.split('\n')[0].trim();
+  val = val.replace(/''/g, '');
+  val = val.replace(/\s+/g, ' ').trim();
+  if (!val || val === '—' || val === '-') return null;
+  return val;
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ============================================================================
+// FETCH
+// ============================================================================
+async function fetchOne(title) {
+  const params = new URLSearchParams({
+    action: 'parse', format: 'json', origin: '*',
+    page: title, prop: 'wikitext', redirects: '1',
+  });
+  const url = `${YUGIPEDIA_API}?${params}`;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.error) return { ok: false, wikitext: null };
+      return { ok: true, wikitext: data?.parse?.wikitext?.['*'] || null };
+    } catch (e) {
+      if (attempt === MAX_RETRIES) return { ok: false, wikitext: null, error: e.message };
+      await sleep(500 * attempt);
+    }
+  }
+}
+
+async function fetchGroup(titles) {
+  const out = {};
+  await Promise.all(titles.map(async (t) => { out[t] = await fetchOne(t); }));
+  return out;
+}
+
+// ============================================================================
+// SCRAPING
+// ============================================================================
+async function runScraping() {
+  stopRequested = false;
+  results = [];
+  const cfg = getLangConfig();
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  document.getElementById('stats').textContent = '';
+  document.getElementById('exportBtn').disabled = true;
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = false;
+
+  const total = parsedEntries.length;
+  let done = 0, translated = 0, missing = 0, errors = 0;
+
+  const rowMap = {};
+  for (const entry of parsedEntries) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(entry.hex)}</td>
+                    <td>${escapeHtml(entry.label)}</td>
+                    <td style="color:#a0a0b0;">…</td>
+                    <td>en attente</td>`;
+    tbody.appendChild(tr);
+    rowMap[entry.hex] = tr;
+  }
+
+  const groups = [];
+  for (let i = 0; i < parsedEntries.length; i += CONCURRENCY) {
+    groups.push(parsedEntries.slice(i, i + CONCURRENCY));
+  }
+
+  for (const group of groups) {
+    if (stopRequested) break;
+    const fetched = await fetchGroup(group.map(e => e.label));
+
+    for (const entry of group) {
+      if (stopRequested) break;
+      const r = fetched[entry.label] || { ok: false, wikitext: null };
+      const tr = rowMap[entry.hex];
+      const val = extractLang(r.wikitext);
+
+      if (val) {
+        translated++;
+        tr.className = 'ok';
+        tr.children[2].textContent = val;
+        tr.children[3].textContent = 'traduit';
+        results.push({ hex: entry.hex, label: entry.label, tr: val, status: 'ok' });
+      } else if (!r.ok) {
+        errors++;
+        tr.className = 'err';
+        tr.children[2].textContent = '—';
+        tr.children[3].textContent = 'erreur' + (r.error ? ' : ' + r.error : '');
+        results.push({ hex: entry.hex, label: entry.label, tr: null, status: 'error' });
+      } else {
+        missing++;
+        tr.className = 'miss';
+        tr.children[2].textContent = '—';
+        tr.children[3].textContent = r.wikitext === null ? 'page introuvable' : `pas de ${cfg.label}`;
+        results.push({ hex: entry.hex, label: entry.label, tr: null, status: 'missing' });
+      }
+      done++;
+    }
+    updateProgress(done, total, translated, missing, errors);
+    await sleep(BATCH_DELAY_MS);
+  }
+
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('stopBtn').disabled = true;
+  document.getElementById('exportBtn').disabled = false;
+  if (stopRequested) document.getElementById('stats').textContent += ' — arrêté.';
+}
+
+function updateProgress(done, total, ok, miss, err) {
+  document.getElementById('bar').style.width = (total ? done / total * 100 : 0) + '%';
+  document.getElementById('counter').textContent = `${done} / ${total}`;
+  document.getElementById('stats').textContent =
+    `✅ ${ok} traduits · ⚠️ ${miss} sans trad · ❌ ${err} erreurs`;
+}
+
+// ============================================================================
+// EXPORT
+// ============================================================================
+function buildFile() {
+  const lines = ['################ use tab', '##setname'];
+  for (const r of results) {
+    lines.push(r.tr ? `${r.hex}\t${r.tr}` : `${r.hex}\t${r.label}`);
+  }
+  lines.push('#end');
+  return lines.join('\n');
+}
+
+function download(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// ============================================================================
+// ÉVÉNEMENTS
+// ============================================================================
+document.getElementById('langSelect').addEventListener('change', (e) => {
+  const cfg = getLangConfig();
+  document.getElementById('langHint').textContent =
+    `Champ « ${cfg.field} » dans les infoboxes Yugipedia.`;
+  document.getElementById('diagStatus').textContent = 'en attente…';
+  document.getElementById('diagStatus').className = '';
+});
+
+document.getElementById('diagBtn').addEventListener('click', runDiagnostic);
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  document.getElementById('input').value = text;
+  parsedEntries = parseSetname(text);
+  document.getElementById('parseStats').textContent =
+    `📊 ${parsedEntries.length} archétypes détectés dans ##setname.`;
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  const text = document.getElementById('input').value;
+  if (!text.trim()) { alert('Colle ton cardinfo_english.txt d\'abord.'); return; }
+  parsedEntries = parseSetname(text);
+  if (!parsedEntries.length) { alert('Aucune entrée dans ##setname.'); return; }
+  runScraping();
+});
+
+document.getElementById('stopBtn').addEventListener('click', () => {
+  stopRequested = true;
+  document.getElementById('stopBtn').disabled = true;
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const cfg = getLangConfig();
+  download(`cardinfo_${cfg.ext}_setname.txt`, buildFile());
+});
+</script>
+
+</body>
+</html>
