@@ -13,6 +13,9 @@ function cleanPendPart(s) {
   return String(s || "")
     .replace(/^[-=_\s]{5,}$/gm, " ")
     .replace(/(?:\s*◆\s*){3}/g, " ")
+    .replace(/(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*\d+/gi, "")
+    .replace(/\[\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*\]/gi, "")
+    .replace(/\[\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*\]/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -61,9 +64,8 @@ function normalizePendulum(card) {
 
   const frame = card.frameType || "";
   const levelRaw = typeof card.level === "number" ? card.level : parseInt(card.level, 10);
-  const levelHasScale = Number.isFinite(levelRaw) && levelRaw > 255; // .cdb : échelles dans les bits hauts
+  const levelHasScale = Number.isFinite(levelRaw) && levelRaw > 255;
 
-  // Vérifie si la carte est VRAIMENT un pendule (par son frame, son type, ou l'échelle cdb)
   const isPend =
     frame.includes("pendulum") ||
     String(card.type || "").includes("Pendulum") ||
@@ -138,7 +140,7 @@ function cacheStructural(id, card) {
 }
 
 function buildYgoproJson(card) {
-  card = normalizePendulum(card); // 🔮 sépare effet Pendule / effet Monstre
+  card = normalizePendulum(card);
   const isSpell = card.type === "Spell Card";
   const isTrap = card.type === "Trap Card";
   const [baseFrame, pendulumSuffix] = (card.frameType || "").split("_");
@@ -223,7 +225,6 @@ function buildTypeLine(card) {
     line = `${displayRace}/${translateAbilities(abilities).join("/")}`;
   }
 
-  // 🔮 Pendule : ajoute "Pendule" → Magicien/Synchro/Pendule/Effet
   const isPend =
     String(card.frameType || "").includes("pendulum") ||
     String(card.type || "").includes("Pendulum");
