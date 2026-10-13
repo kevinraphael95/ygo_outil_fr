@@ -14,6 +14,11 @@ const PEND_HEAD = /\[\s*(?:Pendulum Effect|Effet Pendule|Effet de Pendule)\s*\]/
 const MON_HEAD = /\[\s*(?:Monster Effect|Flavor Text|Effet de Monstre|Effet Monstre|Texte d['’]ambiance)\s*\]/i;
 const SCALE_RE = /(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*(\d+)/i;
 
+// Séparateur entre la ligne de matériaux (ex. "2 monstres de Type Dragon de Niveau 7")
+// et le reste de l'effet de monstre. "\n" = retour à la ligne. Si l'éditeur l'affiche
+// mal, remplace par " " ou par " ◆ ".
+const MATERIALS_SEPARATOR = "\n";
+
 function cleanPendPart(s) {
   return String(s || "")
     .replace(/^[-=_\s]{5,}$/gm, " ")
@@ -36,8 +41,11 @@ function splitPendulumDesc(desc) {
 
   let pendText = "";
   let monText = "";
+  let materials = "";
 
   if (pm) {
+    // Texte placé AVANT l'en-tête Pendule (après l'échelle) = matériaux / conditions d'invocation
+    materials = cleanPendPart(desc.slice(0, pm.index));
     // Cas normal : en-têtes [ Effet Pendule ] / [ Effet de Monstre ]
     const mm = desc.match(MON_HEAD);
     const pendStart = pm.index + pm[0].length;
@@ -59,7 +67,7 @@ function splitPendulumDesc(desc) {
     }
   }
 
-  return { pend: cleanPendPart(pendText), monster: cleanPendPart(monText), scale };
+  return { pend: cleanPendPart(pendText), monster: cleanPendPart(monText), materials, scale };
 }
 
 function normalizePendulum(card) {
@@ -83,8 +91,10 @@ function normalizePendulum(card) {
   let mon = card.monster_desc;
   let scale = card.scale;
   let level = card.level;
+  let materials = card.materials_desc || "";
 
   if (sp) {
+    if (!materials && sp.materials) materials = sp.materials;
     if (!pend) pend = sp.pend;
     if (!mon) mon = sp.monster;
     if ((scale === undefined || scale === null) && sp.scale !== null) scale = sp.scale;
@@ -100,6 +110,7 @@ function normalizePendulum(card) {
     frameType: base + "_pendulum",
     pend_desc: cleanPendPart(pend || ""),
     monster_desc: cleanPendPart(mon || ""),
+    materials_desc: materials,
     scale: scale ?? 0,
     level,
     desc: cleanPendPart(mon || card.desc),
@@ -269,7 +280,10 @@ function buildEffectText(card) {
   text = text.replace(/\s+/g, " ");
   text = text.replace(/(\s*●\s*)+/g, " ● ");
   text = text.replace(/^\s*●\s*/, "").replace(/\s*●\s*$/, "");
-  return text.trim();
+  text = text.trim();
+  // 🔮 Ligne de matériaux (Xyz / Synchro / Lien Pendule…) au début de l'effet de monstre
+  if (card.materials_desc) text = card.materials_desc + (text ? MATERIALS_SEPARATOR + text : "");
+  return text;
 }
 
 function buildLinkMarkers(card) {
