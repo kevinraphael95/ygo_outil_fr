@@ -66,9 +66,11 @@ function buildAttributeInternal(card) {
   if (!card.attribute) return "NONE";
   return card.attribute.toUpperCase();
 }
-function csvQuote(value) {
+function csvQuote(value, keepNewlines = false) {
   if (value === undefined || value === null || value === "") return "";
-  return `"${String(value).replace(/"/g, '""').replace(/\r\n/g, " ").replace(/\n/g, " ").replace(/\r/g, " ")}"`;
+  let v = String(value).replace(/"/g, '""').replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (!keepNewlines) v = v.replace(/\n/g, " ");
+  return `"${v}"`;
 }
 
 // ============================================================================
@@ -159,7 +161,7 @@ function buildCsvRow(card) {
     "Effect Style - Justify Ratio": "100",
     "Effect Style - Min Line": "0",
   };
-  return CSV_FIELDS.map((f) => csvQuote(values[f])).join(",");
+  return CSV_FIELDS.map((f) => csvQuote(values[f], f === "Effect")).join(",");
 }
 
 function buildManagerCsv(cards) {
