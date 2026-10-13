@@ -5,8 +5,8 @@
 // ============================================================================
 // 🔮 PENDULE — sépare "effet Pendule" et "effet de Monstre"
 // ============================================================================
-const PEND_HEAD = /\[\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*\]/i;
-const MON_HEAD = /\[\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*\]/i;
+const PEND_HEAD = /[\[\vert{}]\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*[\]|]/i;
+const MON_HEAD = /[\[\vert{}]\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*[\]|]/i;
 const SCALE_RE = /(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*(\d+)/i;
 
 function cleanPendPart(s) {
@@ -14,9 +14,9 @@ function cleanPendPart(s) {
     .replace(/^[-=_\s]{5,}$/gm, " ")
     .replace(/(?:\s*◆\s*){3}/g, " ")
     .replace(/(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*\d+/gi, "")
-    .replace(/\[\s*(?:VAACT\vert{}VAN\vert{}VNM\vert{}VSYN\vert{}VXYZ\vert{}VLINK\vert{}VRIT)\s*\]/gi, "")
-    .replace(/\[\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*\]\s*:?/gi, "")
-    .replace(/\[\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*\]\s*:?/gi, "")
+    .replace(/[\[\vert{}]\s*(?:VAACT\vert{}VAN\vert{}VNM\vert{}VSYN\vert{}VXYZ\vert{}VLINK\vert{}VRIT)\s*[\]|]/gi, "")
+    .replace(/[\[\vert{}]\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*[\]|]\s*:?/gi, "")
+    .replace(/[\[\vert{}]\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*[\]|]\s*:?/gi, "")
     .replace(/^[\s|:-]+/, "")
     .replace(/\s+/g, " ")
     .trim();
