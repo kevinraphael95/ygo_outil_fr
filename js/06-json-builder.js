@@ -15,8 +15,9 @@ function cleanPendPart(s) {
     .replace(/(?:\s*◆\s*){3}/g, " ")
     .replace(/(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*\d+/gi, "")
     .replace(/\[\s*(?:VAACT\vert{}VAN\vert{}VNM\vert{}VSYN\vert{}VXYZ\vert{}VLINK\vert{}VRIT)\s*\]/gi, "")
-    .replace(/\[\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*\]/gi, "")
-    .replace(/\[\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*\]/gi, "")
+    .replace(/\[\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*\]\s*:?/gi, "")
+    .replace(/\[\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*\]\s*:?/gi, "")
+    .replace(/^[\s|:-]+/, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -95,11 +96,11 @@ function normalizePendulum(card) {
   return {
     ...card,
     frameType: base + "_pendulum",
-    pend_desc: pend || "",
-    monster_desc: mon || "",
+    pend_desc: cleanPendPart(pend || ""),
+    monster_desc: cleanPendPart(mon || ""),
     scale: scale ?? 0,
     level,
-    desc: mon || card.desc,
+    desc: cleanPendPart(mon || card.desc),
   };
 }
 
@@ -163,7 +164,7 @@ function buildYgoproJson(card) {
     rarity: "common",
     pendulum: {
       enabled: isPendulum,
-      effect: isPendulum ? card.pend_desc || "" : "",
+      effect: isPendulum ? cleanPendPart(card.pend_desc) : "",
       blue: isPendulum ? String(card.scale ?? "0") : "0",
       red: isPendulum ? String(card.scale ?? "0") : "0",
       boxSize: "Normal",
