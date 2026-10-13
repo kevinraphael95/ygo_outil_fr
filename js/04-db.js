@@ -2,6 +2,32 @@
 // 04-db.js — Chargement des 2 fichiers JSON locaux (YGOPRODeck + Yugipedia)
 // ============================================================================
 
+// ============================================================================
+// Clés de recherche d'illustration (partagées avec 07-csv.js)
+// ============================================================================
+function artKey(n) {
+  return normalizeForSearch(n).replace(/[^a-z0-9]/g, "");
+}
+
+// Noms de carte possibles déduits du nom de fichier d'un scan Yugipedia.
+// "…/file/Blue-EyesWhiteDragon-LOB-EN-UR-1E.png" → ["blueeyeswhitedragonlob…", "blueeyeswhitedragon", "blue"]
+// (du plus long au plus court). Ignore les images d'anime / manga (cartes différentes).
+function scanNameKeys(url) {
+  if (!url) return [];
+  let file = String(url).split("/").pop().split("?")[0];
+  try { file = decodeURIComponent(file); } catch (e) {}
+  file = file.replace(/\.[a-z0-9]+$/i, "");
+  if (/-(?:Anime|Manga|Game|Artwork)/i.test(file)) return [];
+  const out = [];
+  for (let i = file.length - 1; i > 0; i--) {
+    if (file[i] === "-") {
+      const k = artKey(file.slice(0, i));
+      if (k && !out.includes(k)) out.push(k);
+    }
+  }
+  return out;
+}
+
 async function initDatabase() {
   try {
     // ─── 1. cards-db.json (YGOPRODeck) ───
@@ -73,21 +99,26 @@ async function initDatabase() {
       console.warn("[DB] yugipedia-db.json indisponible :", e.message);
     }
 
-    // ─── 2b. Yugipedia → illustration YGOPRODeck (retrouvée par le nom anglais) ───
+    // ─── 2b. Yugipedia → illustration YGOPRODeck ───
     // Yugipedia ne fournit que le SCAN de la carte entière (cadre + nom). Quand la
-    // carte existe aussi dans YGOPRODeck (même nom anglais), on utilise plutôt son
-    // illustration recadrée. Le scan d'origine est gardé dans `img_scan`.
+    // même carte existe dans YGOPRODeck, on utilise son illustration recadrée.
+    // On retrouve la carte par : nom EN Yugipedia, clé de l'entrée, ou nom contenu
+    // dans le nom de fichier du scan (ex. SalamandratheFlyingFlameDragon-MZMI-EN-SR-1E.png).
+    // Le scan d'origine est gardé dans `img_scan`.
     try {
-      const strip = (n) => normalizeForSearch(n).replace(/[^a-z0-9]/g, "");
       const croppedByEnName = new Map();
       for (const c of memCacheEn.values()) {
         const url = c.card_images && c.card_images[0] && c.card_images[0].image_url_cropped;
-        if (c.name && url) croppedByEnName.set(strip(c.name), url);
+        const k = artKey(c.name);
+        if (url && k) croppedByEnName.set(k, url);
       }
       let swapped = 0;
-      for (const card of window.yugiCache.values()) {
-        if (!card.en) continue;
-        const url = croppedByEnName.get(strip(card.en));
+      for (const [key, card] of window.yugiCache.entries()) {
+        const cands = [artKey(card.en), key, ...scanNameKeys(card.img)];
+        let url = null;
+        for (const k of cands) {
+          if (k && croppedByEnName.has(k)) { url = croppedByEnName.get(k); break; }
+        }
         if (!url) continue;
         if (!card.img_scan) card.img_scan = card.img || card.img_en || "";
         card.img = url;
