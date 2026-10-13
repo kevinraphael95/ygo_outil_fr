@@ -71,6 +71,48 @@ function csvQuote(value) {
   return `"${String(value).replace(/"/g, '""').replace(/\r\n/g, " ").replace(/\n/g, " ").replace(/\r/g, " ")}"`;
 }
 
+// ============================================================================
+// 🖼️ ILLUSTRATION YGOPRODECK PRIORITAIRE
+// ============================================================================
+// Si l'image de la carte est un scan Yugipedia (carte entière avec cadre), on
+// cherche l'illustration recadrée YGOPRODeck par le nom (FR, EN, ou nom EN
+// trouvé dans le cache Yugipedia). Sinon on garde l'image d'origine.
+// ============================================================================
+let _artIndex = null;
+function artKey(n) {
+  return normalizeForSearch(n).replace(/[^a-z0-9]/g, "");
+}
+function buildArtIndex() {
+  const idx = new Map();
+  const add = (store) => {
+    if (!store) return;
+    for (const c of store.values()) {
+      const url = c.card_images && c.card_images[0] && c.card_images[0].image_url_cropped;
+      const k = artKey(c.name);
+      if (url && k && !idx.has(k)) idx.set(k, url);
+    }
+  };
+  add(window.memCacheEn);
+  add(window.memCacheFr);
+  return idx;
+}
+function resolveYgoproArt(card) {
+  const img = card.card_images && card.card_images[0];
+  const raw = img ? (img.image_url_cropped || img.image_url) : "";
+  if (raw && !/yugipedia\.com/i.test(raw)) return raw; // déjà une image YGOPRODeck
+
+  if (!_artIndex || _artIndex.size === 0) _artIndex = buildArtIndex();
+  const y = window.yugiCache ? window.yugiCache.get(artKey(card.name)) : null;
+  const names = [card.name, card._names && card._names.en, card._names && card._names.fr];
+  if (y) names.push(y.en, y.fr);
+  for (const n of names) {
+    if (!n) continue;
+    const url = _artIndex.get(artKey(n));
+    if (url) return url;
+  }
+  return raw;
+}
+
 function buildCsvRow(card) {
   card = normalizePendulum(card); // 🔮 sépare effet Pendule / effet Monstre
   const isSpell = card.type === "Spell Card";
@@ -80,7 +122,7 @@ function buildCsvRow(card) {
   const isLink = baseFrame === "link";
   const links = buildLinkMarkers(card);
   const img = card.card_images && card.card_images[0];
-  const rawImgUrl = img ? (img.image_url_cropped || img.image_url) : "";
+  const rawImgUrl = resolveYgoproArt(card);
   const PLACEHOLDER_RAW = "https://kevinraphael95.github.io/ygo_outil_fr/placeholder.png";
   const PLACEHOLDER_PROXIED = PLACEHOLDER_RAW;
 
