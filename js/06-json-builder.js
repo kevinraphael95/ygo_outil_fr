@@ -10,8 +10,8 @@
 // et effect (Monstre). Gère aussi les cartes venant d'un .cdb (échelle cachée
 // dans le level, frameType sans "pendulum").
 // ============================================================================
-const PEND_HEAD = /\[\s*(?:Pendulum Effect|Effet Pendule|Effet de Pendule)\s*\]/i;
-const MON_HEAD = /\[\s*(?:Monster Effect|Flavor Text|Effet de Monstre|Effet Monstre|Texte d['’]ambiance)\s*\]/i;
+const PEND_HEAD = /\[\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*\]/i;
+const MON_HEAD = /\[\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*\]/i;
 const SCALE_RE = /(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*(\d+)/i;
 
 function cleanPendPart(s) {
@@ -25,22 +25,39 @@ function cleanPendPart(s) {
 function splitPendulumDesc(desc) {
   if (typeof desc !== "string") return null;
   const pm = desc.match(PEND_HEAD);
-  if (!pm) return null;
-
   let scale = null;
   const sm = desc.match(SCALE_RE);
   if (sm) scale = parseInt(sm[1], 10);
 
-  const mm = desc.match(MON_HEAD);
-  const pendStart = pm.index + pm[0].length;
-  let pendText, monText = "";
+  let pendText = "";
+  let monText = "";
 
-  if (mm && mm.index > pm.index) {
-    pendText = desc.slice(pendStart, mm.index);
-    monText = desc.slice(mm.index + mm[0].length);
+  if (pm) {
+    const mm = desc.match(MON_HEAD);
+    const pendStart = pm.index + pm[0].length;
+    if (mm && mm.index > pm.index) {
+      pendText = desc.slice(pendStart, mm.index);
+      monText = desc.slice(mm.index + mm[0].length);
+    } else {
+      pendText = desc.slice(pendStart);
+    }
   } else {
-    pendText = desc.slice(pendStart);
+    const paragraphs = desc.split(/\r?\n\s*\r?\n/).filter(Boolean);
+    if (paragraphs.length >= 2) {
+      pendText = paragraphs[0];
+      monText = paragraphs.slice(1).join("\n\n");
+    } else {
+      const sentences = desc.split(/(?<=\.)\s+/);
+      if (sentences.length >= 2) {
+        pendText = sentences[0];
+        monText = sentences.slice(1).join(" ");
+      } else {
+        pendText = desc;
+        monText = desc;
+      }
+    }
   }
+
   return { pend: cleanPendPart(pendText), monster: cleanPendPart(monText), scale };
 }
 
