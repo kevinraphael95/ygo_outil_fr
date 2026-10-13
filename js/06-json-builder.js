@@ -5,11 +5,6 @@
 // ============================================================================
 // 🔮 PENDULE — sépare "effet Pendule" et "effet de Monstre"
 // ============================================================================
-// La base (cards-db.json) ne fournit que `desc` : l'effet Pendule et l'effet de
-// monstre y sont collés. On les coupe ici pour remplir pendulum.effect (Pendule)
-// et effect (Monstre). Gère aussi les cartes venant d'un .cdb (échelle cachée
-// dans le level, frameType sans "pendulum").
-// ============================================================================
 const PEND_HEAD = /\[\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*\]/i;
 const MON_HEAD = /\[\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*\]/i;
 const SCALE_RE = /(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*(\d+)/i;
@@ -64,17 +59,19 @@ function splitPendulumDesc(desc) {
 function normalizePendulum(card) {
   if (!card || card.type === "Spell Card" || card.type === "Trap Card") return card;
 
-  const sp = splitPendulumDesc(card.desc);
   const frame = card.frameType || "";
   const levelRaw = typeof card.level === "number" ? card.level : parseInt(card.level, 10);
   const levelHasScale = Number.isFinite(levelRaw) && levelRaw > 255; // .cdb : échelles dans les bits hauts
 
+  // Vérifie si la carte est VRAIMENT un pendule (par son frame, son type, ou l'échelle cdb)
   const isPend =
     frame.includes("pendulum") ||
     String(card.type || "").includes("Pendulum") ||
-    !!sp ||
     levelHasScale;
+
   if (!isPend) return card;
+
+  const sp = splitPendulumDesc(card.desc);
 
   let pend = card.pend_desc;
   let mon = card.monster_desc;
