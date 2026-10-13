@@ -14,6 +14,7 @@ function cleanPendPart(s) {
     .replace(/^[-=_\s]{5,}$/gm, " ")
     .replace(/(?:\s*◆\s*){3}/g, " ")
     .replace(/(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*\d+/gi, "")
+    .replace(/\[\s*(?:VAACT\vert{}VAN\vert{}VNM\vert{}VSYN\vert{}VXYZ\vert{}VLINK\vert{}VRIT)\s*\]/gi, "")
     .replace(/\[\s*(?:Pendulum Effect\vert{}Effet Pendule\vert{}Effet de Pendule)\s*\]/gi, "")
     .replace(/\[\s*(?:Monster Effect\vert{}Flavor Text\vert{}Effet de Monstre\vert{}Effet Monstre\vert{}Texte d['’]ambiance)\s*\]/gi, "")
     .replace(/\s+/g, " ")
@@ -257,8 +258,8 @@ function buildAttribute(card) {
 }
 
 function buildEffectText(card) {
-  if (card.type.includes("Pendulum") && card.monster_desc) return card.monster_desc;
-  let text = card.desc || "";
+  let text = card.monster_desc || card.desc || "";
+  text = cleanPendPart(text);
   text = text.replace(/^[#=*\-_\s]{3,}$/gm, " ◆ ◆ ◆ ");
   text = text.replace(/\r\n/g, " ").replace(/\n/g, " ").replace(/\r/g, " ");
   text = text.replace(/\s+/g, " ");
