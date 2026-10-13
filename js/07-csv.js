@@ -79,9 +79,6 @@ function csvQuote(value) {
 // trouvé dans le cache Yugipedia). Sinon on garde l'image d'origine.
 // ============================================================================
 let _artIndex = null;
-function artKey(n) {
-  return normalizeForSearch(n).replace(/[^a-z0-9]/g, "");
-}
 function buildArtIndex() {
   const idx = new Map();
   const add = (store) => {
@@ -105,9 +102,10 @@ function resolveYgoproArt(card) {
   const y = window.yugiCache ? window.yugiCache.get(artKey(card.name)) : null;
   const names = [card.name, card._names && card._names.en, card._names && card._names.fr];
   if (y) names.push(y.en, y.fr);
-  for (const n of names) {
-    if (!n) continue;
-    const url = _artIndex.get(artKey(n));
+  const keys = names.filter(Boolean).map(artKey);
+  keys.push(...scanNameKeys(raw)); // nom déduit du nom de fichier du scan
+  for (const k of keys) {
+    const url = k && _artIndex.get(k);
     if (url) return url;
   }
   return raw;
