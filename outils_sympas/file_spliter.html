@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Découpeur de fichiers</title>
+
+<!-- ⚡ Anti-flash : applique le thème AVANT que le CSS soit appliqué -->
+<!-- Ce script doit être AVANT les <style> et AVANT tout contenu visible. -->
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem('split-theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    } catch (e) {
+      // localStorage indisponible (navigation privée stricte) : fallback système
+      try {
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+      } catch (e2) {}
+    }
+  })();
+</script>
+
+<style>
+  /* ⚠️ IMPORTANT : plus de :root, [data-theme="light"] ici !
+     Le sélecteur par défaut doit être [data-theme="light"] uniquement,
+     sinon le flash revient (le :root s'applique avant que data-theme soit posé). */
+  [data-theme="light"] {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #fafbfc;
+    --border: #e0e4e8;
+    --border-dashed: #d0d5dc;
+    --text: #1a1a1a;
+    --text-muted: #666;
+    --text-dim: #888;
+    --accent: #4a7fd6;
+    --accent-hover: #3a6fc6;
+    --accent-soft: #eef4fc;
+    --accent-text: #2a5aa8;
+    --info-bg: #eef4fc;
+    --info-border: #4a7fd6;
+    --info-text: #2a5aa8;
+    --danger: #c0392b;
+  }
+
+  [data-theme="dark"] {
+    --bg: #16161e;
+    --surface: #1e1e28;
+    --surface-2: #252530;
+    --border: #2e2e3c;
+    --border-dashed: #3a3a4c;
+    --text: #e4e4ea;
+    --text-muted: #a0a0b0;
+    --text-dim: #6a6a80;
+    --accent: #5a8fe6;
+    --accent-hover: #4a7fd6;
+    --accent-soft: rgba(90, 143, 230, 0.12);
+    --accent-text: #7aa8e8;
+    --info-bg: rgba(90, 143, 230, 0.12);
+    --info-border: #5a8fe6;
+    --info-text: #7aa8e8;
+    --danger: #e07a7a;
+  }
+
+  /* Fallback : si jamais data-theme n'est pas posé (JS désactivé), on prend le clair. */
+  html:not([data-theme]) {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #fafbfc;
+    --border: #e0e4e8;
+    --border-dashed: #d0d5dc;
+    --text: #1a1a1a;
+    --text-muted: #666;
+    --text-dim: #888;
+    --accent: #4a7fd6;
+    --accent-hover: #3a6fc6;
+    --accent-soft: #eef4fc;
+    --accent-text: #2a5aa8;
+    --info-bg: #eef4fc;
+    --info-border: #4a7fd6;
+    --info-text: #2a5aa8;
+    --danger: #c0392b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    max-width: 720px; margin: 40px auto; padding: 20px;
+    background: var(--bg); color: var(--text);
+    transition: background 0.25s, color 0.25s;
+  }
+
+  header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 16px; margin-bottom: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .sub { color: var(--text-muted); font-size: 13px; margin: 0; }
+
+  .theme-btn {
+    width: 42px; height: 42px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; font-size: 18px; cursor: pointer;
+    color: var(--text); transition: all 0.15s;
+    font-family: inherit;
+  }
+  .theme-btn:hover {
+    border-color: var(--accent); background: var(--accent-soft);
+    transform: translateY(-1px);
+  }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; margin-bottom: 16px;
+    transition: background 0.25s, border-color 0.25s;
+  }
+
+  .drop {
+    border: 2px dashed var(--border-dashed); border-radius: 10px;
+    padding: 30px; text-align: center; cursor: pointer;
+    transition: all 0.15s; background: var(--surface-2);
+  }
+  .drop:hover, .drop.over {
+    border-color: var(--accent); background: var(--accent-soft);
+  }
+  .drop-icon { font-size: 40px; margin-bottom: 8px; }
+  .drop-text { color: var(--text-muted); font-size: 13px; }
+  .drop-text strong {
+    color: var(--text); display: block; font-size: 15px; margin-bottom: 4px;
+  }
+
+  .row {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .row label {
+    font-weight: 600; font-size: 13px; min-width: 160px;
+    color: var(--text);
+  }
+
+  input[type="number"], select, input[type="text"] {
+    padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 14px; font-family: inherit;
+    background: var(--surface-2); color: var(--text);
+    transition: all 0.15s;
+  }
+  input[type="number"]:focus, select:focus, input[type="text"]:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  input[type="number"] { width: 120px; }
+  input[type="checkbox"] {
+    width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;
+  }
+
+  button:not(.theme-btn) {
+    padding: 10px 18px; background: var(--accent); color: #fff;
+    border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: background 0.15s;
+  }
+  button:not(.theme-btn):hover:not(:disabled) { background: var(--accent-hover); }
+  button:not(.theme-btn):disabled { opacity: .5; cursor: not-allowed; }
+
+  .info {
+    background: var(--info-bg); border-left: 3px solid var(--info-border);
+    padding: 10px 14px; border-radius: 6px; font-size: 13px;
+    color: var(--info-text); margin-bottom: 14px;
+  }
+
+  .stats { font-size: 13px; color: var(--text-muted); margin-top: 10px; }
+
+  ul { padding-left: 20px; font-size: 13px; color: var(--text-muted); }
+  li { margin: 4px 0; }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>✂️ Découpeur de fichiers</h1>
+    <p class="sub">
+      Coupe un gros fichier (CSV, TXT, JSON…) en plusieurs morceaux,
+      dans un ZIP téléchargeable.
+    </p>
+  </div>
+  <button class="theme-btn" id="themeBtn" title="Changer de thème">🌙</button>
+</header>
+
+<div class="panel">
+  <div class="drop" id="drop">
+    <div class="drop-icon">📄</div>
+    <div class="drop-text">
+      <strong>Dépose ton fichier ici</strong>
+      ou clique pour parcourir
+    </div>
+    <input type="file" id="fileInput" hidden>
+  </div>
+  <div class="stats" id="fileInfo"></div>
+</div>
+
+<div class="panel" id="optionsPanel" style="display:none;">
+  <div class="info">
+    Le fichier est coupé <strong>ligne par ligne</strong>. Les guillemets et
+    les retours à la ligne dans les cellules ne sont pas cassés : chaque
+    morceau reste un CSV valide (si l'original l'est).
+  </div>
+
+  <div class="row">
+    <label>Mode de découpe</label>
+    <select id="mode">
+      <option value="lines">Nombre de lignes par morceau</option>
+      <option value="files">Nombre de fichiers voulus</option>
+      <option value="bytes">Taille max par morceau (Ko)</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label>Valeur</label>
+    <input type="number" id="value" value="1000" min="1">
+    <span id="unit" style="font-size:13px;color:var(--text-muted);">lignes</span>
+  </div>
+
+  <div class="row">
+    <label>Extension des morceaux</label>
+    <input type="text" id="ext" value="csv" style="width:80px;">
+    <span style="font-size:12px;color:var(--text-dim);">(sans le point)</span>
+  </div>
+
+  <div class="row">
+    <label>Garder l'en-tête (CSV)</label>
+    <input type="checkbox" id="keepHeader" checked>
+    <span style="font-size:12px;color:var(--text-dim);">
+      Répète la 1<sup>re</sup> ligne dans chaque morceau
+    </span>
+  </div>
+
+  <div class="row">
+    <label>Nom de base</label>
+    <input type="text" id="baseName" value="morceau" style="width:200px;">
+  </div>
+
+  <button id="splitBtn" disabled>✂️ Découper</button>
+  <div class="stats" id="resultStats"></div>
+  <ul id="resultList"></ul>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ============================================================================
+// THÈME — la partie init est dans le <head> (anti-flash).
+// Ici on gère seulement le clic et le suivi système en direct.
+// ============================================================================
+const THEME_KEY = 'split-theme';
+const mq = window.matchMedia('(prefers-color-scheme: dark)');
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('themeBtn');
+  if (btn) {
+    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    btn.title = theme === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre';
+  }
+}
+
+// Synchronise l'icône du bouton avec le thème déjà appliqué par le <head>.
+(function syncButton() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  applyTheme(current);
+})();
+
+// Suit les changements système EN DIRECT, mais seulement si l'utilisateur
+// n'a jamais cliqué sur le bouton (pas de choix manuel enregistré).
+mq.addEventListener('change', (e) => {
+  if (localStorage.getItem(THEME_KEY)) return;
+  applyTheme(e.matches ? 'dark' : 'light');
+});
+
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+});
+
+// ============================================================================
+// ÉTAT
+// ============================================================================
+let currentFile = null;
+let currentText = null;
+
+const $ = id => document.getElementById(id);
+const drop = $('drop'), fileInput = $('fileInput');
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  const f = e.dataTransfer.files[0]; if (f) loadFile(f);
+});
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0]; if (f) loadFile(f);
+});
+
+async function loadFile(file) {
+  currentFile = file;
+  currentText = await file.text();
+  const ext = file.name.split('.').pop().toLowerCase();
+  $('ext').value = ext;
+  $('baseName').value = file.name.replace(/\.[^.]+$/, '');
+  const lines = currentText.split('\n').length;
+  const sizeKo = (file.size / 1024).toFixed(1);
+  $('fileInfo').textContent =
+    `📄 ${file.name} — ${sizeKo} Ko — ${lines.toLocaleString('fr-FR')} lignes`;
+  $('optionsPanel').style.display = 'block';
+  $('splitBtn').disabled = false;
+  $('resultStats').textContent = '';
+  $('resultList').innerHTML = '';
+}
+
+$('mode').addEventListener('change', () => {
+  const mode = $('mode').value;
+  const unit = $('unit');
+  if (mode === 'lines') { unit.textContent = 'lignes'; $('value').value = 1000; }
+  else if (mode === 'files') { unit.textContent = 'fichiers'; $('value').value = 5; }
+  else if (mode === 'bytes') { unit.textContent = 'Ko'; $('value').value = 100; }
+});
+
+$('splitBtn').addEventListener('click', async () => {
+  if (!currentText) return;
+  $('splitBtn').disabled = true;
+  $('resultStats').textContent = 'Découpage en cours…';
+  $('resultList').innerHTML = '';
+
+  await new Promise(r => setTimeout(r, 50));
+
+  const mode = $('mode').value;
+  const value = parseInt($('value').value, 10);
+  const ext = $('ext').value.trim() || 'txt';
+  const baseName = $('baseName').value.trim() || 'morceau';
+  const keepHeader = $('keepHeader').checked;
+
+  if (!value || value < 1) {
+    $('resultStats').textContent = '❌ Valeur invalide.';
+    $('splitBtn').disabled = false;
+    return;
+  }
+
+  const chunks = splitText(currentText, mode, value, keepHeader);
+  const parts = chunks.map((chunk, i) => ({
+    filename: `${baseName}_part${String(i + 1).padStart(2, '0')}.${ext}`,
+    content: chunk,
+  }));
+
+  const totalLines = currentText.split('\n').length;
+  $('resultStats').textContent =
+    `✅ ${parts.length} fichiers créés · ${totalLines.toLocaleString('fr-FR')} lignes au total`;
+
+  const list = $('resultList');
+  parts.forEach(p => {
+    const lines = p.content.split('\n').length;
+    const ko = (new Blob([p.content]).size / 1024).toFixed(1);
+    const li = document.createElement('li');
+    li.textContent = `${p.filename} — ${lines.toLocaleString('fr-FR')} lignes — ${ko} Ko`;
+    list.appendChild(li);
+  });
+
+  if (typeof JSZip === 'undefined') {
+    $('resultStats').textContent += ' · ⚠️ JSZip non chargé.';
+    $('splitBtn').disabled = false;
+    return;
+  }
+
+  const zip = new JSZip();
+  parts.forEach(p => zip.file(p.filename, p.content));
+  const blob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(blob, `${baseName}.zip`);
+  $('splitBtn').disabled = false;
+});
+
+// ============================================================================
+// LOGIQUE DE DÉCOUPE
+// ============================================================================
+function splitText(text, mode, value, keepHeader) {
+  const lines = text.split('\n');
+  const header = keepHeader ? lines[0] + '\n' : '';
+  const bodyStart = keepHeader ? 1 : 0;
+  if (mode === 'lines') return splitByLines(lines, value, header, bodyStart);
+  if (mode === 'files') {
+    const perFile = Math.ceil((lines.length - bodyStart) / value);
+    return splitByLines(lines, perFile, header, bodyStart);
+  }
+  if (mode === 'bytes') return splitByBytes(lines, value * 1024, header, bodyStart);
+  return [text];
+}
+
+function splitByLines(lines, perChunk, header, bodyStart) {
+  const chunks = [];
+  for (let i = bodyStart; i < lines.length; i += perChunk) {
+    chunks.push(header + lines.slice(i, i + perChunk).join('\n'));
+  }
+  return chunks;
+}
+
+function splitByBytes(lines, maxBytes, header, bodyStart) {
+  const chunks = [];
+  let current = [header.trimEnd()];
+  let currentSize = new Blob([header]).size;
+  for (let i = bodyStart; i < lines.length; i++) {
+    const line = lines[i];
+    const lineSize = new Blob([line + '\n']).size;
+    if (currentSize + lineSize > maxBytes && current.length > (header ? 1 : 0)) {
+      chunks.push(current.join('\n'));
+      current = header ? [header.trimEnd()] : [];
+      currentSize = new Blob([header]).size;
+    }
+    current.push(line);
+    currentSize += lineSize;
+  }
+  if (current.length) chunks.push(current.join('\n'));
+  return chunks;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+</script>
+
+</body>
+</html>
