@@ -1,46 +1,32 @@
 // ============================================================================
-// yugipedia-db-generator.js
-// ----------------------------------------------------------------------------
-// Génère yugipedia-db.json — base de cartes Yu-Gi-Oh! depuis Yugipedia.
-//
-// ⚡ Version d'origine : récupère uniquement les pages qui utilisent
-//    Template:CardTable2 (le gros template principal utilisé par la
-//    majorité des cartes). C'est ce qui donnait ~47 000 entrées.
-//
-// Le script fait 3 choses :
-//   1. Liste toutes les pages qui utilisent le template
-//   2. Télécharge leur wikitexte (le code source wiki)
-//   3. Parse chaque wikitexte pour extraire les infos de la carte
-//      et écrit le tout dans yugipedia-db.json
+// Génère yugipedia-db.json — TOUTES les cartes (6 templates) + indenté
+// ============================================================================
+// ⚡ v4.2 : Encodage UTF-8 forcé + Nettoyage des balises Ruby + Fix Artwork
 // ============================================================================
 
 const fs = require("fs");
 const https = require("https");
 
-// ─── Configuration ──────────────────────────────────────────────────────────
 const API = "https://yugipedia.com/api.php";
-
-// Délai entre chaque requête (ms). Empêche Yugipedia de nous bloquer
-// pour cause de spam. 1,2 s est un bon compromis : assez lent pour ne pas
-// se faire blacklister, assez rapide pour finir en ~15 min.
 const DELAY = 1200;
-
-// Nombre de pages par requête. MediaWiki accepte jusqu'à 50 titres dans
-// le paramètre `titles=A|B|C`, ce qui divise le nombre de requêtes par 50.
 const BATCH = 50;
 
-// User-Agent : MediaWiki refuse les requêtes sans UA ou avec un UA générique
-// (curl, wget…). On s'identifie avec un contact pour rester courtois.
 const USER_AGENT = "YGO-Card-DB-Generator/1.0 (https://github.com/kevinraphael95; kevinyugioh@gmail.com)";
 
-// ─── Requête HTTP vers l'API MediaWiki ──────────────────────────────────────
+const CARD_TEMPLATES = [
+  "Template:CardTable2",
+  "Template:Anime card",
+  "Template:Manga card",
+  "Template:Video game card",
+  "Template:OCG card",
+  "Template:TCG card",
+];
+
 function fetchJson(params) {
   return new Promise((resolve, reject) => {
     const url = new URL(API);
     url.searchParams.set("format", "json");
-    // formatversion=2 : sortie JSON moderne (array au lieu d'objets indexés)
     url.searchParams.set("formatversion", "2");
-    // origin=* : nécessaire pour CORS si appelé depuis un navigateur.
     url.searchParams.set("origin", "*");
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
@@ -60,53 +46,53 @@ function fetchJson(params) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-// ============================================================================
-// ÉTAPE 1 : récupérer tous les titres de pages qui utilisent CardTable2
-// ============================================================================
-// L'API `list=embeddedin` liste les pages qui transclusent un template.
-// C'est la façon la plus efficace de découvrir toutes les cartes sans
-// deviner les noms un par un.
+// ═══════════════════════════════════════════════════════════════════════════
+// Étape 1 : TOUS les titres (6 templates)
+// ═══════════════════════════════════════════════════════════════════════════
 async function getAllCardTitles() {
-  console.log("📥 Récupération des pages avec Template:CardTable2...");
+  console.log("📥 Récupération des pages de cartes (6 templates)...\n");
   const titles = new Set();
-  let cont = null;
 
-  while (true) {
-    const params = {
-      action: "query",
-      list: "embeddedin",              // liste les pages qui incluent un template
-      eititle: "Template:CardTable2",  // template ciblé
-      einamespace: "0",                // namespace principal (pas User:, Talk:…)
-      eilimit: "500",                  // 500 par requête (max pour les bots)
-    };
-    if (cont) params.eicontinue = cont; // pagination : "reprends où on s'est arrêté"
+  for (const tpl of CARD_TEMPLATES) {
+    console.log(`📥 ${tpl}`);
+    let cont = null;
+    let tplCount = 0;
 
-    try {
-      const data = await fetchJson(params);
-      const members = data?.query?.embeddedin || [];
-      for (const m of members) titles.add(m.title);
-      console.log(`  → ${titles.size} titres...`);
+    while (true) {
+      const params = {
+        action: "query",
+        list: "embeddedin",
+        eititle: tpl,
+        einamespace: "0",
+        eilimit: "500",
+      };
+      if (cont) params.eicontinue = cont;
 
-      // MediaWiki renvoie `continue.eicontinue` tant qu'il reste des pages.
-      // Quand c'est absent, on a tout récupéré.
-      cont = data?.continue?.eicontinue;
-      if (!cont) break;
-    } catch (e) {
-      console.warn("  ⚠️ Erreur:", e.message);
-      break;
+      try {
+        const data = await fetchJson(params);
+        const members = data?.query?.embeddedin || [];
+        for (const m of members) titles.add(m.title);
+        tplCount += members.length;
+        console.log(`  → ${titles.size} titres cumulés (${tplCount} pour ce template)`);
+
+        cont = data?.continue?.eicontinue;
+        if (!cont) break;
+      } catch (e) {
+        console.warn("  ⚠️ Erreur:", e.message);
+        break;
+      }
+      await sleep(DELAY);
     }
-    await sleep(DELAY);
+    console.log();
   }
   return [...titles];
 }
 
-// ============================================================================
-// ÉTAPE 2 : télécharger le wikitexte de toutes les pages, en batch de 50
-// ============================================================================
-// On envoie jusqu'à 50 titres dans une seule requête. MediaWiki renvoie le
-// contenu de chaque page dans un tableau. 50× plus rapide qu'une page à la fois.
+// ═══════════════════════════════════════════════════════════════════════════
+// Étape 2 : contenu des pages en batch
+// ═══════════════════════════════════════════════════════════════════════════
 async function fetchWikitexts(titles) {
-  console.log(`📥 Récupération du contenu de ${titles.length} pages...`);
+  console.log(`📥 Récupération du contenu de ${titles.length} pages...\n`);
   const results = new Map();
   let i = 0;
 
@@ -115,24 +101,24 @@ async function fetchWikitexts(titles) {
     try {
       const data = await fetchJson({
         action: "query",
-        prop: "revisions",       // on veut les révisions (historique) de chaque page
-        rvprop: "content",       // seulement le contenu (pas la date, l'auteur…)
-        rvslots: "main",         // le slot "main" (le wikitexte principal)
-        titles: chunk.join("|"), // 50 titres séparés par |
-        redirects: "1",          // suit les redirections
+        prop: "revisions",
+        rvprop: "content",
+        rvslots: "main",
+        titles: chunk.join("|"),
+        redirects: "1",
       });
       const pages = data?.query?.pages || [];
       for (const p of pages) {
-        if (!p || p.missing) continue; // page qui n'existe pas → on skip
-        // Selon la version de MediaWiki, le contenu est à un endroit
-        // légèrement différent. On teste les trois structures possibles.
+        if (!p || p.missing) continue;
         const wikitext = p.revisions?.[0]?.slots?.main?.content
                       || p.revisions?.[0]?.content
                       || p.revisions?.[0]?.["*"];
         if (wikitext) results.set(p.title, wikitext);
       }
       i += chunk.length;
-      console.log(`  → ${i} / ${titles.length} pages...`);
+      if (i % 500 === 0 || i >= titles.length) {
+        console.log(`  → ${i} / ${titles.length} pages (${results.size} avec contenu)`);
+      }
     } catch (e) {
       console.warn(`  ⚠️ Erreur batch ${j}:`, e.message);
     }
@@ -141,13 +127,9 @@ async function fetchWikitexts(titles) {
   return results;
 }
 
-// ============================================================================
-// ÉTAPE 3 : parsing du wikitexte
-// ============================================================================
-
-// ─── Extraire le corps d'un template {{...}} ───
-// Trouve `{{CardTable2` puis compte les accolades pour trouver le }}
-// correspondant. Gère les templates imbriqués ({{A|x={{B}}}}).
+// ═══════════════════════════════════════════════════════════════════════════
+// Étape 3 : parsing
+// ═══════════════════════════════════════════════════════════════════════════
 function extractTemplateParams(wikitext, templateName) {
   const escaped = templateName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp("\\{\\{\\s*" + escaped + "\\s*(?=[|}\\n])", "i");
@@ -159,20 +141,14 @@ function extractTemplateParams(wikitext, templateName) {
   while (i < wikitext.length - 1) {
     const two = wikitext.substr(i, 2);
     if (two === "{{") { depth++; i += 2; continue; }
-    if (two === "}}") {
-      depth--;
-      if (depth === 0) { endIdx = i; break; }
-      i += 2; continue;
-    }
+    if (two === "}}") { depth--; if (depth === 0) { endIdx = i; break; } i += 2; continue; }
     i++;
   }
   if (endIdx === null) return null;
+
   return wikitext.slice(startIdx + m[0].length, endIdx);
 }
 
-// ─── Parser les `|clé=valeur` du template ───
-// Retourne un objet { clé: valeur } en minuscules.
-// Gère les valeurs contenant des `|` (dans des templates imbriqués).
 function parseParams(body) {
   const params = {};
   let i = 0;
@@ -193,6 +169,8 @@ function parseParams(body) {
       const two = body.substr(j, 2);
       if (two === "{{") { depth++; j += 2; continue; }
       if (two === "}}") { depth--; j += 2; continue; }
+      if (two === "[[") { depth++; j += 2; continue; }
+      if (two === "]]") { depth--; j += 2; continue; }
       if (depth === 0 && body[j] === "|") break;
       j++;
     }
@@ -202,70 +180,70 @@ function parseParams(body) {
   return params;
 }
 
-// ─── Nettoyage du wikitexte ───
-// Convertit le wikitexte en texte brut lisible.
 function clean(s) {
   if (!s) return null;
   return String(s)
-    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2") // [[lien|texte]] → texte
-    .replace(/\[\[([^\]]+)\]\]/g, "$1")            // [[lien]] → lien
-    .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, "")     // <ref>...</ref> → vide
-    .replace(/<[^>]+>/g, "")                       // autres balises HTML → vide
-    .replace(/'''?/g, "")                          // '''gras''' → gras
-    .replace(/&nbsp;/g, " ")                       // &nbsp; → espace
+    .replace(/\{\{Ruby\|([^|]+)\|[^}]+\}\}/gi, "$1") // ⚡ Nettoyage propre des balises Ruby japonaises
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/'''?/g, "")
+    .replace(/&nbsp;/g, " ")
     .trim() || null;
 }
 
-// Templates à essayer, dans l'ordre. La plupart des pages utilisent
-// CardTable2, mais on teste aussi les autres au cas où (sans que ça change
-// la collecte des titres, seulement le parsing).
 const TEMPLATES = ["CardTable2", "Anime card", "Manga card", "Video game card", "OCG card", "TCG card"];
 
-// ─── Parser une page entière → objet carte ───
-function parseCard(wikitext) {
+function parseCard(wikitext, title) {
   for (const tpl of TEMPLATES) {
     const body = extractTemplateParams(wikitext, tpl);
     if (!body) continue;
     const p = parseParams(body);
 
     const frName = clean(p.fr_name);
-    const enName = clean(p.en_name || p.translated_name);
+    let enName = clean(p.en_name || p.translated_name);
+
+    if (!enName && title) enName = clean(title);
+
     if (!frName && !enName) continue;
 
-    // ⚡ Sélection de l'image : on garde l'artwork (image_ca) en priorité,
-    //    sinon le scan (image). Tu peux modifier l'ordre ici si besoin.
-    const imgCA = (p.image_ca || "").trim().replace(/^.*?:/, "").replace(/^File:/i, "");
-    const imgMain = (p.image || "").trim().replace(/^.*?:/, "").replace(/^File:/i, "");
-    const imgEn = (p.en_image || "").trim().replace(/^.*?:/, "").replace(/^File:/i, "");
-    const imgJa = (p.ja_image || "").trim().replace(/^.*?:/, "").replace(/^File:/i, "");
+    const cardId = p.passcode ? String(p.passcode).trim() : null;
+    const croppedArtworkUrl = cardId ? `https://images.ygoprodeck.com/images/card_cropped/${cardId}.jpg` : null;
 
-    // Priorité : image_ca (artwork) > image (scan) > en > ja
-    const chosenImg = imgCA || imgMain || imgEn || imgJa || null;
+    const rawImg = p.image_ca || p.artwork || p.image_cropped || p.image || p.en_image || p.ja_image || "";
+    
+    // ⚡ Nettoyage robuste pour extraire un nom de fichier image valide
+    let imgName = null;
+    if (rawImg) {
+      const cleanLine = rawImg.split(/[\r\n]+/)[0].trim();
+      const parts = cleanLine.split(";");
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed && !trimmed.includes("=")) {
+          imgName = trimmed.replace(/^.*?:/, "").trim();
+          break;
+        }
+      }
+      if (!imgName) {
+        imgName = cleanLine.replace(/^.*?:/, "").split(";")[0].trim();
+      }
+    }
 
     return {
+      title: title || null,
       fr: frName,
       en: enName,
       tpl,
-      id: p.passcode ? String(p.passcode).trim() : null,
+      id: cardId,
       database_id: p.database_id ? String(p.database_id).trim() : null,
 
-      // Image principale (artwork si dispo, sinon scan)
-      img: chosenImg
-        ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(chosenImg)}`
-        : null,
-      // Artwork isolé (si dispo) — utile pour ton app si tu veux basculer
-      img_artwork: imgCA
-        ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(imgCA)}`
-        : null,
-      // Scan conservé
-      img_scan: imgMain
-        ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(imgMain)}`
-        : null,
-      img_en: imgEn
-        ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(imgEn)}`
-        : null,
-      img_ja: imgJa
-        ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(imgJa)}`
+      img: croppedArtworkUrl || (imgName
+        ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(imgName)}`
+        : null),
+
+      img_en: p.en_image
+        ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(p.en_image.replace(/^.*?:/, ""))}`
         : null,
 
       de: clean(p.de_name),
@@ -309,54 +287,53 @@ function parseCard(wikitext) {
   return null;
 }
 
-// ─── Normalisation d'une chaîne pour servir de clé ───
-// "Dragon Blanc aux Yeux Bleus" → "dragonblancauxyeuxbleus"
 function normalize(s) {
   return String(s || "").toLowerCase().normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 }
 
-// ============================================================================
-// MAIN — orchestrateur
-// ============================================================================
+// ═══════════════════════════════════════════════════════════════════════════
+// Main
+// ═══════════════════════════════════════════════════════════════════════════
 (async () => {
-  // 1. Liste toutes les pages de cartes
   const titles = await getAllCardTitles();
-  console.log(`\n✅ ${titles.length} titres collectés\n`);
+  console.log(`\n✅ ${titles.length} titres collectés au total\n`);
+
   if (titles.length === 0) {
     console.error("❌ Aucun titre trouvé.");
     process.exit(1);
   }
 
-  // 2. Télécharge les wikitextes
   const wikitexts = await fetchWikitexts(titles);
   console.log(`\n✅ ${wikitexts.size} wikitexts récupérés\n`);
 
-  // 3. Parse chaque page
   console.log("🔄 Parsing...");
   const db = {};
   let count = 0;
-  let withArtwork = 0, withScanOnly = 0;
 
   for (const [title, wt] of wikitexts) {
-    const card = parseCard(wt);
+    const card = parseCard(wt, title);
     if (!card) continue;
-    const key = normalize(card.fr || card.en);
+
+    const key = normalize(card.fr || card.en || title);
     if (!key) continue;
     if (!db[key]) {
       db[key] = card;
       count++;
-      if (card.img_artwork) withArtwork++;
-      else if (card.img) withScanOnly++;
+    }
+
+    const titleKey = normalize(title);
+    if (titleKey && titleKey !== key && !db[titleKey]) {
+      db[titleKey] = card;
     }
   }
 
-  console.log(`✅ ${count} cartes parsées`);
-  console.log(`   🎨 ${withArtwork} avec artwork`);
-  console.log(`   📷 ${withScanOnly} avec scan uniquement`);
+  console.log(`✅ ${count} cartes uniques parsées`);
+  console.log(`✅ ${Object.keys(db).length} entrées totales`);
 
-  // 4. Écrit le JSON
   const json = JSON.stringify(db, null, 2);
-  fs.writeFileSync("yugipedia-db.json", json);
+  
+  // ⚡ Encodage UTF-8 explicitement forcé ici pour éviter les bugs d'affichage
+  fs.writeFileSync("yugipedia-db.json", json, "utf8");
   console.log(`\n💾 yugipedia-db.json généré : ${(json.length / 1024 / 1024).toFixed(2)} Mo`);
 })();
