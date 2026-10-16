@@ -10,6 +10,11 @@
 //
 // ⚡ window.yugiCache est chargé par script.js depuis data/yugipedia-db.json
 //    0 requête Yugipedia au runtime.
+//
+// 🆕 CORRECTION : la STRUCTURE de la carte (Magie/Piège + sous-type, type de
+//    monstre, niveau, ATK/DEF, échelles, flèches Lien) est maintenant décodée
+//    depuis le .cdb (decodeCdbCard) et prend le dessus sur la carte officielle
+//    trouvée par nom. La carte officielle ne sert plus qu'aux illustrations.
 // ============================================================================
 
 (() => {
@@ -327,8 +332,8 @@
   // ═══════════════════════════════════════════════════════════════════════
   // ACTION 2 : GÉNÉRER LES JSON
   // ═══════════════════════════════════════════════════════════════════════
-  // PASSE 1 : Locale (FR/EN) + tilde
-  // PASSE 2 : Batch YGOPRODeck (name= 40/req) — 3 sous-étapes
+  // PASSE 1 : Locale (FR/EN) + tilde  (structure = celle du .cdb)
+  // PASSE 2 : Batch YGOPRODeck (name= 40/req) — 3 sous-étapes (images)
   // PASSE 3 : Cache Yugipedia local (window.yugiCache)
   // PASSE 3.5 : Re-batch YGOPRODeck avec les noms EN trouvés
   // PASSE 4 : Génération JSON + CSV
@@ -381,23 +386,32 @@
             if (matched) matchedSource = "tilde";
           }
         }
+
+        // 🆕 Structure décodée depuis le .cdb (null si la carte n'a pas de ligne `datas`)
+        const cdbStruct = (dbType !== null && dbType !== undefined)
+          ? { ...decodeCdbCard(dbType, dbRace, dbAttribute, dbLevel, dbAtk, dbDef), _fromCdb: true }
+          : null;
+
         let card;
         const cardIndex = state.resolvedCards.length;
         if (matched) {
-          card = { ...matched, id: localId, name: localName, desc: localDesc };
+          // La carte officielle fournit surtout les illustrations ; la structure vient du .cdb
+          card = { ...matched, ...(cdbStruct || {}), id: localId, name: localName, desc: localDesc };
           if (matchedSource === "local") foundLocal++;
           else foundTilde++;
         } else {
-          const frameType = detectFrameType(dbType);
-          const isSpell = (dbType & 0x2) !== 0;
-          const isTrap = (dbType & 0x4) !== 0;
-          card = {
-            id: localId, name: localName, desc: localDesc,
-            type: isSpell ? "Spell Card" : isTrap ? "Trap Card" : "Effect Monster",
-            frameType, atk: dbAtk ?? 0, def: dbDef ?? 0, level: dbLevel ?? 0,
-            race: raceFromCode(dbRace), attribute: attributeFromCode(dbAttribute),
-            card_images: [],
-          };
+          if (cdbStruct) {
+            card = { ...cdbStruct, id: localId, name: localName, desc: localDesc, card_images: [] };
+          } else {
+            // Pas de ligne `datas` : ancien comportement minimal
+            card = {
+              id: localId, name: localName, desc: localDesc,
+              type: "Effect Monster", frameType: "effect",
+              atk: 0, def: 0, level: 0,
+              race: "Warrior", attribute: "DARK",
+              card_images: [],
+            };
+          }
           foundCdb++;
         }
         if (!matched) {
@@ -413,7 +427,7 @@
       }
       console.log(`[CDB] Passe 1 : ${foundLocal} loc, ${foundTilde} tilde, ${foundCdb} cdb · ${pending.length} à chercher`);
 
-      // ═══ PASSE 2 : YGOPRODECK BATCH ═══
+      // ═══ PASSE 2 : YGOPRODECK BATCH (illustrations uniquement) ═══
       if (pending.length > 0 && !state.cancelled) {
         console.log(`[CDB] ⚡ Passe 2 : Batch YGOPRODeck pour ${pending.length} carte(s)`);
         dom.yugiProgressWrap.classList.add("visible");
@@ -589,23 +603,102 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // HELPERS
+  // HELPERS — DÉCODAGE DU .CDB
   // ═══════════════════════════════════════════════════════════════════════
-  function detectFrameType(type) {
-    if (!type) return "effect";
-    if (type & 0x4000000) return "link";
-    if (type & 0x800000) return "xyz";
-    if (type & 0x2000) return "synchro";
-    if (type & 0x40) return "fusion";
-    if (type & 0x80) return "ritual";
-    if (type & 0x10) return "normal";
-    if (type & 0x2) return "spell";
-    if (type & 0x4) return "trap";
-    return "effect";
+  // Bits de la colonne `type` d'EDOPro / YGOPro :
+  //   0x1 Monstre · 0x2 Magie · 0x4 Piège · 0x10 Normal · 0x20 Effet · 0x40 Fusion
+  //   0x80 Rituel · 0x200 Esprit · 0x400 Union · 0x800 Gémeau · 0x1000 Syntoniseur
+  //   0x2000 Synchro · 0x4000 Token · 0x10000 Magie Rapide · 0x20000 Continue
+  //   0x40000 Équipement · 0x80000 Terrain · 0x100000 Contre · 0x200000 Retournement
+  //   0x400000 Toon · 0x800000 Xyz · 0x1000000 Pendule · 0x4000000 Lien
+  // `level` : bas = niveau/rang/valeur Lien · bits 16-23 = échelle droite · 24-31 = échelle gauche
+  // `def`   : pour un Lien, bitmask des flèches.
+  function decodeCdbCard(t, race, attr, lvl, atk, def) {
+    t = t | 0; lvl = lvl | 0; atk = atk ?? 0; def = def ?? 0;
+    const has = (b) => (t & b) !== 0;
+    const empty = { typeline: undefined, linkval: undefined, linkmarkers: undefined, scale: undefined, scaleRight: undefined };
+
+    // ─── Magie / Piège ───
+    if (has(0x2) || has(0x4)) {
+      const spell = has(0x2);
+      let sub = "Normal";
+      if (has(0x10000)) sub = "Quick-Play";
+      else if (has(0x20000)) sub = "Continuous";
+      else if (has(0x40000)) sub = "Equip";
+      else if (has(0x80000)) sub = "Field";
+      else if (has(0x100000)) sub = "Counter";
+      else if (has(0x80)) sub = "Ritual";
+      return {
+        ...empty,
+        type: spell ? "Spell Card" : "Trap Card",
+        frameType: spell ? "spell" : "trap",
+        race: sub, attribute: undefined,
+        atk: 0, def: 0, level: 0,
+      };
+    }
+
+    // ─── Monstres ───
+    const isLink = has(0x4000000);
+    const isPend = has(0x1000000);
+    const baseFrame =
+      has(0x4000) ? "token"
+      : isLink ? "link"
+      : has(0x800000) ? "xyz"
+      : has(0x2000) ? "synchro"
+      : has(0x40) ? "fusion"
+      : has(0x80) ? "ritual"
+      : has(0x20) ? "effect"
+      : has(0x10) ? "normal"
+      : "effect";
+
+    // Capacités, dans l'ordre d'affichage officiel (ex. Magicien/Synchro/Pendule/Syntoniseur/Effet)
+    const ab = [];
+    if (has(0x40)) ab.push("Fusion");
+    if (has(0x2000)) ab.push("Synchro");
+    if (has(0x800000)) ab.push("Xyz");
+    if (isLink) ab.push("Link");
+    if (has(0x80)) ab.push("Ritual");
+    if (has(0x200)) ab.push("Spirit");
+    if (has(0x400)) ab.push("Union");
+    if (has(0x800)) ab.push("Gemini");
+    if (has(0x400000)) ab.push("Toon");
+    if (isPend) ab.push("Pendulum");
+    if (has(0x200000)) ab.push("Flip");
+    if (has(0x1000)) ab.push("Tuner");
+    if (has(0x20)) ab.push("Effect");
+    if (has(0x10)) ab.push("Normal");
+
+    const raceName = raceFromCode(race);
+    const out = {
+      ...empty,
+      type: has(0x4000) ? "Token" : (ab.length ? ab.join(" ") : "Effect") + " Monster",
+      frameType: isPend ? baseFrame + "_pendulum" : baseFrame,
+      race: raceName,
+      attribute: attributeFromCode(attr),
+      typeline: [raceName, ...ab],
+      atk: atk === -2 ? "?" : atk,
+      def: def === -2 ? "?" : def,
+      level: lvl & 0xff,
+    };
+
+    if (isPend) {
+      out.scale = (lvl >> 24) & 0xff;       // échelle gauche (bleue)
+      out.scaleRight = (lvl >> 16) & 0xff;  // échelle droite (rouge)
+    }
+    if (isLink) {
+      out.linkval = lvl & 0xff;
+      out.level = lvl & 0xff;
+      const M = { 0x1: "Bottom-Left", 0x2: "Bottom", 0x4: "Bottom-Right", 0x8: "Left",
+                  0x20: "Right", 0x40: "Top-Left", 0x80: "Top", 0x100: "Top-Right" };
+      out.linkmarkers = Object.entries(M).filter(([b]) => (def & Number(b)) !== 0).map(([, n]) => n);
+      out.def = "";
+    }
+    return out;
   }
+
   function raceFromCode(code) {
     if (!code) return "Warrior";
-    const R = { 0x1:"Warrior",0x2:"Spellcaster",0x4:"Fairy",0x8:"Fiend",0x10:"Zombie",0x20:"Machine",0x40:"Aqua",0x80:"Pyro",0x100:"Rock",0x200:"Winged Beast",0x400:"Plant",0x800:"Insect",0x1000:"Thunder",0x2000:"Dragon",0x4000:"Beast",0x8000:"Beast-Warrior",0x10000:"Dinosaur",0x20000:"Fish",0x40000:"Sea Serpent",0x80000:"Reptile",0x100000:"Psychic",0x200000:"Divine-Beast",0x400000:"Creator God",0x800000:"Wyrm",0x1000000:"Cyberse" };
+    const R = { 0x1:"Warrior",0x2:"Spellcaster",0x4:"Fairy",0x8:"Fiend",0x10:"Zombie",0x20:"Machine",0x40:"Aqua",0x80:"Pyro",0x100:"Rock",0x200:"Winged Beast",0x400:"Plant",0x800:"Insect",0x1000:"Thunder",0x2000:"Dragon",0x4000:"Beast",0x8000:"Beast-Warrior",0x10000:"Dinosaur",0x20000:"Fish",0x40000:"Sea Serpent",0x80000:"Reptile",0x100000:"Psychic",0x200000:"Divine-Beast",0x400000:"Creator God",0x800000:"Wyrm",0x1000000:"Cyberse",0x2000000:"Illusion" };
     for (const [b, n] of Object.entries(R)) if (code & parseInt(b)) return n;
     return "Warrior";
   }
