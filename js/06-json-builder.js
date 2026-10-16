@@ -75,7 +75,7 @@ function normalizePendulum(card) {
 
   const frame = card.frameType || "";
   const levelRaw = typeof card.level === "number" ? card.level : parseInt(card.level, 10);
-  const levelHasScale = Number.isFinite(levelRaw) && levelRaw > 255; // .cdb : échelles dans les bits hauts
+  const levelHasScale = Number.isFinite(levelRaw) && levelRaw > 255; // .cdb brut : échelles dans les bits hauts
 
   const isPend =
     frame.includes("pendulum") ||
@@ -90,6 +90,7 @@ function normalizePendulum(card) {
   let pend = card.pend_desc;
   let mon = card.monster_desc;
   let scale = card.scale;
+  let scaleRight = card.scaleRight; // 🆕 échelle droite (si différente de la gauche)
   let level = card.level;
   let materials = card.materials_desc || "";
 
@@ -101,6 +102,7 @@ function normalizePendulum(card) {
   }
   if (levelHasScale) {
     if (scale === undefined || scale === null) scale = (levelRaw >> 24) & 0xff;
+    if (scaleRight === undefined || scaleRight === null) scaleRight = (levelRaw >> 16) & 0xff;
     level = levelRaw & 0xff;
   }
 
@@ -112,6 +114,7 @@ function normalizePendulum(card) {
     monster_desc: cleanPendPart(mon || ""),
     materials_desc: materials,
     scale: scale ?? 0,
+    scaleRight: scaleRight ?? scale ?? 0,
     level,
     desc: cleanPendPart(mon || card.desc),
   };
@@ -128,6 +131,14 @@ async function generateJsonForCard(card, overrideName, providedStructural) {
       desc: card.desc || card._descs?.fr || card._descs?.en || "",
     });
   }
+
+  // 🆕 Carte issue d'un .cdb : sa structure (type, sous-type Magie/Piège, niveau,
+  // stats, échelles, flèches) a déjà été décodée depuis le .cdb. On NE va PAS
+  // rechercher la carte officielle par ID, sinon elle écraserait ces valeurs.
+  if (card._fromCdb) {
+    return buildYgoproJson({ ...card, name: overrideName || card.name });
+  }
+
   let structural = providedStructural || structuralCardCache.get(card.id);
   if (!structural) {
     try {
@@ -179,7 +190,8 @@ function buildYgoproJson(card) {
       enabled: isPendulum,
       effect: isPendulum ? cleanPendPart(card.pend_desc) : "",
       blue: isPendulum ? String(card.scale ?? "0") : "0",
-      red: isPendulum ? String(card.scale ?? "0") : "0",
+      // 🆕 échelle droite distincte si connue (cartes custom), sinon identique à la gauche
+      red: isPendulum ? String(card.scaleRight ?? card.scale ?? "0") : "0",
       boxSize: "Normal",
       boxSizeEnabled: true,
     },
