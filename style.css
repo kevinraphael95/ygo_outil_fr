@@ -161,6 +161,10 @@ body {
 
 .icon-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
+/* 👇 THEME TOGGLE IMPORT EMOJI 👇 */
+[data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
+[data-theme="light"] #theme-toggle::before { content: "☀️"; }
+
 /* ============================================================
    BADGE BASE YGOPRODECK
    ============================================================ */
