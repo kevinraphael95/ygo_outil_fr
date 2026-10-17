@@ -16,16 +16,9 @@
       var s = localStorage.getItem("ygo-theme");
       t = s || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
     } catch (e) {}
-    
     var r = document.documentElement;
     r.dataset.theme = t;
     r.style.colorScheme = t;
-
-    // 👇 NOUVEAU : On met l'icône dès que le bouton est prêt
-    document.addEventListener('DOMContentLoaded', function() {
-      var btn = document.getElementById("theme-toggle");
-      if (btn) btn.textContent = t === "dark" ? "🌙" : "☀️";
-    });
   })();
 </script>
 
@@ -50,7 +43,7 @@
     <div id="db-badge" class="db-badge hidden"></div>
 
     <div class="header-actions">
-      <button class="icon-btn" id="theme-toggle" title="Changer de thème" aria-label="Changer de thème"></button>
+      <button class="icon-btn" id="theme-toggle" title="Changer de thème" aria-label="Changer de thème">🌙</button>
       <button class="icon-btn" id="about-btn" title="À propos" aria-label="À propos">ℹ️</button>
     </div>
   </div>
