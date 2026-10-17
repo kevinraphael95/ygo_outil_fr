@@ -10,7 +10,6 @@
 // synchroniser l'icône du bouton et gérer le clic.
 (function initTheme() {
   const theme = document.documentElement.dataset.theme || "dark";
-  themeToggle.textContent = theme === "dark" ? "🌙" : "☀️";
 })();
 
 themeToggle.addEventListener("click", () => {
@@ -19,7 +18,6 @@ themeToggle.addEventListener("click", () => {
   root.dataset.theme = next;
   root.style.colorScheme = next;
   try { localStorage.setItem("ygo-theme", next); } catch (e) {}
-  themeToggle.textContent = next === "dark" ? "🌙" : "☀️";
   toast(`Thème ${next === "dark" ? "sombre" : "clair"} activé`, "info");
 });
 
