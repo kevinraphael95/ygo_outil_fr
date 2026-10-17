@@ -162,12 +162,6 @@ body {
 .icon-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* ============================================================
-   BOUTON THÈME — icône via CSS (évite le flash au chargement)
-   ============================================================ */
-[data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
-[data-theme="light"] #theme-toggle::before { content: "☀️"; }
-
-/* ============================================================
    BADGE BASE YGOPRODECK
    ============================================================ */
 .db-badge {
