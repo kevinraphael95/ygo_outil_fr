@@ -3,23 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
 <title>YGO Card Maker JSON</title>
+
+<!-- Thème appliqué AVANT le chargement du CSS : évite tout flash sombre/clair.
+     Il est posé sur <html> (qui existe déjà ici, contrairement à <body>).
+     Même clé de stockage que js/08-ui.js : "ygo-theme". -->
+<script>
+  (function () {
+    var t = "dark";
+    try {
+      var s = localStorage.getItem("ygo-theme");
+      t = s || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    } catch (e) {}
+    var r = document.documentElement;
+    r.dataset.theme = t;
+    r.style.colorScheme = t;
+  })();
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-theme="dark">
-<script>
-  // Applique le thème enregistré avant le premier affichage (évite le flash sombre)
-  (function () {
-    try {
-      var saved = localStorage.getItem("ygo-theme");
-      var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-      document.body.dataset.theme = saved || (prefersLight ? "light" : "dark");
-    } catch (e) {}
-  })();
-</script>
+<body>
 
 <!-- ============================== HEADER ============================== -->
 <header class="app-header">
