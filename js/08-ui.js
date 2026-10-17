@@ -18,6 +18,10 @@ themeToggle.addEventListener("click", () => {
   root.dataset.theme = next;
   root.style.colorScheme = next;
   try { localStorage.setItem("ygo-theme", next); } catch (e) {}
+  
+  // 👇 NOUVEAU : On change l'icône au clic
+  themeToggle.textContent = next === "dark" ? "🌙" : "☀️"; 
+  
   toast(`Thème ${next === "dark" ? "sombre" : "clair"} activé`, "info");
 });
 
