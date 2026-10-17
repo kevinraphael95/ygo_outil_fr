@@ -10,6 +10,16 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-theme="dark">
+<script>
+  // Applique le thème enregistré avant le premier affichage (évite le flash sombre)
+  (function () {
+    try {
+      var saved = localStorage.getItem("ygo-theme");
+      var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+      document.body.dataset.theme = saved || (prefersLight ? "light" : "dark");
+    } catch (e) {}
+  })();
+</script>
 
 <!-- ============================== HEADER ============================== -->
 <header class="app-header">
