@@ -5,18 +5,20 @@
 // ============================================================================
 // THÈME
 // ============================================================================
+// Le thème initial est posé sur <html> par le petit script du <head> de
+// index.html (avant le chargement du CSS, donc sans flash). Ici on ne fait que
+// synchroniser l'icône du bouton et gérer le clic.
 (function initTheme() {
-  const saved = localStorage.getItem("ygo-theme");
-  const prefers = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  const theme = saved || prefers;
-  document.body.dataset.theme = theme;
+  const theme = document.documentElement.dataset.theme || "dark";
   themeToggle.textContent = theme === "dark" ? "🌙" : "☀️";
 })();
 
 themeToggle.addEventListener("click", () => {
-  const next = document.body.dataset.theme === "dark" ? "light" : "dark";
-  document.body.dataset.theme = next;
-  localStorage.setItem("ygo-theme", next);
+  const root = document.documentElement;
+  const next = root.dataset.theme === "dark" ? "light" : "dark";
+  root.dataset.theme = next;
+  root.style.colorScheme = next;
+  try { localStorage.setItem("ygo-theme", next); } catch (e) {}
   themeToggle.textContent = next === "dark" ? "🌙" : "☀️";
   toast(`Thème ${next === "dark" ? "sombre" : "clair"} activé`, "info");
 });
