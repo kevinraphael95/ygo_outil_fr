@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<title>Découpeur de fichiers</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- FontAwesome Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- ⚡ Anti-flash : applique le thème AVANT que le CSS soit affiché -->
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem('split-theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    } catch (e) {
+      try {
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+      } catch (e2) {}
+    }
+  })();
+</script>
+
+<style>
+  /* ============================================================
+     DESIGN SYSTEM — Thème YGO (Harmonisé)
+     ============================================================ */
+  :root,
+  [data-theme="dark"] {
+    --bg:            #0d0a1a;
+    --bg-pattern:    rgba(212, 175, 55, 0.025);
+    --surface:       #16112a;
+    --surface-2:     #1f1838;
+    --surface-3:     #2a2148;
+    --border:        #3a2d5c;
+    --border-strong: #4d3d75;
+    --border-dashed: #4d3d75;
+    --text:          #f5ecd8;
+    --text-muted:    #a89b82;
+    --text-dim:      #6b6252;
+    --gold:          #d4af37;
+    --gold-light:    #e8c85a;
+    --gold-dark:     #a67c00;
+    --gold-soft:     rgba(212, 175, 55, 0.12);
+    --gold-glow:     rgba(212, 175, 55, 0.35);
+    --success:       #5fd07f;
+    --success-soft:  rgba(95, 208, 127, 0.14);
+    --warning:       #e0b64c;
+    --warning-soft:  rgba(224, 182, 76, 0.14);
+    --danger:        #e07a7a;
+    --danger-soft:   rgba(224, 122, 122, 0.14);
+    --yugi:          #b88ae0;
+    --yugi-soft:     rgba(155, 107, 196, 0.15);
+    --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
+    --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
+    --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
+    --code-bg:       #0a0715;
+    --info-bg:       rgba(212, 175, 55, 0.08);
+    --info-border:   #d4af37;
+    --info-text:     #e8c85a;
+  }
+
+  [data-theme="light"] {
+    --bg:            #f0e8d8;
+    --bg-pattern:    rgba(166, 124, 0, 0.04);
+    --surface:       #faf5e8;
+    --surface-2:     #f2ebd9;
+    --surface-3:     #e8dfc5;
+    --border:        #d4c8b0;
+    --border-strong: #b8a888;
+    --border-dashed: #b8a888;
+    --text:          #2a1f14;
+    --text-muted:    #6b5d47;
+    --text-dim:      #9a8b70;
+    --gold:          #a67c00;
+    --gold-light:    #c49616;
+    --gold-dark:     #7a5a00;
+    --gold-soft:     rgba(166, 124, 0, 0.10);
+    --gold-glow:     rgba(166, 124, 0, 0.25);
+    --success:       #1f8a3d;
+    --success-soft:  rgba(31, 138, 61, 0.12);
+    --warning:       #a67c00;
+    --warning-soft:  rgba(166, 124, 0, 0.12);
+    --danger:        #c33a3a;
+    --danger-soft:   rgba(195, 58, 58, 0.12);
+    --yugi:          #6a3a9a;
+    --yugi-soft:     rgba(106, 58, 154, 0.12);
+    --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
+    --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
+    --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
+    --code-bg:       #f7f2e3;
+    --info-bg:       rgba(166, 124, 0, 0.08);
+    --info-border:   #a67c00;
+    --info-text:     #7a5a00;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    max-width: 720px; margin: 40px auto; padding: 20px;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
+      radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+    transition: background 0.25s, color 0.25s;
+  }
+
+  header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 16px; margin-bottom: 24px;
+  }
+  
+  h1 { 
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 1.4rem; 
+    margin: 0 0 6px; 
+    color: var(--gold);
+    font-weight: 700;
+  }
+  
+  .sub { color: var(--text-muted); font-size: 13px; margin: 0; }
+
+  .theme-btn {
+    width: 42px; height: 42px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; font-size: 18px; cursor: pointer;
+    color: var(--text); transition: all 0.15s;
+    font-family: inherit;
+  }
+  .theme-btn:hover {
+    border-color: var(--gold); background: var(--gold-soft);
+    color: var(--gold); transform: translateY(-1px);
+    box-shadow: 0 0 10px var(--gold-glow);
+  }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; margin-bottom: 16px;
+    box-shadow: var(--shadow-sm);
+    transition: background 0.25s, border-color 0.25s;
+  }
+
+  .drop {
+    border: 2px dashed var(--border-dashed); border-radius: 12px;
+    padding: 30px; text-align: center; cursor: pointer;
+    transition: all 0.15s; background: var(--surface-2);
+  }
+  .drop:hover, .drop.over {
+    border-color: var(--gold); background: var(--gold-soft);
+  }
+  .drop-icon { font-size: 40px; margin-bottom: 8px; color: var(--gold); }
+  .drop-text { color: var(--text-muted); font-size: 13px; }
+  .drop-text strong {
+    color: var(--text); display: block; font-size: 15px; margin-bottom: 4px;
+  }
+
+  .row {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .row label {
+    font-weight: 600; font-size: 13px; min-width: 160px;
+    color: var(--text);
+  }
+
+  input[type="number"], select, input[type="text"] {
+    padding: 9px 12px; border: 1px solid var(--border);
+    border-radius: 10px; font-size: 14px; font-family: inherit;
+    background: var(--surface-2); color: var(--text);
+    transition: all 0.15s;
+  }
+  input[type="number"]:focus, select:focus, input[type="text"]:focus {
+    outline: none; border-color: var(--gold);
+    box-shadow: 0 0 0 3px var(--gold-soft);
+  }
+  input[type="number"] { width: 120px; }
+  input[type="checkbox"] {
+    width: 18px; height: 18px; accent-color: var(--gold); cursor: pointer;
+  }
+
+  button:not(.theme-btn) {
+    padding: 11px 20px; 
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark)); 
+    color: #1a1408;
+    border: 1px solid var(--gold); 
+    border-radius: 10px; 
+    font-size: 14px; 
+    font-weight: 700;
+    cursor: pointer; 
+    font-family: inherit; 
+    transition: all 0.18s ease;
+    box-shadow: 0 2px 8px var(--gold-glow);
+  }
+  button:not(.theme-btn):hover:not(:disabled) { 
+    background: linear-gradient(135deg, var(--gold-light), var(--gold)); 
+    transform: translateY(-1px);
+  }
+  button:not(.theme-btn):disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+  .info {
+    background: var(--info-bg); border-left: 3px solid var(--info-border);
+    padding: 12px 16px; border-radius: 8px; font-size: 13px;
+    color: var(--info-text); margin-bottom: 14px;
+  }
+
+  .stats { font-size: 13px; color: var(--text-muted); margin-top: 10px; }
+
+  ul { padding-left: 20px; font-size: 13px; color: var(--text-muted); }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>✂️ Découpeur de fichiers</h1>
+    <p class="sub">
+      Coupe un gros fichier (CSV, TXT, JSON…) en plusieurs morceaux,
+      dans un ZIP téléchargeable.
+    </p>
+  </div>
+  <button class="theme-btn" id="themeBtn" title="Changer de thème"></button>
+</header>
+
+<div class="panel">
+  <div class="drop" id="drop">
+    <div class="drop-icon"><i class="fa-solid fa-file-arrow-up"></i></div>
+    <div class="drop-text">
+      <strong>Dépose ton fichier ici</strong>
+      ou clique pour parcourir
+    </div>
+    <input type="file" id="fileInput" hidden>
+  </div>
+  <div class="stats" id="fileInfo"></div>
+</div>
+
+<div class="panel" id="optionsPanel" style="display:none;">
+  <div class="info">
+    Le fichier est coupé <strong>ligne par ligne</strong>. Les guillemets et
+    les retours à la ligne dans les cellules ne sont pas cassés : chaque
+    morceau reste un CSV valide (si l'original l'est).
+  </div>
+
+  <div class="row">
+    <label>Mode de découpe</label>
+    <select id="mode">
+      <option value="lines">Nombre de lignes par morceau</option>
+      <option value="files">Nombre de fichiers voulus</option>
+      <option value="bytes">Taille max par morceau (Ko)</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label>Valeur</label>
+    <input type="number" id="value" value="1000" min="1">
+    <span id="unit" style="font-size:13px;color:var(--text-muted);">lignes</span>
+  </div>
+
+  <div class="row">
+    <label>Extension des morceaux</label>
+    <input type="text" id="ext" value="csv" style="width:80px;">
+    <span style="font-size:12px;color:var(--text-dim);">(sans le point)</span>
+  </div>
+
+  <div class="row">
+    <label>Garder l'en-tête (CSV)</label>
+    <input type="checkbox" id="keepHeader" checked>
+    <span style="font-size:12px;color:var(--text-dim);">
+      Répète la 1<sup>re</sup> ligne dans chaque morceau
+    </span>
+  </div>
+
+  <div class="row">
+    <label>Nom de base</label>
+    <input type="text" id="baseName" value="morceau" style="width:200px;">
+  </div>
+
+  <button id="splitBtn" disabled>✂️ Découper</button>
+  <div class="stats" id="resultStats"></div>
+  <ul id="resultList"></ul>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ============================================================================
+// THÈME — Gestion de la persistance et du bouton
+// ============================================================================
+const THEME_KEY = 'split-theme';
+const mq = window.matchMedia('(prefers-color-scheme: dark)');
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('themeBtn');
+  if (btn) {
+    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    btn.title = theme === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre';
+  }
+}
+
+(function syncButton() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  applyTheme(current);
+})();
+
+mq.addEventListener('change', (e) => {
+  if (localStorage.getItem(THEME_KEY)) return;
+  applyTheme(e.matches ? 'dark' : 'light');
+});
+
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+});
+
+// ============================================================================
+// ÉTAT
+// ============================================================================
+let currentFile = null;
+let currentText = null;
+
+const $ = id => document.getElementById(id);
+const drop = $('drop'), fileInput =$('fileInput');
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  const f = e.dataTransfer.files[0]; if (f) loadFile(f);
+});
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0]; if (f) loadFile(f);
+});
+
+async function loadFile(file) {
+  currentFile = file;
+  currentText = await file.text();
+  const ext = file.name.split('.').pop().toLowerCase();
+  $('ext').value = ext;
+  $('baseName').value = file.name.replace(/\.[^.]+$/, '');
+  const lines = currentText.split('\n').length;
+  const sizeKo = (file.size / 1024).toFixed(1);
+  $('fileInfo').textContent =
+    `📄 ${file.name} — ${sizeKo} Ko — ${lines.toLocaleString('fr-FR')} lignes`;
+  $('optionsPanel').style.display = 'block';$('splitBtn').disabled = false;
+  $('resultStats').textContent = '';$('resultList').innerHTML = '';
+}
+
+$('mode').addEventListener('change', () => {
+  const mode = $('mode').value;
+  const unit = $('unit');
+  if (mode === 'lines') { unit.textContent = 'lignes'; $('value').value = 1000; }
+  else if (mode === 'files') { unit.textContent = 'fichiers'; $('value').value = 5; }
+  else if (mode === 'bytes') { unit.textContent = 'Ko'; $('value').value = 100; }
+});
+
+$('splitBtn').addEventListener('click', async () => {
+  if (!currentText) return;
+  $('splitBtn').disabled = true;
+  $('resultStats').textContent = 'Découpage en cours…';
+  $('resultList').innerHTML = '';
+
+  await new Promise(r => setTimeout(r, 50));
+
+  const mode = $('mode').value;
+  const value = parseInt($('value').value, 10);
+  const ext = $('ext').value.trim() || 'txt';
+  const baseName = $('baseName').value.trim() || 'morceau';
+  const keepHeader = $('keepHeader').checked;
+
+  if (!value || value < 1) {
+    $('resultStats').textContent = '❌ Valeur invalide.';
+    $('splitBtn').disabled = false;
+    return;
+  }
+
+  const chunks = splitText(currentText, mode, value, keepHeader);
+  const parts = chunks.map((chunk, i) => ({
+    filename: `${baseName}_part${String(i + 1).padStart(2, '0')}.${ext}`,
+    content: chunk,
+  }));
+
+  const totalLines = currentText.split('\n').length;
+  $('resultStats').textContent =
+    `✅ ${parts.length} fichiers créés · ${totalLines.toLocaleString('fr-FR')} lignes au total`;
+
+  const list = $('resultList');
+  parts.forEach(p => {
+    const lines = p.content.split('\n').length;
+    const ko = (new Blob([p.content]).size / 1024).toFixed(1);
+    const li = document.createElement('li');
+    li.textContent = `${p.filename} — ${lines.toLocaleString('fr-FR')} lignes — ${ko} Ko`;
+    list.appendChild(li);
+  });
+
+  if (typeof JSZip === 'undefined') {
+    $('resultStats').textContent += ' · ⚠️ JSZip non chargé.';
+    $('splitBtn').disabled = false;
+    return;
+  }
+
+  const zip = new JSZip();
+  parts.forEach(p => zip.file(p.filename, p.content));
+  const blob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(blob, `${baseName}.zip`);
+  $('splitBtn').disabled = false;
+});
+
+// ============================================================================
+// LOGIQUE DE DÉCOUPE
+// ============================================================================
+function splitText(text, mode, value, keepHeader) {
+  const lines = text.split('\n');
+  const header = keepHeader ? lines[0] + '\n' : '';
+  const bodyStart = keepHeader ? 1 : 0;
+  if (mode === 'lines') return splitByLines(lines, value, header, bodyStart);
+  if (mode === 'files') {
+    const perFile = Math.ceil((lines.length - bodyStart) / value);
+    return splitByLines(lines, perFile, header, bodyStart);
+  }
+  if (mode === 'bytes') return splitByBytes(lines, value * 1024, header, bodyStart);
+  return [text];
+}
+
+function splitByLines(lines, perChunk, header, bodyStart) {
+  const chunks = [];
+  for (let i = bodyStart; i < lines.length; i += perChunk) {
+    chunks.push(header + lines.slice(i, i + perChunk).join('\n'));
+  }
+  return chunks;
+}
+
+function splitByBytes(lines, maxBytes, header, bodyStart) {
+  const chunks = [];
+  let current = [header.trimEnd()];
+  let currentSize = new Blob([header]).size;
+  for (let i = bodyStart; i < lines.length; i++) {
+    const line = lines[i];
+    const lineSize = new Blob([line + '\n']).size;
+    if (currentSize + lineSize > maxBytes && current.length > (header ? 1 : 0)) {
+      chunks.push(current.join('\n'));
+      current = header ? [header.trimEnd()] : [];
+      currentSize = new Blob([header]).size;
+    }
+    current.push(line);
+    currentSize += lineSize;
+  }
+  if (current.length) chunks.push(current.join('\n'));
+  return chunks;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+</script>
+
+</body>
+</html>
