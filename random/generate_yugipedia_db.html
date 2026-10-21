@@ -71,8 +71,6 @@ const { $ } = YGO;
 const API = 'https://yugipedia.com/api.php';
 const DELAY = 1200;  // pause entre requêtes (comme le script Node)
 const BATCH = 50;
-const UA = 'YGO-Card-DB-Generator/1.0 (https://github.com/kevinraphael95)';
-let useUA = true;    // en-tête Api-User-Agent (retiré automatiquement si le navigateur le refuse)
 const TEMPLATES = ['CardTable2', 'Anime card', 'Manga card', 'Video game card', 'OCG card', 'TCG card'];
 
 const out = YGO.console($('console'));
@@ -86,12 +84,11 @@ async function fetchJson(params) {
     for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
     for (let attempt = 0; attempt <= 5; attempt++) {
         try {
-            const res = await fetch(url, useUA ? { headers: { 'Api-User-Agent': UA } } : undefined);
+            const res = await fetch(url);
             if (res.ok) return await res.json();
             if (res.status !== 429 && res.status < 500) throw new Error('HTTP ' + res.status);
         } catch (e) {
             if (/^HTTP/.test(e.message)) throw e;          // erreur définitive (4xx)
-            if (useUA) { useUA = false; attempt--; continue; }   // en-tête refusé (CORS) : on réessaie sans
         }                                                   // 503 / réseau : on retente
         const wait = 1500 * 2 ** attempt;
         out.log(`⚠️ Yugipedia sature (503), nouvel essai dans ${wait / 1000}s…`, 'warn');
