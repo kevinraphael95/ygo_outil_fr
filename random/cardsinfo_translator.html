@@ -95,8 +95,8 @@
 <script>
 const { $ } = YGO;
 const YUGIPEDIA_API = 'https://yugipedia.com/api.php';
-const CONCURRENCY = 3;       // requêtes en parallèle
-const DELAY_MS = 150;        // pause par worker entre deux entrées
+const DELAY_MS = 200;    // pause entre deux requêtes (comme l'ancienne version)
+const MAX_RETRY = 5;     // essais en cas de 503 / 429 / coupure réseau
 
 const LANGS = {
     french:  { field: 'fr_name', ext: 'fr' },
@@ -145,11 +145,19 @@ function extractLang(wikitext, field) {
 
 async function fetchWikitext(page) {
     const params = new URLSearchParams({ action: 'parse', format: 'json', origin: '*', page, prop: 'wikitext', redirects: '1' });
-    try {
-        const res = await fetch(`${YUGIPEDIA_API}?${params}`);
-        const data = await res.json();
-        return data?.parse?.wikitext?.['*'] || null;
-    } catch (e) { return null; }
+    for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
+        if (stopRequested) throw new Error('stop');
+        try {
+            const res = await fetch(`${YUGIPEDIA_API}?${params}`);
+            if (res.ok) {
+                const data = await res.json();
+                return data?.parse?.wikitext?.['*'] || null;   // page absente => null
+            }
+            if (res.status !== 429 && res.status < 500) return null;
+        } catch (e) { /* réseau : on retente */ }
+        await YGO.sleep(1500 * 2 ** attempt);                  // 503 : attente croissante
+    }
+    throw new Error('Yugipedia ne répond pas (503 répétés). Réessaie dans quelques minutes.');
 }
 
 function setStats(done, translated, missing, total) {
@@ -165,7 +173,8 @@ async function runScraping() {
     lastLang = $('langSelect').value;
     const field = LANGS[lastLang].field;
     const total = entries.length;
-    let done = 0, translated = 0, missing = 0, next = 0;
+    let done = 0, translated = 0, missing = 0;
+    let failure = null;
 
     $('exportBtn').disabled = true;
     $('startBtn').disabled = true;
@@ -184,26 +193,22 @@ async function runScraping() {
     });
     setStats(0, 0, 0, total);
 
-    async function worker() {
-        while (!stopRequested) {
-            const i = next++;
-            if (i >= total) return;
-            const e = entries[i];
+    try {
+        for (let i = 0; i < total && !stopRequested; i++) {      // une requête à la fois
+            const e = entries[i], tr = rows[i];
             let val = extractLang(await fetchWikitext(e.label), field);
             if (!val) val = extractLang(await fetchWikitext(`${e.label} (archetype)`), field);
 
-            const tr = rows[i];
+            tr.children[2].className = '';
             if (val) {
                 translated++;
                 tr.className = 'ok';
-                tr.children[2].className = '';
                 tr.children[2].textContent = val;
                 tr.children[3].textContent = 'officiel';
                 results[i] = { hex: e.hex, tr: val };
             } else {
                 missing++;
                 tr.className = 'miss';
-                tr.children[2].className = '';
                 tr.children[2].textContent = e.label;          // garde l'anglais si absent
                 tr.children[3].textContent = 'non trouvé';
                 results[i] = { hex: e.hex, tr: e.label };
@@ -211,16 +216,16 @@ async function runScraping() {
             setStats(++done, translated, missing, total);
             await YGO.sleep(DELAY_MS);
         }
+    } catch (err) {
+        if (err.message !== 'stop') failure = err;
     }
-
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, worker));
 
     $('startBtn').disabled = false;
     $('stopBtn').disabled = true;
-    $('exportBtn').disabled = false;
+    $('exportBtn').disabled = !results.some(Boolean);
     $('exportName').textContent = exportName();
-    YGO.toast(stopRequested ? `Arrêté : ${translated} traduits, ${missing} non trouvés.`
-                            : `Terminé : ${translated} traduits, ${missing} non trouvés.`);
+    if (failure) YGO.toast(failure.message, 'err');
+    else YGO.toast(`${stopRequested ? 'Arrêté' : 'Terminé'} : ${translated} traduits, ${missing} non trouvés.`);
 }
 
 function buildFile() {
