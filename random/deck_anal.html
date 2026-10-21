@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>VAACT - Explorateur d'Interactions (Local)</title>
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+:root{--bg:#09090b;--panel:#18181b;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--accent:#3b82f6;--accent-h:#2563eb}
+*{box-sizing:border-box}
+body{font-family:'Inter','Segoe UI',Tahoma,sans-serif;margin:0;background:var(--bg);color:var(--text);overflow:hidden;display:flex;height:100vh}
+#sidebar{width:340px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px;z-index:10;box-shadow:2px 0 10px rgba(0,0,0,.5);overflow-y:auto}
+.logo-area{font-size:1.2em;font-weight:700;margin-bottom:20px;display:flex;gap:10px}
+.logo-area span{color:var(--accent)}
+.section-title{font-size:.75em;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:6px 0 12px;border-bottom:1px solid var(--border);padding-bottom:5px}
+.btn{padding:10px;border-radius:6px;cursor:pointer;font-weight:600;text-align:center;border:none;width:100%;transition:.2s;display:block;font-size:.9em;margin-bottom:8px;font-family:inherit}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-h)}
+.btn-secondary{background:#27272a;color:var(--text);border:1px solid #3f3f46}
+.btn-secondary:hover:not(:disabled){background:#3f3f46;border-color:var(--accent)}
+.btn:disabled{opacity:.4;cursor:default}
+.row{display:flex;gap:8px}.row .btn{margin-bottom:8px}
+input[type=file]{display:none}
+#search{width:100%;padding:10px;border-radius:6px;border:1px solid #3f3f46;background:#0f0f12;color:var(--text);font-family:inherit;margin-bottom:10px}
+#search:focus{outline:none;border-color:var(--accent)}
+#card-details{margin-top:10px;display:none;flex-direction:column;animation:fadeIn .3s ease;background:rgba(0,0,0,.2);padding:14px;border-radius:8px;border:1px solid var(--border)}
+#focus-name{margin-bottom:8px;font-size:1.1em;font-weight:600;text-align:center;width:100%;color:var(--text)}
+#focus-effect{font-size:.85em;color:var(--muted);line-height:1.4;width:100%;max-height:220px;overflow-y:auto;background:rgba(0,0,0,.2);padding:8px 10px;border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;margin-bottom:8px}
+#focus-links-count{color:var(--muted);font-size:.85em;margin-top:6px;text-align:center}
+#links-list{width:100%;margin-top:12px;display:flex;flex-direction:column;gap:4px}
+.link-item{font-size:.8em;padding:6px 8px;border-radius:5px;background:#202024;cursor:pointer;border:1px solid transparent;line-height:1.35}
+.link-item:hover{border-color:var(--accent)}
+.link-item .lbl{color:var(--muted);display:block;font-size:.95em}
+.dir{color:var(--accent);font-weight:700}
+#main-area{flex-grow:1;position:relative}
+#mynetwork{width:100%;height:100%;background:radial-gradient(circle at center,#18181b 0%,#09090b 100%)}
+.welcome-message{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);pointer-events:none}
+.welcome-message h2{color:var(--text);margin-bottom:10px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.hint{position:absolute;bottom:20px;right:20px;background:rgba(24,24,27,.8);padding:8px 15px;border-radius:20px;font-size:.8em;color:var(--muted);border:1px solid var(--border);backdrop-filter:blur(5px);pointer-events:none}
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <div class="logo-area"><span>◆</span> Deck Explorer</div>
+
+  <div class="section-title">Outils</div>
+  <label for="jsonFileInput" class="btn btn-primary">📂 Charger un JSON</label>
+  <input type="file" id="jsonFileInput" accept=".json">
+
+  <label for="csvFileInput" class="btn btn-secondary">📄 Charger le CSV (Effets)</label>
+  <input type="file" id="csvFileInput" accept=".csv">
+
+  <input id="search" list="card-names" placeholder="🔍 Rechercher une carte…" autocomplete="off">
+  <datalist id="card-names"></datalist>
+  <div class="row">
+    <button class="btn btn-secondary" id="btnBack" disabled>◀ Retour</button>
+    <button class="btn btn-secondary" id="btnFit">🎯 Recentrer</button>
+  </div>
+
+  <div id="card-details">
+    <div id="focus-name"></div>
+    <div id="focus-effect"></div>
+    <div id="focus-links-count"></div>
+    <div id="links-list"></div>
+  </div>
+</div>
+
+<div id="main-area">
+  <div class="welcome-message" id="welcome-msg"><h2>Aucune donnée chargée</h2><p>Importez un fichier JSON via le panneau de gauche.</p></div>
+  <div id="mynetwork"></div>
+  <div class="hint"><span style='color:#60a5fa'>■</span> part de la carte centrale &nbsp; <span style='color:#fbbf24'>■</span> pointe vers elle &nbsp;|&nbsp; Clic : détails &nbsp;|&nbsp; Double-clic : focus &nbsp;|&nbsp; Survol : lire le lien</div>
+</div>
+
+<script>
+var DECK_DATA = null, network = null, hoverId = null, selectedId = null, focusId = null, navHistory = [];
+var nodes = new vis.DataSet(), edges = new vis.DataSet();
+var cardEffects = {};
+
+// ===== PARSEUR CSV ROBUSTE =====
+function parseCSVLine(text) {
+  var result = [], cell = '', inQuotes = false;
+  for (var i = 0; i < text.length; i++) {
+    var c = text[i];
+    if (c === '"') {
+      if (inQuotes && text[i + 1] === '"') { cell += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (c === ',' && !inQuotes) {
+      result.push(cell.trim());
+      cell = '';
+    } else {
+      cell += c;
+    }
+  }
+  result.push(cell.trim());
+  return result;
+}
+
+// ===== CHARGEMENT DU CSV DES EFFETS =====
+document.getElementById('csvFileInput').addEventListener('change', function (ev) {
+  var f = ev.target.files[0]; if (!f) return;
+  var r = new FileReader();
+  r.onload = function (e) {
+    var text = e.target.result;
+    var lines = text.split(/\r?\n/);
+    if (lines.length < 2) return;
+    
+    var headers = parseCSVLine(lines[0]);
+    var nameIdx = headers.indexOf('Name');
+    var effIdx = headers.indexOf('Effect');
+    
+    if (nameIdx === -1 || effIdx === -1) {
+      alert("Format CSV invalide : colonnes 'Name' ou 'Effect' introuvables.");
+      return;
+    }
+
+    cardEffects = {};
+    for (var i = 1; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      var cols = parseCSVLine(line);
+      if (cols.length > Math.max(nameIdx, effIdx)) {
+        var cardName = cols[nameIdx].replace(/^["']|["']$/g, '').trim();
+        var cardEff = cols[effIdx].replace(/^["']|["']$/g, '').trim();
+        if (cardName) cardEffects[cardName] = cardEff;
+      }
+    }
+    alert("CSV chargé avec succès (" + Object.keys(cardEffects).length + " effets enregistrés) !");
+    if (selectedId) updateSidebar(selectedId, selectedId === focusId);
+  };
+  r.readAsText(f, 'utf-8');
+});
+
+// ===== CHEMINS D'IMAGES =====
+var BASE_PATH_OFFICIAL = 'file:///C:/ProjectIgnis/pics/';
+var EXTENSION_FOLDERS = ['VAACT'];
+var CARD_BACK = 'https://images.ygoprodeck.com/images/cards/back_high.jpg';
+var HUB_COL = { magie:['#0f766e','#134e4a','Carte Magie'], piege:['#9d174d','#500724','Piège'], magicien:['#6d28d9','#2e1065','Monstre Magicien'], lumiere:['#ca8a04','#422006','Monstre LUMIÈRE'], tenebres:['#4b5563','#030712','Monstre TÉNÈBRES'], n5:['#b45309','#431407','Monstre Niveau 5+'] };
+function hubImage(k) {
+  var c = HUB_COL[k] || ['#3b82f6','#172554','Catégorie'], words = c[2].split(' ');
+  var lines = [], cur = '';
+  words.forEach(function (w) { if ((cur + ' ' + w).trim().length > 11 && cur) { lines.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); });
+  lines.push(cur);
+  var t = lines.map(function (l, i) { return '<text x="210" y="' + (240 + i * 56 - (lines.length - 1) * 28) + '" text-anchor="middle" font-family="Segoe UI,Arial" font-weight="700" font-size="46" fill="#f4f4f5">' + l + '</text>'; }).join('');
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="421" height="614" viewBox="0 0 421 614"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs><rect x="6" y="6" width="409" height="602" rx="22" fill="url(#g)" stroke="#f4f4f5" stroke-width="6"/><text x="210" y="140" text-anchor="middle" font-size="110" fill="#f4f4f5" opacity=".85">⬢</text>' + t + '</svg>';
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+function getImageUrl(cardId) {
+  var s = String(cardId);
+  if (s.indexOf('cat:') === 0) return hubImage(s.slice(4));
+  if (s.startsWith('91')) return 'file:///C:/ProjectIgnis/expansions/' + (EXTENSION_FOLDERS[0] || 'VAACT') + '/pics/' + s + '.png';
+  return BASE_PATH_OFFICIAL + s + '.jpg';
+}
+
+// ===== STYLE DES FLÈCHES =====
+var PAR_OFF = 11, ARROW_LEN = 18, ARROW_HALF = 8, GAP = 3, LINE_W = 2.2;
+var COL_OUT = 'rgba(96,165,250,0.85)', COL_IN = 'rgba(251,191,36,0.85)', COL_OUT_HL = '#93c5fd', COL_IN_HL = '#fcd34d', COL_DIM = 'rgba(82,82,91,0.28)';
+var edgeLabels = {}, edgeCurve = {}, labelQ = [];
+
+var options = {
+  nodes: {
+    shape: 'image', size: 40, borderWidth: 0, shadow: { enabled: false },
+    font: { color: '#f4f4f5', strokeWidth: 5, strokeColor: '#09090b', size: 12, vadjust: -75, face: 'Inter, sans-serif', bold: true }
+  },
+  edges: {
+    width: 1,
+    color: { color: 'rgba(0,0,0,0)', highlight: 'rgba(0,0,0,0)', hover: 'rgba(0,0,0,0)' },
+    arrows: { to: { enabled: false } },
+    selectionWidth: 0, hoverWidth: 0,
+    font: { align: 'middle', size: 11, color: '#e4e4e7', strokeWidth: 0, background: 'rgba(9,9,11,0.88)', face: 'Inter, sans-serif' },
+    chosen: false
+  },
+  physics: {
+    enabled: true, stabilization: { enabled: false }, minVelocity: 0.6,
+    barnesHut: { gravitationalConstant: -5000, centralGravity: 0.1, springLength: 230, springConstant: 0.04, damping: 0.4 }
+  },
+  interaction: { hover: true, dragView: true, zoomView: true, tooltipDelay: 200 }
+};
+network = new vis.Network(document.getElementById('mynetwork'), { nodes: nodes, edges: edges }, options);
+
+// ---------- géométrie ----------
+function getRect(id) {
+  var n = network.body.nodes[id]; if (!n) return null;
+  var w = (n.shape && n.shape.width) || n.options.size * 1.4;
+  var h = (n.shape && n.shape.height) || n.options.size * 2;
+  return { x: n.x, y: n.y, hw: w / 2, hh: h / 2 };
+}
+function inside(p, r, pad) { return Math.abs(p.x - r.x) <= r.hw + pad && Math.abs(p.y - r.y) <= r.hh + pad; }
+function bez(A, C, B, t) {
+  var u = 1 - t;
+  return { x: u*u*A.x + 2*u*t*C.x + t*t*B.x, y: u*u*A.y + 2*u*t*C.y + t*t*B.y };
+}
+function bezTan(A, C, B, t) {
+  var u = 1 - t;
+  return { x: 2*u*(C.x - A.x) + 2*t*(B.x - C.x), y: 2*u*(C.y - A.y) + 2*t*(B.y - C.y) };
+}
+function findExit(A, C, B, rect, fromStart) {
+  var lo = fromStart ? 0 : 0, hi = 1;
+  if (fromStart) {
+    for (var i = 0; i < 14; i++) { var m = (lo + hi) / 2; if (inside(bez(A, C, B, m), rect, GAP)) lo = m; else hi = m; }
+    return hi;
+  } else {
+    lo = 0; hi = 1;
+    for (var j = 0; j < 14; j++) { var m2 = (lo + hi) / 2; if (inside(bez(A, C, B, m2), rect, GAP)) hi = m2; else lo = m2; }
+    return lo;
+  }
+}
+
+function drawEdges(ctx) {
+  var active = hoverId || (selectedId !== focusId ? selectedId : null);
+  labelQ = [];
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  Object.keys(network.body.edges).forEach(function (eid) {
+    var e = network.body.edges[eid];
+    if (!e.fromId || !e.toId || e.fromId === e.toId) return;
+    var rf = getRect(e.fromId), rt = getRect(e.toId); if (!rf || !rt) return;
+    var A = { x: rf.x, y: rf.y }, B = { x: rt.x, y: rt.y }, C = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+    var cv = edgeCurve[eid], nrm = null, dirv = null;
+    if (cv) {
+      var ddx = B.x - A.x, ddy = B.y - A.y, dd = Math.hypot(ddx, ddy) || 1;
+      nrm = { x: ddy / dd, y: -ddx / dd }; dirv = { x: ddx / dd, y: ddy / dd };
+      A = { x: A.x + nrm.x * PAR_OFF, y: A.y + nrm.y * PAR_OFF };
+      B = { x: B.x + nrm.x * PAR_OFF, y: B.y + nrm.y * PAR_OFF };
+      C = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+    }
+    if (inside(A, rt, 0) || inside(B, rf, 0)) return;
+
+    var t0 = findExit(A, C, B, rf, true), t1 = findExit(A, C, B, rt, false);
+    if (t1 <= t0) return;
+    var tip = bez(A, C, B, t1), tg = bezTan(A, C, B, t1), L = Math.hypot(tg.x, tg.y) || 1;
+    var dx = tg.x / L, dy = tg.y / L;
+    var base = { x: tip.x - dx * ARROW_LEN, y: tip.y - dy * ARROW_LEN };
+
+    var hl = active && (e.fromId === active || e.toId === active);
+    var isOut = e.fromId === focusId;
+    var col = active ? (hl ? (isOut ? COL_OUT_HL : COL_IN_HL) : COL_DIM) : (isOut ? COL_OUT : COL_IN);
+
+    var pts = [], N = 16;
+    for (var i = 0; i <= N; i++) {
+      var p = bez(A, C, B, t0 + (t1 - t0) * i / N);
+      if (Math.hypot(tip.x - p.x, tip.y - p.y) > ARROW_LEN * 0.9) pts.push(p);
+    }
+    ctx.strokeStyle = col; ctx.lineWidth = hl ? LINE_W + 1 : LINE_W;
+    ctx.beginPath();
+    pts.forEach(function (p, i) { i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+    ctx.lineTo(base.x + dx * 1, base.y + dy * 1);
+    ctx.stroke();
+
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(base.x - dy * ARROW_HALF, base.y + dx * ARROW_HALF);
+    ctx.lineTo(base.x + dy * ARROW_HALF, base.y - dx * ARROW_HALF);
+    ctx.closePath(); ctx.fill();
+    var lb = edgeLabels[eid];
+    if (lb) { var mp = bez(A, C, B, 0.5); labelQ.push({ x: mp.x, y: mp.y, nx: dirv ? dirv.x : 0, ny: dirv ? dirv.y : 0, t: lb, hl: !!hl, act: !!active, out: isOut }); }
+  });
+  ctx.restore();
+}
+network.on('beforeDrawing', drawEdges);
+
+function wrapText(ctx, text, maxW) {
+  var words = text.split(' '), lines = [], cur = '';
+  words.forEach(function (w) {
+    var t = cur ? cur + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+function pill(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+}
+function drawLabels(ctx) {
+  var many = labelQ.length > 14;
+  var list = labelQ.filter(function (l) { return l.hl || (!l.act && !many); }).sort(function (a, b) { return a.hl - b.hl; });
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  list.forEach(function (l) {
+    var full = l.hl, size = full ? 14 : 11;
+    ctx.font = (full ? '600 ' : '500 ') + size + 'px Inter, "Segoe UI", sans-serif';
+    var txt = full ? l.t : (l.t.split(' · ')[0].length > 34 ? l.t.split(' · ')[0].slice(0, 33) + '…' : l.t.split(' · ')[0]);
+    var lines = full ? [].concat.apply([], txt.split(' · ').map(function (part) { return wrapText(ctx, part, 300); })) : [txt];
+    var lh = size + 5, w = 0;
+    lines.forEach(function (ln) { w = Math.max(w, ctx.measureText(ln).width); });
+    var pw = w + 16, ph = lines.length * lh + 8;
+    var sh = (l.nx || l.ny) ? Math.abs(l.nx) * pw / 2 + Math.abs(l.ny) * ph / 2 + 4 : 0;
+    var lx = l.x + l.nx * sh, ly = l.y + l.ny * sh, x = lx - pw / 2, y = ly - ph / 2;
+    pill(ctx, x, y, pw, ph, 8);
+    ctx.fillStyle = full ? 'rgba(9,9,11,0.96)' : 'rgba(9,9,11,0.82)'; ctx.fill();
+    ctx.lineWidth = full ? 1.6 : 1; ctx.strokeStyle = l.out ? 'rgba(96,165,250,' + (full ? 1 : .5) + ')' : 'rgba(251,191,36,' + (full ? 1 : .5) + ')'; ctx.stroke();
+    ctx.fillStyle = full ? '#fafafa' : '#d4d4d8';
+    lines.forEach(function (ln, i) { ctx.fillText(ln, lx, y + 4 + lh * (i + 0.5)); });
+  });
+  ctx.restore();
+}
+network.on('afterDrawing', drawLabels);
+
+// ---------- interactions ----------
+network.on('hoverNode', function (p) { hoverId = p.node; document.getElementById('mynetwork').style.cursor = 'pointer'; });
+network.on('blurNode', function () { hoverId = null; document.getElementById('mynetwork').style.cursor = 'default'; });
+var lastClick = { id: null, t: 0 }, lastGo = 0;
+function tryGo(id) {
+  var now = Date.now();
+  if (now - lastGo < 600 || id === focusId || !DECK_DATA || !DECK_DATA.cartes[id]) return;
+  lastGo = now; goTo(id);
+}
+network.on('click', function (p) {
+  if (!DECK_DATA) return;
+  if (!p.nodes.length) { selectedId = focusId; if (focusId) updateSidebar(focusId, true); network.redraw(); return; }
+  var id = p.nodes[0], now = Date.now();
+  if (lastClick.id === id && now - lastClick.t < 500) { lastClick = { id: null, t: 0 }; tryGo(id); return; }
+  lastClick = { id: id, t: now };
+  selectedId = id; updateSidebar(id, id === focusId); network.redraw();
+});
+network.on('doubleClick', function (p) { if (p.nodes.length) tryGo(p.nodes[0]); });
+network.once('stabilizationIterationsDone', function () {});
+
+document.getElementById('btnFit').onclick = function () { network.fit({ animation: { duration: 600, easingFunction: 'easeInOutQuad' } }); };
+document.getElementById('btnBack').onclick = function () {
+  if (navHistory.length) { var prev = navHistory.pop(); goTo(prev, true); }
+};
+document.getElementById('search').addEventListener('change', function () {
+  var v = this.value.trim(); if (!DECK_DATA || !v) return;
+  var key = Object.keys(DECK_DATA.cartes).find(function (k) { return k.toLowerCase() === v.toLowerCase(); });
+  if (key) { goTo(key); this.value = ''; this.blur(); }
+});
+
+document.getElementById('jsonFileInput').addEventListener('change', function (ev) {
+  var f = ev.target.files[0]; if (!f) return;
+  var r = new FileReader();
+  r.onload = function (e) {
+    try {
+      var d = JSON.parse(e.target.result);
+      if (!d.cartes || !d.liens || !d.carteDeDepart) throw new Error('Structure JSON invalide.');
+      DECK_DATA = d; navHistory = [];
+      document.getElementById('welcome-msg').style.display = 'none';
+      var dl = document.getElementById('card-names'); dl.innerHTML = '';
+      Object.keys(d.cartes).sort().forEach(function (k) { var o = document.createElement('option'); o.value = k; dl.appendChild(o); });
+      focusId = null; goTo(d.carteDeDepart, true);
+    } catch (err) { alert('Erreur JSON :\n' + err.message); }
+  };
+  r.readAsText(f);
+});
+
+function goTo(id, noHistory) {
+  if (!noHistory && focusId && focusId !== id) navHistory.push(focusId);
+  document.getElementById('btnBack').disabled = navHistory.length === 0;
+  updateFocus(id); updateSidebar(id, true);
+}
+
+function updateSidebar(cardId, isFocus) {
+  var db = DECK_DATA.cartes; if (!db[cardId]) return;
+  document.getElementById('card-details').style.display = 'flex';
+  
+  // Nom de la carte
+  document.getElementById('focus-name').textContent = cardId + (db[cardId].zone ? '  ·  ' + db[cardId].zone : '');
+
+  // Affichage complet de l'effet en partant du début
+  var cardInfo = db[cardId];
+  var effectText = cardEffects[cardId] || cardInfo.desc || cardInfo.text || cardInfo.effect || '(Aucun effet trouvé)';
+  var effectBox = document.getElementById('focus-effect');
+  effectBox.textContent = effectText;
+  effectBox.scrollTop = 0; // Remet le texte tout en haut
+
+  var list = document.getElementById('links-list'); list.innerHTML = '';
+  var count = 0;
+  DECK_DATA.liens.forEach(function (l) {
+    if (l.from !== cardId && l.to !== cardId) return;
+    count++;
+    var out = l.from === cardId, other = out ? l.to : l.from;
+    var d = document.createElement('div'); d.className = 'link-item';
+    var a = document.createElement('span'); a.className = 'dir'; a.textContent = out ? '→ ' : '← ';
+    d.appendChild(a); d.appendChild(document.createTextNode(other));
+    if (l.label) { var s = document.createElement('span'); s.className = 'lbl'; s.textContent = l.label; d.appendChild(s); }
+    d.onclick = function () { if (db[other]) goTo(other); };
+    d.onmouseenter = function () { hoverId = other; network.redraw(); };
+    d.onmouseleave = function () { hoverId = null; network.redraw(); };
+    list.appendChild(d);
+  });
+  document.getElementById('focus-links-count').textContent = count + ' interaction(s) directe(s)' + (isFocus ? '' : ' (double-clic pour explorer)');
+}
+
+function wrapName(n, w) {
+  var words = n.split(' '), lines = [], cur = '';
+  words.forEach(function (x) { if ((cur + ' ' + x).trim().length > w && cur) { lines.push(cur); cur = x; } else cur = (cur + ' ' + x).trim(); });
+  lines.push(cur); return lines.join('\n');
+}
+function updateFocus(centerId) {
+  focusId = centerId; selectedId = centerId; hoverId = null; edgeLabels = {}; edgeCurve = {};
+  nodes.clear(); edges.clear();
+  var db = DECK_DATA.cartes, newNodes = [], newEdges = [];
+  if (!db[centerId]) return;
+
+  var related = new Set(), links = [];
+  DECK_DATA.liens.forEach(function (l) {
+    if (!db[l.from] || !db[l.to] || l.from === l.to) return;
+    if (l.from === centerId) { related.add(l.to); links.push(l); }
+    else if (l.to === centerId) { related.add(l.from); links.push(l); }
+  });
+  var n = related.size, sz = n > 40 ? 30 : n > 24 ? 36 : n > 12 ? 42 : 48, csz = Math.round(sz * 1.7);
+  var fs = n > 40 ? 12 : 13;
+
+  newNodes.push({ id: centerId, label: wrapName(centerId, 20), image: getImageUrl(db[centerId].img), brokenImage: CARD_BACK,
+    size: csz, borderWidth: 0, x: 0, y: 0, mass: 4, font: { size: 15, bold: true, vadjust: -Math.round(csz * 1.5) } });
+  related.forEach(function (id) {
+    newNodes.push({ id: id, label: wrapName(id, 16), image: getImageUrl(db[id].img), brokenImage: CARD_BACK, size: sz,
+      font: { size: fs, vadjust: -Math.round(sz * 1.85) } });
+  });
+
+  var pairs = {}, seen = {};
+  links.forEach(function (l) { var k = [l.from, l.to].sort().join('||'); pairs[k] = (pairs[k] || 0) + 1; });
+  links.forEach(function (l, i) {
+    var k = [l.from, l.to].sort().join('||'), c = pairs[k], id = 'edge-' + i;
+    var edge = { id: id, from: l.from, to: l.to };
+    edge.smooth = { enabled: false };
+    if (c > 1) edgeCurve[id] = 0.3;
+    edgeLabels[id] = l.label || '';
+    newEdges.push(edge);
+  });
+  network.setOptions({ physics: { barnesHut: { springLength: 200 + Math.min(n, 40) * 6, gravitationalConstant: -5000 - n * 120 } } });
+  nodes.add(newNodes); edges.add(newEdges);
+  setTimeout(function () { network.fit({ animation: { duration: 600, easingFunction: 'easeInOutQuad' } }); }, 500);
+}
+</script>
+</body>
+</html>
