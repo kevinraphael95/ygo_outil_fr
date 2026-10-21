@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<title>YGOPRO Archétypes — Traducteur Officiel TCG v7</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- FontAwesome Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+/* ============================================================
+   DESIGN SYSTEM — Thème YGO (Harmonisé)
+   ============================================================ */
+:root,
+[data-theme="dark"] {
+    --bg:            #0d0a1a;
+    --bg-pattern:    rgba(212, 175, 55, 0.025);
+    --surface:       #16112a;
+    --surface-2:     #1f1838;
+    --surface-3:     #2a2148;
+    --border:        #3a2d5c;
+    --border-strong: #4d3d75;
+    --text:          #f5ecd8;
+    --text-muted:    #a89b82;
+    --text-dim:      #6b6252;
+    --gold:          #d4af37;
+    --gold-light:    #e8c85a;
+    --gold-dark:     #a67c00;
+    --gold-soft:     rgba(212, 175, 55, 0.12);
+    --gold-glow:     rgba(212, 175, 55, 0.35);
+    --success:       #5fd07f;
+    --success-soft:  rgba(95, 208, 127, 0.14);
+    --warning:       #e0b64c;
+    --warning-soft:  rgba(224, 182, 76, 0.14);
+    --danger:        #e07a7a;
+    --danger-soft:   rgba(224, 122, 122, 0.14);
+    --yugi:          #b88ae0;
+    --yugi-soft:     rgba(155, 107, 196, 0.15);
+    --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
+    --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
+    --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
+    --code-bg:       #0a0715;
+}
+
+[data-theme="light"] {
+    --bg:            #f0e8d8;
+    --bg-pattern:    rgba(166, 124, 0, 0.04);
+    --surface:       #faf5e8;
+    --surface-2:     #f2ebd9;
+    --surface-3:     #e8dfc5;
+    --border:        #d4c8b0;
+    --border-strong: #b8a888;
+    --text:          #2a1f14;
+    --text-muted:    #6b5d47;
+    --text-dim:      #9a8b70;
+    --gold:          #a67c00;
+    --gold-light:    #c49616;
+    --gold-dark:     #7a5a00;
+    --gold-soft:     rgba(166, 124, 0, 0.10);
+    --gold-glow:     rgba(166, 124, 0, 0.25);
+    --success:       #1f8a3d;
+    --success-soft:  rgba(31, 138, 61, 0.12);
+    --warning:       #a67c00;
+    --warning-soft:  rgba(166, 124, 0, 0.12);
+    --danger:        #c33a3a;
+    --danger-soft:   rgba(195, 58, 58, 0.12);
+    --yugi:          #6a3a9a;
+    --yugi-soft:     rgba(106, 58, 154, 0.12);
+    --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
+    --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
+    --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
+    --code-bg:       #f7f2e3;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    background-image:
+        radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
+        radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+    transition: background 0.3s ease, color 0.3s ease;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* HEADER */
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-logo {
+    font-size: 1.7rem;
+    color: var(--gold);
+    filter: drop-shadow(0 0 8px var(--gold-glow));
+}
+
+h1 {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    color: var(--gold);
+    font-weight: 700;
+}
+
+.sub { color: var(--text-muted); font-size: 13px; margin: 0; }
+
+.icon-btn {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1.05rem;
+    transition: all 0.18s ease;
+}
+
+.icon-btn:hover {
+    background: var(--gold-soft);
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+[data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
+[data-theme="light"] #theme-toggle::before { content: "☀️"; }
+
+/* PANELS & CONTAINER */
+.panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-sm);
+}
+
+.panel strong { color: var(--text); font-size: 0.9rem; }
+
+textarea {
+    width: 100%;
+    height: 160px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    background: var(--code-bg);
+    color: var(--text);
+    border-radius: 10px;
+    resize: vertical;
+}
+
+textarea:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+
+select, input[type="file"] {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+select:focus, input[type="file"]:focus { outline: none; border-color: var(--gold); }
+
+button {
+    padding: 11px 20px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    color: #1a1408;
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 2px 8px var(--gold-glow);
+    transition: all 0.18s ease;
+}
+
+button:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    transform: translateY(-1px);
+}
+
+button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+button.secondary {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    box-shadow: none;
+}
+
+button.secondary:hover:not(:disabled) {
+    background: var(--gold-soft);
+    border-color: var(--gold);
+    color: var(--gold);
+    transform: translateY(-1px);
+}
+
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.progress { flex: 1; height: 10px; background: var(--surface-3); border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
+.progress > div { height: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-light)); width: 0%; transition: width .2s; }
+
+.stats { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
+
+/* TABLE */
+.table-wrap {
+    max-height: 400px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--code-bg);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: 'SF Mono', Consolas, monospace;
+}
+
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th {
+    background: var(--surface-2);
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-muted);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+tr.ok td:nth-child(3) { color: var(--success); font-weight: 600; }
+tr.miss td:nth-child(3) { color: var(--danger); font-style: italic; }
+tr:hover td { background: var(--surface-2); }
+
+/* TOASTS */
+.toasts {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 200;
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    pointer-events: auto;
+    animation: toastIn 0.3s ease;
+}
+
+.toast.ok { border-left: 3px solid var(--success); }
+.toast.err { border-left: 3px solid var(--danger); }
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translateX(40px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+</style>
+<script>
+    // Mémorisation et chargement immédiat du thème
+    (function() {
+        const savedTheme = localStorage.getItem('ygo_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
+</script>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="brand">
+        <div class="brand-logo"><i class="fa-solid fa-language"></i></div>
+        <div>
+            <h1>YGOPRO — Traducteur d'archétypes</h1>
+            <div class="sub">v7 · Officiel TCG avec récupération automatique des traductions Yugipedia</div>
+        </div>
+    </div>
+    <button class="icon-btn" id="theme-toggle" title="Changer de thème"></button>
+</header>
+
+<div class="panel">
+    <div class="row">
+        <strong>🌐 Langue cible</strong>
+        <select id="langSelect">
+            <option value="french">Français (TCG Official)</option>
+            <option value="german">Deutsch</option>
+            <option value="spanish">Español</option>
+            <option value="italian">Italiano</option>
+        </select>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="row" style="margin-bottom:10px;">
+        <strong>📄 Fichier cardinfo_english.txt</strong>
+        <input type="file" id="fileInput" accept=".txt">
+    </div>
+    <textarea id="input" placeholder="Colle ton cardinfo_english.txt ici…"></textarea>
+    <div class="stats" id="parseStats"></div>
+</div>
+
+<div class="panel">
+    <div class="row">
+        <button id="startBtn"><i class="fa-solid fa-play"></i> Lancer la traduction officielle</button>
+        <button id="exportBtn" class="secondary" disabled><i class="fa-solid fa-download"></i> Exporter cardinfo_fr_setname.txt</button>
+        <button id="stopBtn" class="secondary" disabled><i class="fa-solid fa-stop"></i> Stop</button>
+    </div>
+    <div class="row" style="margin-top:12px;">
+        <div class="progress"><div id="bar"></div></div>
+        <span id="counter" style="font-size:12px;color:var(--text-muted);min-width:80px;text-align:right;">0 / 0</span>
+    </div>
+    <div class="stats" id="stats"></div>
+</div>
+
+<div class="panel">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Hex</th><th>Nom EN</th><th>Traduction Officielle</th><th>Statut</th></tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+// Gestion du Thème
+const themeToggle = document.getElementById('theme-toggle');
+const htmlEl = document.documentElement;
+
+themeToggle.addEventListener('click', () => {
+    const current = htmlEl.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    htmlEl.setAttribute('data-theme', next);
+    localStorage.setItem('ygo_theme', next);
+});
+
+// Toasts
+function showToast(message, type = 'ok') {
+    const container = document.getElementById('toasts');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<i class="fa-solid ${type === 'ok' ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+
+const YUGIPEDIA_API = 'https://yugipedia.com/api.php';
+const BATCH_DELAY_MS = 200;
+
+const LANGS = {
+    french: { field: 'fr_name', ext: 'fr' },
+    german: { field: 'de_name', ext: 'de' },
+    spanish: { field: 'es_name', ext: 'es' },
+    italian: { field: 'it_name', ext: 'it' }
+};
+
+let parsedEntries = [];
+let results = [];
+let stopRequested = false;
+
+function parseSetname(text) {
+    const lines = text.split('\n');
+    const entries = [];
+    let inSetname = false;
+    for (const raw of lines) {
+        const line = raw.replace(/\r$/, '');
+        if (line.startsWith('##')) { inSetname = line.trim() === '##setname'; continue; }
+        if (line.trim() === '#end') break;
+        if (!inSetname || !line.trim()) continue;
+        const m = line.match(/^(-?\d+|0x[0-9a-fA-F]+)[\t ]+(.+)$/);
+        if (!m) continue;
+        entries.push({ hex: m[1], label: m[2].trim() });
+    }
+    return entries;
+}
+
+function extractLang(wikitext) {
+    if (!wikitext) return null;
+    const cfg = LANGS[document.getElementById('langSelect').value];
+    const re = new RegExp(`\\|\\s*${cfg.field}\\s*=\\s*([^\\n|]+)`, 'i');
+    const m = wikitext.match(re);
+    if (!m) return null;
+    let val = m[1].trim()
+        .replace(/\{\{Ruby\|([^|]+)\|[^}]+\}\}/gi, '$1')
+        .replace(/\[\[([^\]\vert{}]+)\Vert{}([^\]]+)\]\]/g, '$2')
+        .replace(/\[\[([^\]]+)\]\]/g, '$1')
+        .replace(/<ref[^>]*>.*?<\/ref>/gi, '')
+        .split('\n')[0].trim().replace(/''/g, '');
+    return (val && val !== '—' && val !== '-') ? val : null;
+}
+
+async function fetchWikitext(pageTitle) {
+    const params = new URLSearchParams({
+        action: 'parse', format: 'json', origin: '*',
+        page: pageTitle, prop: 'wikitext', redirects: '1'
+    });
+    try {
+        const res = await fetch(`${YUGIPEDIA_API}?${params}`);
+        const data = await res.json();
+        return data?.parse?.wikitext?.['*'] || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function runScraping() {
+    stopRequested = false;
+    results = [];
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    document.getElementById('exportBtn').disabled = true;
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+
+    const total = parsedEntries.length;
+    let done = 0, translated = 0, missing = 0;
+
+    const rowMap = {};
+    for (const entry of parsedEntries) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${entry.hex}</td><td>${entry.label}</td><td style="color:var(--text-dim);">…</td><td>en attente</td>`;
+        tbody.appendChild(tr);
+        rowMap[entry.hex] = tr;
+    }
+
+    for (const entry of parsedEntries) {
+        if (stopRequested) break;
+        const tr = rowMap[entry.hex];
+        let wt = await fetchWikitext(entry.label);
+        let val = extractLang(wt);
+
+        // Tentative de fallback si la page directe ne donne rien
+        if (!val) {
+            wt = await fetchWikitext(`${entry.label} (archetype)`);
+            val = extractLang(wt);
+        }
+
+        if (val) {
+            translated++;
+            tr.className = 'ok';
+            tr.children[2].textContent = val;
+            tr.children[3].textContent = 'officiel';
+            results.push({ hex: entry.hex, label: entry.label, tr: val });
+        } else {
+            missing++;
+            tr.className = 'miss';
+            tr.children[2].textContent = entry.label; // garde EN en cas d'absence
+            tr.children[3].textContent = 'non trouvé';
+            results.push({ hex: entry.hex, label: entry.label, tr: entry.label });
+        }
+
+        done++;
+        document.getElementById('bar').style.width = (done / total * 100) + '%';
+        document.getElementById('counter').textContent = `${done} / ${total}`;
+        document.getElementById('stats').textContent = `✅ ${translated} traduits · ⚠️ ${missing} non trouvés`;
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+    }
+
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+    document.getElementById('exportBtn').disabled = false;
+    showToast(`Traduction terminée : ${translated} traduits, ${missing} non trouvés.`, 'ok');
+}
+
+function buildFile() {
+    const lines = ['################ use tab', '##setname'];
+    for (const r of results) {
+        lines.push(`${r.hex}\t${r.tr}`);
+    }
+    lines.push('#end');
+    return lines.join('\n');
+}
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    document.getElementById('input').value = text;
+    parsedEntries = parseSetname(text);
+    document.getElementById('parseStats').textContent = `📊 ${parsedEntries.length} archétypes détectés.`;
+    showToast(`${parsedEntries.length} archétypes chargés.`, 'ok');
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+    const text = document.getElementById('input').value;
+    parsedEntries = parseSetname(text);
+    if (parsedEntries.length) {
+        runScraping();
+    } else {
+        showToast("Aucun archétype valide détecté dans le texte.", "err");
+    }
+});
+
+document.getElementById('stopBtn').addEventListener('click', () => {
+    stopRequested = true;
+    showToast("Arrêt demandé...", "err");
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+    const blob = new Blob([buildFile()], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'cardinfo_fr_setname.txt';
+    a.click();
+    showToast("Fichier exporté avec succès !", "ok");
+});
+</script>
+</body>
+</html>
