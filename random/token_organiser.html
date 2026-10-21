@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<title>Réorganisateur de Tokens CDB</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- FontAwesome Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- ⚡ Anti-flash : applique le thème AVANT que le CSS ne s'affiche -->
+<script>
+    (function() {
+        try {
+            var saved = localStorage.getItem('ygo_theme');
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {}
+    })();
+</script>
+
+<style>
+/* ============================================================
+   DESIGN SYSTEM — Thème YGO (Harmonisé global)
+   ============================================================ */
+:root,
+[data-theme="dark"] {
+    --bg:            #0d0a1a;
+    --bg-pattern:    rgba(212, 175, 55, 0.025);
+    --surface:       #16112a;
+    --surface-2:     #1f1838;
+    --surface-3:     #2a2148;
+    --border:        #3a2d5c;
+    --border-strong: #4d3d75;
+    --text:          #f5ecd8;
+    --text-muted:    #a89b82;
+    --text-dim:      #6b6252;
+    --gold:          #d4af37;
+    --gold-light:    #e8c85a;
+    --gold-dark:     #a67c00;
+    --gold-soft:     rgba(212, 175, 55, 0.12);
+    --gold-glow:     rgba(212, 175, 55, 0.35);
+    --success:       #5fd07f;
+    --success-soft:  rgba(95, 208, 127, 0.14);
+    --warning:       #e0b64c;
+    --warning-soft:  rgba(224, 182, 76, 0.14);
+    --danger:        #e07a7a;
+    --danger-soft:   rgba(224, 122, 122, 0.14);
+    --yugi:          #b88ae0;
+    --yugi-soft:     rgba(155, 107, 196, 0.15);
+    --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
+    --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
+    --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
+    --code-bg:       #0a0715;
+}
+
+[data-theme="light"] {
+    --bg:            #f0e8d8;
+    --bg-pattern:    rgba(166, 124, 0, 0.04);
+    --surface:       #faf5e8;
+    --surface-2:     #f2ebd9;
+    --surface-3:     #e8dfc5;
+    --border:        #d4c8b0;
+    --border-strong: #b8a888;
+    --text:          #2a1f14;
+    --text-muted:    #6b5d47;
+    --text-dim:      #9a8b70;
+    --gold:          #a67c00;
+    --gold-light:    #c49616;
+    --gold-dark:     #7a5a00;
+    --gold-soft:     rgba(166, 124, 0, 0.10);
+    --gold-glow:     rgba(166, 124, 0, 0.25);
+    --success:       #1f8a3d;
+    --success-soft:  rgba(31, 138, 61, 0.12);
+    --warning:       #a67c00;
+    --warning-soft:  rgba(166, 124, 0, 0.12);
+    --danger:        #c33a3a;
+    --danger-soft:   rgba(195, 58, 58, 0.12);
+    --yugi:          #6a3a9a;
+    --yugi-soft:     rgba(106, 58, 154, 0.12);
+    --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
+    --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
+    --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
+    --code-bg:       #f7f2e3;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    background-image:
+        radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
+        radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+    transition: background 0.3s ease, color 0.3s ease;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+/* HEADER */
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm);
+    margin: -24px -24px 24px -24px;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-logo {
+    font-size: 1.7rem;
+    color: var(--gold);
+    filter: drop-shadow(0 0 8px var(--gold-glow));
+}
+
+h1 {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 1.25rem;
+    margin: 0 0 2px;
+    color: var(--gold);
+    font-weight: 700;
+}
+
+.sub { color: var(--text-muted); font-size: 12px; margin: 0; }
+
+.icon-btn {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1.05rem;
+    transition: all 0.18s ease;
+}
+
+.icon-btn:hover {
+    background: var(--gold-soft);
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+[data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
+[data-theme="light"] #theme-toggle::before { content: "☀️"; }
+
+/* PANELS */
+.panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.panel-title {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--gold);
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+label {
+    display: block; font-weight: 600; font-size: 13px;
+    margin-bottom: 6px; color: var(--text);
+}
+
+input[type="file"] {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--surface-2);
+    color: var(--text);
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+button:not(.icon-btn) {
+    padding: 11px 20px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    color: #1a1408;
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 2px 8px var(--gold-glow);
+    transition: all 0.18s ease;
+}
+button:not(.icon-btn):hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    transform: translateY(-1px);
+}
+button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+/* CONSOLE LOGS */
+.console-box {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    font-family: monospace;
+    font-size: 0.82rem;
+    height: 220px;
+    overflow-y: auto;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+/* TOASTS */
+.toasts {
+    position: fixed; bottom: 24px; right: 24px;
+    display: flex; flex-direction: column; gap: 10px;
+    z-index: 200; pointer-events: none;
+}
+.toast {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg); font-size: 0.88rem; font-weight: 600;
+    color: var(--text); pointer-events: auto; animation: toastIn 0.3s ease;
+}
+.toast.ok { border-left: 3px solid var(--success); }
+.toast.err { border-left: 3px solid var(--danger); }
+@keyframes toastIn {
+    from { opacity: 0; transform: translateX(40px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="brand">
+        <div class="brand-logo"><i class="fa-solid fa-clone"></i></div>
+        <div>
+            <h1>Réorganisateur de Tokens CDB</h1>
+            <div class="sub">Place chaque token juste après la carte qui l'invoque</div>
+        </div>
+    </div>
+    <button class="icon-btn" id="theme-toggle" title="Changer de thème"></button>
+</header>
+
+<div class="panel">
+    <div class="panel-title"><i class="fa-solid fa-file-arrow-up"></i> Fichier CDB source</div>
+    
+    <label>Sélectionnez votre fichier .cdb :</label>
+    <input type="file" id="cdbFile" accept=".cdb">
+
+    <button id="startBtn"><i class="fa-solid fa-play"></i> Réorganiser et télécharger</button>
+</div>
+
+<div class="panel">
+    <div class="panel-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</div>
+    <div id="console-log" class="console-box">
+        [Système] En attente du fichier CDB...<br>
+    </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- sql.js pour manipuler les bases SQLite dans le navigateur -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+
+<script>
+// Thème unifié
+const themeToggle = document.getElementById('theme-toggle');
+const htmlEl = document.documentElement;
+
+themeToggle.addEventListener('click', () => {
+    const current = htmlEl.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    htmlEl.setAttribute('data-theme', next);
+    localStorage.setItem('ygo_theme', next);
+});
+
+function showToast(message, type = 'ok') {
+    const container = document.getElementById('toasts');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<i class="fa-solid ${type === 'ok' ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'}"></i><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+
+const consoleLog = document.getElementById('console-log');
+function log(msg, isError = false) {
+    const time = new Date().toLocaleTimeString();
+    consoleLog.innerHTML += `<span style="color:var(--text-dim)">[${time}]</span> <span style="color:${isError ? 'var(--danger)' : 'var(--text)'}">${msg}</span><br>`;
+    consoleLog.scrollTop = consoleLog.scrollHeight;
+}
+
+const TOKEN_TYPE = 0x4000;
+
+let SQL = null;
+initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` }).then(aliasedSQL => {
+    SQL = aliasedSQL;
+    log("[Système] Moteur SQL prêt.");
+});
+
+document.getElementById('startBtn').addEventListener('click', async () => {
+    if (!SQL) {
+        showToast("Moteur SQL en cours de chargement...", "err");
+        return;
+    }
+
+    const fileInput = document.getElementById('cdbFile').files[0];
+    if (!fileInput) {
+        showToast("Veuillez sélectionner un fichier .cdb", "err");
+        return;
+    }
+
+    consoleLog.innerHTML = "";
+    log("📂 Chargement du fichier CDB...");
+
+    try {
+        const buffer = await fileInput.arrayBuffer();
+        const srcDb = new SQL.Database(new Uint8Array(buffer));
+
+        // Récupération des lignes
+        const rows = [];
+        const res = srcDb.exec("SELECT d.id, d.type, d.alias, d.setcode, d.atk, d.def, d.level, d.race, d.attribute, d.category, t.name, t.desc FROM datas d JOIN texts t ON t.id = d.id ORDER BY d.id");
+        
+        if (res.length > 0) {
+            for (const row of res[0].values) {
+                rows.push({
+                    id: row[0],
+                    type: row[1],
+                    alias: row[2],
+                    setcode: row[3],
+                    atk: row[4],
+                    def: row[5],
+                    level: row[6],
+                    race: row[7],
+                    attribute: row[8],
+                    category: row[9],
+                    name: row[10],
+                    desc: row[11] || ""
+                });
+            }
+        }
+
+        const cards = rows.filter(r => !(r.type & TOKEN_TYPE));
+        const tokens = rows.filter(r => (r.type & TOKEN_TYPE));
+
+        const byName = {};
+        for (const c of cards) {
+            byName[c.name] = byName[c.name] || [];
+            byName[c.name].push(c);
+        }
+
+        const after = {}; // id carte -> [tokens]
+        let orphans = [];
+
+        for (const t of tokens) {
+            const m = t.desc.match(/"([^"]+)"/);
+            const cands = m ? byName[m[1]] : null;
+            if (!cands) {
+                orphans.push(t);
+                continue;
+            }
+            let targetCands = cands;
+            if (cands.length > 1) {
+                const citing = cands.filter(c => c.desc.includes(t.name));
+                if (citing.length > 0) {
+                    targetCands = citing;
+                } else {
+                    log(`! Ambigu : ${t.name} (${t.id}) -> plusieurs cartes '${m[1]}', la première est prise`);
+                }
+            }
+            after[targetCands[0].id] = after[targetCands[0].id] || [];
+            after[targetCands[0].id].push(t);
+        }
+
+        // Nouvel ordre
+        const order = [];
+        for (const c of cards) {
+            order.push(c);
+            if (after[c.id]) {
+                order.push(...after[c.id]);
+            }
+        }
+        order.push(...orphans);
+
+        const startId = rows[0].id;
+        const mapping = {};
+        order.forEach((item, idx) => {
+            mapping[item.id] = startId + idx;
+        });
+
+        // Création de la nouvelle base de données SQLite de sortie
+        const dstDb = new SQL.Database();
+        
+        // Copie des schémas de table
+        const schemas = srcDb.exec("SELECT sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL");
+        schemas[0].values.forEach(val => {
+            dstDb.run(val[0]);
+        });
+
+        dstDb.run("BEGIN TRANSACTION;");
+
+        const insertData = dstDb.prepare("INSERT INTO datas VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+        const insertText = dstDb.prepare("INSERT INTO texts VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+
+        for (const oldItem of order) {
+            const newId = mapping[oldItem.id];
+            
+            // Données datas d'origine
+            const dRow = srcDb.exec(`SELECT * FROM datas WHERE id=${oldItem.id}`)[0].values[0];
+            dRow[0] = newId;
+            if (dRow[2]) { // alias
+                dRow[2] = mapping[dRow[2]] || dRow[2];
+            }
+            insertData.run(dRow);
+
+            // Données texts d'origine
+            const tRow = srcDb.exec(`SELECT * FROM texts WHERE id=${oldItem.id}`)[0].values[0];
+            tRow[0] = newId;
+            insertText.run(tRow);
+        }
+
+        insertData.free();
+        insertText.free();
+        dstDb.run("COMMIT;");
+
+        // Export du fichier binaire SQLite
+        const binaryArray = dstDb.export();
+        const blob = new Blob([binaryArray], { type: "application/x-sqlite3" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        const stem = fileInput.name.replace(/\.[^/.]+$/, "");
+        a.download = `${stem}_tokens.cdb`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        log(`✅ ${tokens.length - orphans.length} tokens replacés, ${orphans.length} orphelins.`);
+        orphans.forEach(o => log(`  orphelin : ${o.name} (${o.id})`));
+        log(`-> Fichier téléchargé avec succès !`);
+        showToast("Réorganisation terminée avec succès !", "ok");
+
+        srcDb.close();
+        dstDb.close();
+
+    } catch (err) {
+        log(`❌ Erreur : ${err.message}`, true);
+        showToast("Erreur lors du traitement du CDB.", "err");
+    }
+});
+</script>
+</body>
+</html>
