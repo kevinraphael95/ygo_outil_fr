@@ -1,489 +1,141 @@
 <!DOCTYPE html>
 <html lang="fr" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Générateur Database Yu-Gi-Oh!</title>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        /* ============================================================
-           DESIGN SYSTEM — Thème YGO
-           ============================================================ */
-        :root,
-        [data-theme="dark"] {
-            --bg:            #0d0a1a;
-            --bg-pattern:    rgba(212, 175, 55, 0.025);
-            --surface:       #16112a;
-            --surface-2:     #1f1838;
-            --surface-3:     #2a2148;
-            --border:        #3a2d5c;
-            --border-strong: #4d3d75;
-            --text:          #f5ecd8;
-            --text-muted:    #a89b82;
-            --text-dim:      #6b6252;
-            --gold:          #d4af37;
-            --gold-light:    #e8c85a;
-            --gold-dark:     #a67c00;
-            --gold-soft:     rgba(212, 175, 55, 0.12);
-            --gold-glow:     rgba(212, 175, 55, 0.35);
-            --success:       #5fd07f;
-            --success-soft:  rgba(95, 208, 127, 0.14);
-            --warning:       #e0b64c;
-            --warning-soft:  rgba(224, 182, 76, 0.14);
-            --danger:        #e07a7a;
-            --danger-soft:   rgba(224, 122, 122, 0.14);
-            --yugi:          #b88ae0;
-            --yugi-soft:     rgba(155, 107, 196, 0.15);
-            --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
-            --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
-            --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
-            --code-bg:       #0a0715;
-        }
-
-        [data-theme="light"] {
-            --bg:            #f0e8d8;
-            --bg-pattern:    rgba(166, 124, 0, 0.04);
-            --surface:       #faf5e8;
-            --surface-2:     #f2ebd9;
-            --surface-3:     #e8dfc5;
-            --border:        #d4c8b0;
-            --border-strong: #b8a888;
-            --text:          #2a1f14;
-            --text-muted:    #6b5d47;
-            --text-dim:      #9a8b70;
-            --gold:          #a67c00;
-            --gold-light:    #c49616;
-            --gold-dark:     #7a5a00;
-            --gold-soft:     rgba(166, 124, 0, 0.10);
-            --gold-glow:     rgba(166, 124, 0, 0.25);
-            --success:       #1f8a3d;
-            --success-soft:  rgba(31, 138, 61, 0.12);
-            --warning:       #a67c00;
-            --warning-soft:  rgba(166, 124, 0, 0.12);
-            --danger:        #c33a3a;
-            --danger-soft:   rgba(195, 58, 58, 0.12);
-            --yugi:          #6a3a9a;
-            --yugi-soft:     rgba(106, 58, 154, 0.12);
-            --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
-            --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
-            --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
-            --code-bg:       #f7f2e3;
-        }
-
-        *, *::before, *::after { box-sizing: border-box; }
-        html, body { height: 100%; margin: 0; }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg);
-            background-image:
-                radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
-                radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
-            color: var(--text);
-            font-size: 15px;
-            line-height: 1.5;
-            transition: background 0.3s ease, color 0.3s ease;
-        }
-
-        /* HEADER */
-        .app-header {
-            position: sticky;
-            top: 0;
-            z-index: 50;
-            background: color-mix(in srgb, var(--surface) 92%, transparent);
-            backdrop-filter: blur(14px);
-            border-bottom: 1px solid var(--border);
-            box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm);
-        }
-
-        .app-header-inner {
-            max-width: 1180px;
-            margin: 0 auto;
-            padding: 14px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 700;
-        }
-
-        .brand-logo {
-            font-size: 1.7rem;
-            color: var(--gold);
-            filter: drop-shadow(0 0 8px var(--gold-glow));
-        }
-
-        .brand-name {
-            font-family: 'Cinzel', Georgia, serif;
-            color: var(--gold);
-            font-weight: 900;
-            font-size: 1.05rem;
-        }
-
-        .brand-sub {
-            display: block;
-            font-size: 0.68rem;
-            font-weight: 500;
-            color: var(--text-muted);
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .icon-btn {
-            width: 40px;
-            height: 40px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--surface-2);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 1.05rem;
-            transition: all 0.18s ease;
-        }
-
-        .icon-btn:hover {
-            background: var(--gold-soft);
-            border-color: var(--gold);
-            color: var(--gold);
-        }
-
-        [data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
-        [data-theme="light"] #theme-toggle::before { content: "☀️"; }
-
-        /* CONTAINER & HERO */
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 32px 24px 80px;
-        }
-
-        .hero { margin-bottom: 28px; }
-        .hero h1 {
-            font-family: 'Cinzel', Georgia, serif;
-            font-size: 2rem;
-            margin: 0 0 10px;
-            font-weight: 700;
-        }
-        .hero h1 .grad {
-            background: linear-gradient(135deg, var(--gold-light), var(--gold), var(--gold-dark));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            filter: drop-shadow(0 0 12px var(--gold-glow));
-        }
-        .hero p { color: var(--text-muted); margin: 0; }
-
-        /* CARD */
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: var(--shadow-sm);
-            position: relative;
-            margin-bottom: 20px;
-        }
-
-        .card-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-family: 'Cinzel', Georgia, serif;
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin: 0 0 6px;
-            color: var(--gold);
-        }
-
-        .card-sub { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 18px; }
-        .card-sub code {
-            background: var(--code-bg);
-            padding: 1px 6px;
-            border-radius: 4px;
-            color: var(--gold-light);
-        }
-
-        /* BUTTONS */
-        .btn-primary {
-            width: 100%;
-            padding: 14px 24px;
-            border-radius: 12px;
-            border: 1px solid var(--gold);
-            background: linear-gradient(135deg, var(--gold), var(--gold-dark));
-            color: #1a1408;
-            font-size: 0.95rem;
-            font-weight: 700;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.18s ease;
-            box-shadow: 0 2px 8px var(--gold-glow);
-        }
-        .btn-primary:hover:not(:disabled) {
-            background: linear-gradient(135deg, var(--gold-light), var(--gold));
-            transform: translateY(-1px);
-        }
-        .btn-primary:disabled { opacity: 0.6; cursor: wait; }
-
-        /* PROGRESSION */
-        .progress-wrap { margin: 16px 0; display: none; }
-        .progress-wrap.visible { display: block; }
-        .progress-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.82rem;
-            color: var(--text-muted);
-            margin-bottom: 8px;
-        }
-        .progress-bar {
-            height: 6px;
-            border-radius: 999px;
-            background: var(--surface-3);
-            overflow: hidden;
-        }
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-light));
-            transition: width 0.3s ease;
-        }
-
-        /* CONSOLE LOGS */
-        .console-box {
-            background: var(--code-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            font-family: monospace;
-            font-size: 0.82rem;
-            height: 220px;
-            overflow-y: auto;
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
-
-        /* TOASTS */
-        .toasts {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 200;
-            pointer-events: none;
-        }
-        .toast {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 16px;
-            border-radius: 12px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow-lg);
-            font-size: 0.88rem;
-            font-weight: 600;
-            color: var(--text);
-            pointer-events: auto;
-            animation: toastIn 0.3s ease;
-        }
-        .toast.ok { border-left: 3px solid var(--success); }
-        .toast.err { border-left: 3px solid var(--danger); }
-        @keyframes toastIn {
-            from { opacity: 0; transform: translateX(40px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-    </style>
-    <script>
-        // Charger immédiatement le thème sauvegardé pour éviter un flash visuel au chargement
-        (function() {
-            const savedTheme = localStorage.getItem('ygo_theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        })();
-    </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Générateur cards-db.json · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
 </head>
 <body>
 
-    <!-- Header -->
-    <header class="app-header">
-        <div class="app-header-inner">
-            <div class="brand">
-                <div class="brand-logo"><i class="fa-solid fa-database"></i></div>
-                <div>
-                    <span class="brand-name">Yu-Gi-Oh! DB Generator</span>
-                    <span class="brand-sub">Générateur de Base de Données API</span>
-                </div>
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
             </div>
-            <button class="icon-btn" id="theme-toggle" title="Changer de thème"></button>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
         </div>
-    </header>
+    </div>
+</header>
 
-    <!-- Content -->
-    <main class="container">
-        <div class="hero">
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-database"></i></div>
+        <div>
             <h1>Génération de <span class="grad">cards-db.json</span></h1>
-            <p>Récupère et fusionne directement depuis votre navigateur les bases de données Anglaises et Françaises de YGOPRODeck.</p>
+            <p>Récupère et fusionne les bases anglaise et française de YGOPRODeck, directement depuis ton navigateur.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Téléchargement et fusion</h2>
+        <p class="card-sub">Génère le fichier <code>cards-db.json</code> directement sur ton ordinateur.</p>
+
+        <label class="check" style="margin-bottom:16px;">
+            <input type="checkbox" id="minify" checked>
+            Minifier le JSON <span class="hint">(fichier beaucoup plus léger)</span>
+        </label>
+
+        <div class="actions">
+            <button id="start-btn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Lancer la génération</button>
         </div>
 
-        <div class="card">
-            <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Téléchargement et Fusion</h2>
-            <p class="card-sub">Génère automatiquement le fichier <code>cards-db.json</code> sur votre ordinateur.</p>
-
-            <button id="start-btn" class="btn-primary">
-                <i class="fa-solid fa-play"></i> Lancer la génération
-            </button>
-
-            <div id="progress-wrap" class="progress-wrap">
-                <div class="progress-info">
-                    <span id="progress-text">Préparation...</span>
-                    <span id="progress-percent">0%</span>
-                </div>
-                <div class="progress-bar">
-                    <div id="progress-fill" class="progress-fill"></div>
-                </div>
-            </div>
+        <div id="progress" class="progress hidden">
+            <div class="progress-meta"><span class="progress-text">Préparation…</span><span class="progress-percent">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
         </div>
+    </div>
 
-        <div class="card">
-            <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
-            <div id="console-log" class="console-box">
-                [Système] En attente du lancement...<br>
-            </div>
-        </div>
-    </main>
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
 
-    <div class="toasts" id="toasts"></div>
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
 
-    <script>
-        // Gestion du Thème avec persistance (localStorage)
-        const themeToggle = document.getElementById('theme-toggle');
-        const htmlEl = document.documentElement;
-        
-        themeToggle.addEventListener('click', () => {
-            const current = htmlEl.getAttribute('data-theme');
-            const next = current === 'light' ? 'dark' : 'light';
-            htmlEl.setAttribute('data-theme', next);
-            localStorage.setItem('ygo_theme', next);
-        });
+<script>
+const { $ } = YGO;
+const API = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
+const out = YGO.console($('console'));
+const progress = YGO.progress($('progress'));
+const btn = $('start-btn');
+out.log('En attente du lancement…');
 
-        // Toasts
-        function showToast(message, type = 'ok') {
-            const container = document.getElementById('toasts');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `<i class="fa-solid ${type === 'ok' ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'}"></i><span>${message}</span>`;
-            container.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
+async function getJson(url, label) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Erreur réseau ${label} (HTTP ${res.status})`);
+    return res.json();
+}
+
+btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    progress.show();
+    out.clear();
+    try {
+        out.log('📥 Téléchargement des cartes EN et FR en parallèle…');
+        progress.set(10, 'Téléchargement EN + FR…');
+        const [en, fr] = await Promise.all([
+            getJson(API, 'EN'),
+            getJson(API + '?language=fr', 'FR'),
+        ]);
+        out.log(`→ ${en.data.length} cartes EN, ${fr.data.length} cartes FR.`, 'ok');
+
+        out.log('🔄 Indexation et fusion des données…');
+        progress.set(70, 'Fusion des données…');
+        const frById = new Map(fr.data.map((c) => [String(c.id), c]));
+
+        const merged = {};
+        for (const c of en.data) {
+            const id = String(c.id);
+            const f = frById.get(id);
+            merged[id] = {
+                fr: f ? f.name : null,
+                en: c.name,
+                type: c.type,
+                frameType: c.frameType,
+                desc_fr: f ? f.desc : null,
+                desc_en: c.desc,
+                atk: c.atk ?? null,
+                def: c.def ?? null,
+                level: c.level ?? null,
+                race: c.race || null,
+                attribute: c.attribute || null,
+                linkval: c.linkval ?? null,
+                linkmarkers: c.linkmarkers || null,
+                scale: c.scale ?? null,
+                img_cropped: `https://images.ygoprodeck.com/images/cards_cropped/${id}.jpg`,
+                img_full: `https://images.ygoprodeck.com/images/cards/${id}.jpg`,
+            };
         }
 
-        // Log Console
-        const consoleLog = document.getElementById('console-log');
-        function log(msg, isError = false) {
-            const time = new Date().toLocaleTimeString();
-            consoleLog.innerHTML += `<span style="color:var(--text-dim)">[${time}]</span> <span style="color:${isError ? 'var(--danger)' : 'var(--text)'}">${msg}</span><br>`;
-            consoleLog.scrollTop = consoleLog.scrollHeight;
-        }
+        out.log('📦 Création du fichier JSON…');
+        progress.set(92, 'Génération du fichier…');
+        const json = $('minify').checked ? JSON.stringify(merged) : JSON.stringify(merged, null, 2);
+        const size = YGO.download(json, 'cards-db.json', 'application/json;charset=utf-8');
 
-        // Script de génération
-        const API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
-        const startBtn = document.getElementById('start-btn');
-        const progressWrap = document.getElementById('progress-wrap');
-        const progressFill = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-text');
-        const progressPercent = document.getElementById('progress-percent');
-
-        function setProgress(pct, text) {
-            progressFill.style.width = `${pct}%`;
-            progressPercent.textContent = `${pct}%`;
-            progressText.textContent = text;
-        }
-
-        startBtn.addEventListener('click', async () => {
-            startBtn.disabled = true;
-            progressWrap.classList.add('visible');
-            consoleLog.innerHTML = "";
-
-            try {
-                log("📥 Téléchargement des cartes EN...");
-                setProgress(10, "Téléchargement EN...");
-                let res = await fetch(API);
-                if (!res.ok) throw new Error("Erreur réseau API EN");
-                const en = await res.json();
-                log(` → ${en.data.length} cartes EN récupérées.`);
-
-                log("📥 Téléchargement des cartes FR...");
-                setProgress(40, "Téléchargement FR...");
-                res = await fetch(API + "?language=fr");
-                if (!res.ok) throw new Error("Erreur réseau API FR");
-                const fr = await res.json();
-                log(` → ${fr.data.length} cartes FR récupérées.`);
-
-                log("🔄 Indexation et fusion des données...");
-                setProgress(75, "Fusion des données...");
-                const frById = new Map();
-                fr.data.forEach((c) => frById.set(String(c.id), c));
-
-                const merged = {};
-                en.data.forEach((c) => {
-                    const id = String(c.id);
-                    const frCard = frById.get(id);
-                    merged[id] = {
-                        fr: frCard ? frCard.name : null,
-                        en: c.name,
-                        type: c.type,
-                        frameType: c.frameType,
-                        desc_fr: frCard ? frCard.desc : null,
-                        desc_en: c.desc,
-                        atk: c.atk ?? null,
-                        def: c.def ?? null,
-                        level: c.level ?? null,
-                        race: c.race || null,
-                        attribute: c.attribute || null,
-                        linkval: c.linkval ?? null,
-                        linkmarkers: c.linkmarkers || null,
-                        scale: c.scale ?? null,
-                        img_cropped: `https://images.ygoprodeck.com/images/cards_cropped/${id}.jpg`,
-                        img_full: `https://images.ygoprodeck.com/images/cards/${id}.jpg`,
-                    };
-                });
-
-                log("📦 Création et téléchargement du fichier JSON...");
-                setProgress(95, "Génération du fichier...");
-                const json = JSON.stringify(merged, null, 2);
-                const sizeMo = (json.length / 1024 / 1024).toFixed(2);
-
-                // Déclenchement du téléchargement navigateur
-                const blob = new Blob([json], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = "cards-db.json";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                setProgress(100, "Terminé !");
-                log(`✅ cards-db.json généré avec succès (${sizeMo} Mo).`);
-                showToast(`cards-db.json généré (${sizeMo} Mo) !`, 'ok');
-
-            } catch (err) {
-                log(`❌ Erreur : ${err.message}`, true);
-                showToast("Une erreur est survenue", 'err');
-            } finally {
-                startBtn.disabled = false;
-            }
-        });
-    </script>
+        progress.set(100, 'Terminé !');
+        out.log(`✅ cards-db.json généré (${YGO.fmtBytes(size)}, ${Object.keys(merged).length} cartes).`, 'ok');
+        YGO.toast(`cards-db.json généré (${YGO.fmtBytes(size)}) !`);
+    } catch (err) {
+        out.log('❌ Erreur : ' + err.message, 'err');
+        YGO.toast('Une erreur est survenue', 'err');
+    } finally {
+        btn.disabled = false;
+    }
+});
+</script>
 </body>
 </html>

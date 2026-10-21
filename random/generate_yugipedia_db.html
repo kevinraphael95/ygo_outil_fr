@@ -1,700 +1,279 @@
 <!DOCTYPE html>
 <html lang="fr" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Générateur Yugipedia DB (6 Templates)</title>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        /* ============================================================
-           DESIGN SYSTEM — Thème YGO
-           ============================================================ */
-        :root,
-        [data-theme="dark"] {
-            --bg:            #0d0a1a;
-            --bg-pattern:    rgba(212, 175, 55, 0.025);
-            --surface:       #16112a;
-            --surface-2:     #1f1838;
-            --surface-3:     #2a2148;
-            --border:        #3a2d5c;
-            --border-strong: #4d3d75;
-            --text:          #f5ecd8;
-            --text-muted:    #a89b82;
-            --text-dim:      #6b6252;
-            --gold:          #d4af37;
-            --gold-light:    #e8c85a;
-            --gold-dark:     #a67c00;
-            --gold-soft:     rgba(212, 175, 55, 0.12);
-            --gold-glow:     rgba(212, 175, 55, 0.35);
-            --success:       #5fd07f;
-            --success-soft:  rgba(95, 208, 127, 0.14);
-            --warning:       #e0b64c;
-            --warning-soft:  rgba(224, 182, 76, 0.14);
-            --danger:        #e07a7a;
-            --danger-soft:   rgba(224, 122, 122, 0.14);
-            --yugi:          #b88ae0;
-            --yugi-soft:     rgba(155, 107, 196, 0.15);
-            --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
-            --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
-            --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
-            --code-bg:       #0a0715;
-        }
-
-        [data-theme="light"] {
-            --bg:            #f0e8d8;
-            --bg-pattern:    rgba(166, 124, 0, 0.04);
-            --surface:       #faf5e8;
-            --surface-2:     #f2ebd9;
-            --surface-3:     #e8dfc5;
-            --border:        #d4c8b0;
-            --border-strong: #b8a888;
-            --text:          #2a1f14;
-            --text-muted:    #6b5d47;
-            --text-dim:      #9a8b70;
-            --gold:          #a67c00;
-            --gold-light:    #c49616;
-            --gold-dark:     #7a5a00;
-            --gold-soft:     rgba(166, 124, 0, 0.10);
-            --gold-glow:     rgba(166, 124, 0, 0.25);
-            --success:       #1f8a3d;
-            --success-soft:  rgba(31, 138, 61, 0.12);
-            --warning:       #a67c00;
-            --warning-soft:  rgba(166, 124, 0, 0.12);
-            --danger:        #c33a3a;
-            --danger-soft:   rgba(195, 58, 58, 0.12);
-            --yugi:          #6a3a9a;
-            --yugi-soft:     rgba(106, 58, 154, 0.12);
-            --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
-            --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
-            --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
-            --code-bg:       #f7f2e3;
-        }
-
-        *, *::before, *::after { box-sizing: border-box; }
-        html, body { height: 100%; margin: 0; }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg);
-            background-image:
-                radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
-                radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
-            color: var(--text);
-            font-size: 15px;
-            line-height: 1.5;
-            transition: background 0.3s ease, color 0.3s ease;
-        }
-
-        /* HEADER */
-        .app-header {
-            position: sticky;
-            top: 0;
-            z-index: 50;
-            background: color-mix(in srgb, var(--surface) 92%, transparent);
-            backdrop-filter: blur(14px);
-            border-bottom: 1px solid var(--border);
-            box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm);
-        }
-
-        .app-header-inner {
-            max-width: 1180px;
-            margin: 0 auto;
-            padding: 14px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 700;
-        }
-
-        .brand-logo {
-            font-size: 1.7rem;
-            color: var(--gold);
-            filter: drop-shadow(0 0 8px var(--gold-glow));
-        }
-
-        .brand-name {
-            font-family: 'Cinzel', Georgia, serif;
-            color: var(--gold);
-            font-weight: 900;
-            font-size: 1.05rem;
-        }
-
-        .brand-sub {
-            display: block;
-            font-size: 0.68rem;
-            font-weight: 500;
-            color: var(--text-muted);
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .icon-btn {
-            width: 40px;
-            height: 40px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--surface-2);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 1.05rem;
-            transition: all 0.18s ease;
-        }
-
-        .icon-btn:hover {
-            background: var(--gold-soft);
-            border-color: var(--gold);
-            color: var(--gold);
-        }
-
-        [data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
-        [data-theme="light"] #theme-toggle::before { content: "☀️"; }
-
-        /* CONTAINER & HERO */
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 32px 24px 80px;
-        }
-
-        .hero { margin-bottom: 28px; }
-        .hero h1 {
-            font-family: 'Cinzel', Georgia, serif;
-            font-size: 2rem;
-            margin: 0 0 10px;
-            font-weight: 700;
-        }
-        .hero h1 .grad {
-            background: linear-gradient(135deg, var(--gold-light), var(--gold), var(--gold-dark));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            filter: drop-shadow(0 0 12px var(--gold-glow));
-        }
-        .hero p { color: var(--text-muted); margin: 0; }
-
-        /* CARD */
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: var(--shadow-sm);
-            position: relative;
-            margin-bottom: 20px;
-        }
-
-        .card-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-family: 'Cinzel', Georgia, serif;
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin: 0 0 6px;
-            color: var(--gold);
-        }
-
-        .card-sub { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 18px; }
-        .card-sub code {
-            background: var(--code-bg);
-            padding: 1px 6px;
-            border-radius: 4px;
-            color: var(--gold-light);
-        }
-
-        /* BUTTONS */
-        .btn-primary {
-            width: 100%;
-            padding: 14px 24px;
-            border-radius: 12px;
-            border: 1px solid var(--gold);
-            background: linear-gradient(135deg, var(--gold), var(--gold-dark));
-            color: #1a1408;
-            font-size: 0.95rem;
-            font-weight: 700;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.18s ease;
-            box-shadow: 0 2px 8px var(--gold-glow);
-        }
-        .btn-primary:hover:not(:disabled) {
-            background: linear-gradient(135deg, var(--gold-light), var(--gold));
-            transform: translateY(-1px);
-        }
-        .btn-primary:disabled { opacity: 0.6; cursor: wait; }
-
-        /* PROGRESSION */
-        .progress-wrap { margin: 16px 0; display: none; }
-        .progress-wrap.visible { display: block; }
-        .progress-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.82rem;
-            color: var(--text-muted);
-            margin-bottom: 8px;
-        }
-        .progress-bar {
-            height: 6px;
-            border-radius: 999px;
-            background: var(--surface-3);
-            overflow: hidden;
-        }
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-light));
-            transition: width 0.3s ease;
-        }
-
-        /* CONSOLE LOGS */
-        .console-box {
-            background: var(--code-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            font-family: monospace;
-            font-size: 0.82rem;
-            height: 220px;
-            overflow-y: auto;
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
-
-        /* TOASTS */
-        .toasts {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 200;
-            pointer-events: none;
-        }
-        .toast {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 16px;
-            border-radius: 12px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow-lg);
-            font-size: 0.88rem;
-            font-weight: 600;
-            color: var(--text);
-            pointer-events: auto;
-            animation: toastIn 0.3s ease;
-        }
-        .toast.ok { border-left: 3px solid var(--success); }
-        .toast.err { border-left: 3px solid var(--danger); }
-        @keyframes toastIn {
-            from { opacity: 0; transform: translateX(40px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-    </style>
-    <script>
-        // Mémorisation et chargement immédiat du thème
-        (function() {
-            const savedTheme = localStorage.getItem('ygo_theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        })();
-    </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Générateur yugipedia-db.json · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
 </head>
 <body>
 
-    <!-- Header -->
-    <header class="app-header">
-        <div class="app-header-inner">
-            <div class="brand">
-                <div class="brand-logo"><i class="fa-solid fa-scroll"></i></div>
-                <div>
-                    <span class="brand-name">Yugipedia DB Generator</span>
-                    <span class="brand-sub">Extraction des 6 Templates de Cartes</span>
-                </div>
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
             </div>
-            <button class="icon-btn" id="theme-toggle" title="Changer de thème"></button>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
         </div>
-    </header>
+    </div>
+</header>
 
-    <!-- Content -->
-    <main class="container">
-        <div class="hero">
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-scroll"></i></div>
+        <div>
             <h1>Génération de <span class="grad">yugipedia-db.json</span></h1>
-            <p>Extraction complète, nettoyage des balises Ruby[cite: 3] et fusion multi-templates directement depuis votre navigateur.</p>
+            <p>Extraction des 6 templates de cartes, nettoyage des balises wiki et fusion, directement depuis ton navigateur.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Lancer l'extraction Yugipedia</h2>
+        <p class="card-sub">Parcourt les 6 templates de cartes et génère <code>yugipedia-db.json</code>. Compte plusieurs minutes (limite de débit de l'API).</p>
+
+        <label class="check" style="margin-bottom:16px;">
+            <input type="checkbox" id="minify" checked>
+            Minifier le JSON <span class="hint">(fichier beaucoup plus léger)</span>
+        </label>
+
+        <div class="actions">
+            <button id="start-btn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Démarrer l'extraction des 6 templates</button>
         </div>
 
-        <div class="card">
-            <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Lancer l'extraction Yugipedia</h2>
-            <p class="card-sub">Génère automatiquement le fichier <code>yugipedia-db.json</code> complet sur votre PC.</p>
-
-            <button id="start-btn" class="btn-primary">
-                <i class="fa-solid fa-play"></i> Démarrer l'extraction des 6 templates
-            </button>
-
-            <div id="progress-wrap" class="progress-wrap">
-                <div class="progress-info">
-                    <span id="progress-text">Préparation...</span>
-                    <span id="progress-percent">0%</span>
-                </div>
-                <div class="progress-bar">
-                    <div id="progress-fill" class="progress-fill"></div>
-                </div>
-            </div>
+        <div id="progress" class="progress hidden">
+            <div class="progress-meta"><span class="progress-text">Préparation…</span><span class="progress-percent">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
         </div>
+    </div>
 
-        <div class="card">
-            <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
-            <div id="console-log" class="console-box">
-                [Système] Prêt à lancer l'extraction Yugipedia...<br>
-            </div>
-        </div>
-    </main>
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
 
-    <div class="toasts" id="toasts"></div>
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
 
-    <script>
-        // Gestion du Thème
-        const themeToggle = document.getElementById('theme-toggle');
-        const htmlEl = document.documentElement;
-        
-        themeToggle.addEventListener('click', () => {
-            const current = htmlEl.getAttribute('data-theme');
-            const next = current === 'light' ? 'dark' : 'light';
-            htmlEl.setAttribute('data-theme', next);
-            localStorage.setItem('ygo_theme', next);
-        });
+<script>
+const { $ } = YGO;
+const API = 'https://yugipedia.com/api.php';
+const DELAY = 600;   // pause entre requêtes (politesse envers l'API)
+const BATCH = 30;
+const TEMPLATES = ['CardTable2', 'Anime card', 'Manga card', 'Video game card', 'OCG card', 'TCG card'];
 
-        // Toasts
-        function showToast(message, type = 'ok') {
-            const container = document.getElementById('toasts');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `<i class="fa-solid ${type === 'ok' ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'}"></i><span>${message}</span>`;
-            container.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
+const out = YGO.console($('console'));
+const progress = YGO.progress($('progress'));
+const btn = $('start-btn');
+out.log('Prêt à lancer l\'extraction Yugipedia…');
+
+async function fetchJson(params) {
+    const url = new URL(API);
+    const q = { format: 'json', formatversion: '2', origin: '*', ...params };
+    for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+}
+
+function clean(s) {
+    if (!s) return null;
+    return String(s)
+        .replace(/\{\{Ruby\|([^|]+)\|[^}]+\}\}/gi, '$1')   // balises Ruby
+        .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')      // [[cible|texte]]
+        .replace(/\[\[([^\]]+)\]\]/g, '$1')                 // [[texte]]
+        .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/'{2,3}/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .trim() || null;
+}
+
+function extractTemplateParams(wikitext, name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = new RegExp('\\{\\{\\s*' + escaped + '\\s*(?=[|}\\n])', 'i').exec(wikitext);
+    if (!m) return null;
+    let i = m.index, depth = 0, end = null;
+    while (i < wikitext.length - 1) {
+        const two = wikitext.substr(i, 2);
+        if (two === '{{') { depth++; i += 2; continue; }
+        if (two === '}}') { depth--; if (depth === 0) { end = i; break; } i += 2; continue; }
+        i++;
+    }
+    return end === null ? null : wikitext.slice(m.index + m[0].length, end);
+}
+
+function parseParams(body) {
+    const params = {};
+    let i = body[0] === '|' ? 1 : 0;
+    while (i < body.length) {
+        const eq = body.indexOf('=', i);
+        if (eq === -1) break;
+        const key = body.slice(i, eq).trim().replace(/^[|\s]*/, '').trim();
+        if (!/^[a-zA-Z_0-9]+$/.test(key)) {
+            const np = body.indexOf('|', i);
+            if (np === -1) break;
+            i = np + 1;
+            continue;
+        }
+        let j = eq + 1, depth = 0;
+        while (j < body.length) {
+            const two = body.substr(j, 2);
+            if (two === '{{' || two === '[[') { depth++; j += 2; continue; }
+            if (two === '}}' || two === ']]') { depth--; j += 2; continue; }
+            if (depth === 0 && body[j] === '|') break;
+            j++;
+        }
+        params[key.toLowerCase()] = body.slice(eq + 1, j).trim();
+        i = j + 1;
+    }
+    return params;
+}
+
+const int = (v) => (v ? parseInt(v, 10) || null : null);
+const redirect = (f) => 'https://yugipedia.com/wiki/Special:Redirect/file/' + encodeURIComponent(f);
+
+function parseCard(wikitext, title) {
+    for (const tpl of TEMPLATES) {
+        const body = extractTemplateParams(wikitext, tpl);
+        if (!body) continue;
+        const p = parseParams(body);
+
+        const fr = clean(p.fr_name);
+        let en = clean(p.en_name || p.translated_name);
+        if (!en && title) en = clean(title);
+        if (!fr && !en) continue;
+
+        const id = p.passcode ? String(p.passcode).trim() : null;
+        const cropped = id ? `https://images.ygoprodeck.com/images/card_cropped/${id}.jpg` : null;
+        const rawImg = p.image_ca || p.artwork || p.image_cropped || p.image || p.en_image || p.ja_image || '';
+
+        let imgName = null;
+        if (rawImg) {
+            const line = rawImg.split(/[\r\n]+/)[0].trim();
+            for (const part of line.split(';')) {
+                const t = part.trim();
+                if (t && !t.includes('=')) { imgName = t.replace(/^.*?:/, '').trim(); break; }
+            }
+            if (!imgName) imgName = line.replace(/^.*?:/, '').split(';')[0].trim();
         }
 
-        // Log Console
-        const consoleLog = document.getElementById('console-log');
-        function log(msg, isError = false) {
-            const time = new Date().toLocaleTimeString();
-            consoleLog.innerHTML += `<span style="color:var(--text-dim)">[${time}]</span> <span style="color:${isError ? 'var(--danger)' : 'var(--text)'}">${msg}</span><br>`;
-            consoleLog.scrollTop = consoleLog.scrollHeight;
+        const types = p.types || p.type || '';
+        return {
+            title: title || null, fr, en, tpl, id,
+            database_id: p.database_id ? String(p.database_id).trim() : null,
+            img: cropped || (imgName ? redirect(imgName) : null),
+            img_en: p.en_image ? redirect(p.en_image.replace(/^.*?:/, '')) : null,
+            de: clean(p.de_name), it: clean(p.it_name), pt: clean(p.pt_name), es: clean(p.es_name),
+            ja: clean(p.ja_name), ko: clean(p.ko_name), tc: clean(p.tc_name), sc: clean(p.sc_name),
+            romaji: clean(p.romaji_name),
+            card_type: clean(p.card_type), property: clean(p.property),
+            type: clean(types), race: clean(types.split('/')[0]) || null,
+            attribute: clean(p.attribute),
+            atk: int(p.atk), def: int(p.def), level: int(p.level), rank: int(p.rank),
+            link: int(p.link), link_arrows: p.link_arrows ? clean(p.link_arrows) : null, scale: int(p.scale),
+            lore: clean(p.lore || p.text), fr_lore: clean(p.fr_lore || p.fr_text),
+            effect_types: clean(p.effect_types),
+            archetype: clean(p.archetype), archseries: clean(p.archseries),
+            supports: clean(p.supports), anti_supports: clean(p.anti_supports),
+            supports_archetypes: clean(p.supports_archetypes),
+            ocg_status: clean(p.ocg_status), tcg_status: clean(p.tcg_status),
+        };
+    }
+    return null;
+}
+
+const normalize = (s) => String(s || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    progress.show();
+    out.clear();
+    try {
+        /* Étape 1 : titres */
+        out.log('📥 Étape 1 : récupération des pages de cartes (6 templates)…');
+        const titles = new Set();
+        for (let t = 0; t < TEMPLATES.length; t++) {
+            const tpl = 'Template:' + TEMPLATES[t];
+            progress.set(2 + (t / TEMPLATES.length) * 8, 'Titres : ' + TEMPLATES[t]);
+            let cont = null;
+            do {
+                const params = { action: 'query', list: 'embeddedin', eititle: tpl, einamespace: '0', eilimit: '500' };
+                if (cont) params.eicontinue = cont;
+                const data = await fetchJson(params);
+                for (const m of data?.query?.embeddedin || []) titles.add(m.title);
+                cont = data?.continue?.eicontinue;
+                if (cont) await YGO.sleep(DELAY);
+            } while (cont);
+            out.log(`→ ${tpl} : ${titles.size} titres cumulés`);
         }
+        if (!titles.size) throw new Error('Aucun titre trouvé.');
+        out.log(`✅ ${titles.size} titres collectés.`, 'ok');
 
-        // Script de génération Yugipedia transposé en JS Client
-        const API = "https://yugipedia.com/api.php";
-        const DELAY = 600; // Légèrement réduit pour le web
-        const BATCH = 30;
-        const USER_AGENT = "YGO-Card-DB-Generator/1.0";
-
-        const CARD_TEMPLATES = [
-            "Template:CardTable2",
-            "Template:Anime card",
-            "Template:Manga card",
-            "Template:Video game card",
-            "Template:OCG card",
-            "Template:TCG card",
-        ];
-
-        const TEMPLATES = ["CardTable2", "Anime card", "Manga card", "Video game card", "OCG card", "TCG card"];
-
-        const startBtn = document.getElementById('start-btn');
-        const progressWrap = document.getElementById('progress-wrap');
-        const progressFill = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-text');
-        const progressPercent = document.getElementById('progress-percent');
-
-        function setProgress(pct, text) {
-            progressFill.style.width = `${pct}%`;
-            progressPercent.textContent = `${pct}%`;
-            progressText.textContent = text;
-        }
-
-        function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-
-        async function fetchJson(params) {
-            const url = new URL(API);
-            url.searchParams.set("format", "json");
-            url.searchParams.set("formatversion", "2");
-            url.searchParams.set("origin", "*");
-            Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-
-            const res = await fetch(url.toString(), {
-                headers: { "User-Agent": USER_AGENT, "Accept": "application/json" }
+        /* Étape 2 : wikitexts */
+        out.log('📥 Étape 2 : récupération du contenu des pages par lots…');
+        const arr = [...titles];
+        const wikitexts = new Map();
+        for (let j = 0; j < arr.length; j += BATCH) {
+            const data = await fetchJson({
+                action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main',
+                titles: arr.slice(j, j + BATCH).join('|'), redirects: '1',
             });
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-            return await res.json();
-        }
-
-        function clean(s) {
-            if (!s) return null;
-            return String(s)
-                .replace(/\{\{Ruby\|([^|]+)\|[^}]+\}\}/gi, "$1") // Nettoyage balises Ruby[cite: 3]
-                .replace(/\[\[([^\]\vert{}]+)\Vert{}([^\]]+)\]\]/g, "$2")
-                .replace(/\[\[([^\]]+)\]\]/g, "$1")
-                .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, "")
-                .replace(/<[^>]+>/g, "")
-                .replace(/'''?/g, "")
-                .replace(/&nbsp;/g, " ")
-                .trim() || null;
-        }
-
-        function extractTemplateParams(wikitext, templateName) {
-            const escaped = templateName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            const re = new RegExp("\\{\\{\\s*" + escaped + "\\s*(?=[|}\\n])", "i");
-            const m = re.exec(wikitext);
-            if (!m) return null;
-
-            const startIdx = m.index;
-            let i = startIdx, depth = 0, endIdx = null;
-            while (i < wikitext.length - 1) {
-                const two = wikitext.substr(i, 2);
-                if (two === "{{") { depth++; i += 2; continue; }
-                if (two === "}}") { depth--; if (depth === 0) { endIdx = i; break; } i += 2; continue; }
-                i++;
+            for (const p of data?.query?.pages || []) {
+                if (!p || p.missing) continue;
+                const wt = p.revisions?.[0]?.slots?.main?.content ?? p.revisions?.[0]?.content;
+                if (wt) wikitexts.set(p.title, wt);
             }
-            if (endIdx === null) return null;
-            return wikitext.slice(startIdx + m[0].length, endIdx);
-        }
-
-        function parseParams(body) {
-            const params = {};
-            let i = 0;
-            if (body[i] === "|") i++;
-
-            while (i < body.length) {
-                const eqIdx = body.indexOf("=", i);
-                if (eqIdx === -1) break;
-                const key = body.slice(i, eqIdx).trim().replace(/^[|\s]*/, "").trim();
-                if (!/^[a-zA-Z_0-9]+$/.test(key)) {
-                    const np = body.indexOf("|", i);
-                    if (np === -1) break;
-                    i = np + 1;
-                    continue;
-                }
-                let j = eqIdx + 1, depth = 0;
-                while (j < body.length) {
-                    const two = body.substr(j, 2);
-                    if (two === "{{") { depth++; j += 2; continue; }
-                    if (two === "}}") { depth--; j += 2; continue; }
-                    if (two === "[[") { depth++; j += 2; continue; }
-                    if (two === "]]") { depth--; j += 2; continue; }
-                    if (depth === 0 && body[j] === "|") break;
-                    j++;
-                }
-                params[key.toLowerCase()] = body.slice(eqIdx + 1, j).trim();
-                i = j + 1;
+            const done = Math.min(j + BATCH, arr.length);
+            progress.set(10 + (done / arr.length) * 70, `Wikitexts : ${done} / ${arr.length}`);
+            if (done % 300 < BATCH || done === arr.length) {
+                out.log(`→ ${done} / ${arr.length} traités (${wikitexts.size} chargés)`);
             }
-            return params;
+            await YGO.sleep(DELAY);
         }
 
-        function parseCard(wikitext, title) {
-            for (const tpl of TEMPLATES) {
-                const body = extractTemplateParams(wikitext, tpl);
-                if (!body) continue;
-                const p = parseParams(body);
-
-                const frName = clean(p.fr_name);
-                let enName = clean(p.en_name || p.translated_name);
-                if (!enName && title) enName = clean(title);
-                if (!frName && !enName) continue;
-
-                const cardId = p.passcode ? String(p.passcode).trim() : null;
-                const croppedArtworkUrl = cardId ? `https://images.ygoprodeck.com/images/card_cropped/${cardId}.jpg` : null;
-                const rawImg = p.image_ca || p.artwork || p.image_cropped || p.image || p.en_image || p.ja_image || "";
-                
-                let imgName = null;
-                if (rawImg) {
-                    const cleanLine = rawImg.split(/[\r\n]+/)[0].trim();
-                    const parts = cleanLine.split(";");
-                    for (const part of parts) {
-                        const trimmed = part.trim();
-                        if (trimmed && !trimmed.includes("=")) {
-                            imgName = trimmed.replace(/^.*?:/, "").trim();
-                            break;
-                        }
-                    }
-                    if (!imgName) imgName = cleanLine.replace(/^.*?:/, "").split(";")[0].trim();
-                }
-
-                return {
-                    title: title || null,
-                    fr: frName,
-                    en: enName,
-                    tpl,
-                    id: cardId,
-                    database_id: p.database_id ? String(p.database_id).trim() : null,
-                    img: croppedArtworkUrl || (imgName ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(imgName)}` : null),
-                    img_en: p.en_image ? `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(p.en_image.replace(/^.*?:/, ""))}` : null,
-                    de: clean(p.de_name),
-                    it: clean(p.it_name),
-                    pt: clean(p.pt_name),
-                    es: clean(p.es_name),
-                    ja: clean(p.ja_name),
-                    ko: clean(p.ko_name),
-                    tc: clean(p.tc_name),
-                    sc: clean(p.sc_name),
-                    romaji: clean(p.romaji_name),
-                    card_type: clean(p.card_type),
-                    property: clean(p.property),
-                    type: clean(p.types || p.type),
-                    race: clean((p.types || p.type || "").split("/")[0]) || null,
-                    attribute: clean(p.attribute),
-                    atk: p.atk ? parseInt(p.atk) || null : null,
-                    def: p.def ? parseInt(p.def) || null : null,
-                    level: p.level ? parseInt(p.level) || null : null,
-                    rank: p.rank ? parseInt(p.rank) || null : null,
-                    link: p.link ? parseInt(p.link) || null : null,
-                    link_arrows: p.link_arrows ? clean(p.link_arrows) : null,
-                    scale: p.scale ? parseInt(p.scale) || null : null,
-                    lore: clean(p.lore || p.text),
-                    fr_lore: clean(p.fr_lore || p.fr_text),
-                    effect_types: clean(p.effect_types),
-                    archetype: clean(p.archetype),
-                    archseries: clean(p.archseries),
-                    supports: clean(p.supports),
-                    anti_supports: clean(p.anti_supports),
-                    supports_archetypes: clean(p.supports_archetypes),
-                    ocg_status: clean(p.ocg_status),
-                    tcg_status: clean(p.tcg_status),
-                };
-            }
-            return null;
+        /* Étape 3 : parsing */
+        out.log('🔄 Étape 3 : parsing et nettoyage des cartes…');
+        progress.set(84, 'Parsing des cartes…');
+        const db = {};
+        let count = 0;
+        for (const [title, wt] of wikitexts) {
+            const card = parseCard(wt, title);
+            if (!card) continue;
+            const key = normalize(card.fr || card.en || title);
+            if (!key) continue;
+            if (!db[key]) { db[key] = card; count++; }
+            const tk = normalize(title);
+            if (tk && tk !== key && !db[tk]) db[tk] = card;
         }
+        out.log(`✅ ${count} cartes uniques (${Object.keys(db).length} entrées).`, 'ok');
 
-        function normalize(s) {
-            return String(s || "").toLowerCase().normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-        }
-
-        startBtn.addEventListener('click', async () => {
-            startBtn.disabled = true;
-            progressWrap.classList.add('visible');
-            consoleLog.innerHTML = "";
-
-            try {
-                log("📥 Étape 1 : Récupération des pages de cartes (6 templates)...");
-                setProgress(10, "Récupération des titres...");
-                const titles = new Set();
-
-                for (const tpl of CARD_TEMPLATES) {
-                    let cont = null;
-                    while (true) {
-                        const params = {
-                            action: "query",
-                            list: "embeddedin",
-                            eititle: tpl,
-                            einamespace: "0",
-                            eilimit: "500",
-                        };
-                        if (cont) params.eicontinue = cont;
-
-                        const data = await fetchJson(params);
-                        const members = data?.query?.embeddedin || [];
-                        for (const m of members) titles.add(m.title);
-
-                        cont = data?.continue?.eicontinue;
-                        if (!cont) break;
-                        await sleep(DELAY);
-                    }
-                    log(` → Template ${tpl} : total cumulé ${titles.size} titres`);
-                }
-
-                if (titles.size === 0) throw new Error("Aucun titre trouvé.");
-                log(`✅ ${titles.size} titres collectés au total.`);
-
-                log("📥 Étape 2 : Récupération du contenu des pages en batch...");
-                setProgress(40, "Téléchargement wikitexts...");
-                const titlesArr = [...titles];
-                const wikitexts = new Map();
-
-                for (let j = 0; j < titlesArr.length; j += BATCH) {
-                    const chunk = titlesArr.slice(j, j + BATCH);
-                    const data = await fetchJson({
-                        action: "query",
-                        prop: "revisions",
-                        rvprop: "content",
-                        rvslots: "main",
-                        titles: chunk.join("|"),
-                        redirects: "1",
-                    });
-                    const pages = data?.query?.pages || [];
-                    for (const p of pages) {
-                        if (!p || p.missing) continue;
-                        const wikitext = p.revisions?.[0]?.slots?.main?.content
-                                      || p.revisions?.[0]?.content
-                                      || p.revisions?.[0]?.["*"];
-                        if (wikitext) wikitexts.set(p.title, wikitext);
-                    }
-                    if ((j + BATCH) % 500 === 0 || j + BATCH >= titlesArr.length) {
-                        log(` → ${Math.min(j + BATCH, titlesArr.length)} / ${titlesArr.length} traités (${wikitexts.size} chargés)`);
-                    }
-                    await sleep(DELAY);
-                }
-
-                log("🔄 Étape 3 : Parsing et nettoyage des cartes...");
-                setProgress(80, "Parsing des cartes...");
-                const db = {};
-                let count = 0;
-
-                for (const [title, wt] of wikitexts) {
-                    const card = parseCard(wt, title);
-                    if (!card) continue;
-
-                    const key = normalize(card.fr || card.en || title);
-                    if (!key) continue;
-                    if (!db[key]) {
-                        db[key] = card;
-                        count++;
-                    }
-
-                    const titleKey = normalize(title);
-                    if (titleKey && titleKey !== key && !db[titleKey]) {
-                        db[titleKey] = card;
-                    }
-                }
-
-                log(`✅ ${count} cartes uniques parsées (${Object.keys(db).length} entrées totales).`);
-
-                log("📦 Génération et téléchargement du fichier JSON...");
-                setProgress(95, "Génération finale...");
-                const json = JSON.stringify(db, null, 2);
-                const sizeMo = (json.length / 1024 / 1024).toFixed(2);
-
-                const blob = new Blob([json], { type: "application/json;charset=utf-8" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = "yugipedia-db.json";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                setProgress(100, "Terminé !");
-                log(`✅ yugipedia-db.json généré et téléchargé (${sizeMo} Mo) !`);
-                showToast(`yugipedia-db.json généré avec succès (${sizeMo} Mo) !`, 'ok');
-
-            } catch (err) {
-                log(`❌ Erreur : ${err.message}`, true);
-                showToast("Une erreur est survenue lors de l'extraction", 'err');
-            } finally {
-                startBtn.disabled = false;
-            }
-        });
-    </script>
+        /* Export */
+        progress.set(95, 'Génération du fichier…');
+        const json = $('minify').checked ? JSON.stringify(db) : JSON.stringify(db, null, 2);
+        const size = YGO.download(json, 'yugipedia-db.json', 'application/json;charset=utf-8');
+        progress.set(100, 'Terminé !');
+        out.log(`✅ yugipedia-db.json généré (${YGO.fmtBytes(size)}).`, 'ok');
+        YGO.toast(`yugipedia-db.json généré (${YGO.fmtBytes(size)}) !`);
+    } catch (err) {
+        out.log('❌ Erreur : ' + err.message, 'err');
+        YGO.toast("Erreur pendant l'extraction", 'err');
+    } finally {
+        btn.disabled = false;
+    }
+});
+</script>
 </body>
 </html>

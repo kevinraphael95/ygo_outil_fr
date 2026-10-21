@@ -2,464 +2,184 @@
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<title>Générateur de Scripts Modifiés (Overwrite)</title>
-<!-- Google Fonts -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scripts modifiés (overwrite) · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- FontAwesome Icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<!-- ⚡ Anti-flash : applique le thème AVANT que le CSS ne s'affiche -->
-<script>
-    (function() {
-        try {
-            var saved = localStorage.getItem('ygo_theme');
-            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            var theme = saved || (prefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
-        } catch (e) {}
-    })();
-</script>
-
-<style>
-/* ============================================================
-   DESIGN SYSTEM — Thème YGO (Harmonisé global)
-   ============================================================ */
-:root,
-[data-theme="dark"] {
-    --bg:            #0d0a1a;
-    --bg-pattern:    rgba(212, 175, 55, 0.025);
-    --surface:       #16112a;
-    --surface-2:     #1f1838;
-    --surface-3:     #2a2148;
-    --border:        #3a2d5c;
-    --border-strong: #4d3d75;
-    --text:          #f5ecd8;
-    --text-muted:    #a89b82;
-    --text-dim:      #6b6252;
-    --gold:          #d4af37;
-    --gold-light:    #e8c85a;
-    --gold-dark:     #a67c00;
-    --gold-soft:     rgba(212, 175, 55, 0.12);
-    --gold-glow:     rgba(212, 175, 55, 0.35);
-    --success:       #5fd07f;
-    --success-soft:  rgba(95, 208, 127, 0.14);
-    --warning:       #e0b64c;
-    --warning-soft:  rgba(224, 182, 76, 0.14);
-    --danger:        #e07a7a;
-    --danger-soft:   rgba(224, 122, 122, 0.14);
-    --yugi:          #b88ae0;
-    --yugi-soft:     rgba(155, 107, 196, 0.15);
-    --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
-    --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
-    --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
-    --code-bg:       #0a0715;
-}
-
-[data-theme="light"] {
-    --bg:            #f0e8d8;
-    --bg-pattern:    rgba(166, 124, 0, 0.04);
-    --surface:       #faf5e8;
-    --surface-2:     #f2ebd9;
-    --surface-3:     #e8dfc5;
-    --border:        #d4c8b0;
-    --border-strong: #b8a888;
-    --text:          #2a1f14;
-    --text-muted:    #6b5d47;
-    --text-dim:      #9a8b70;
-    --gold:          #a67c00;
-    --gold-light:    #c49616;
-    --gold-dark:     #7a5a00;
-    --gold-soft:     rgba(166, 124, 0, 0.10);
-    --gold-glow:     rgba(166, 124, 0, 0.25);
-    --success:       #1f8a3d;
-    --success-soft:  rgba(31, 138, 61, 0.12);
-    --warning:       #a67c00;
-    --warning-soft:  rgba(166, 124, 0, 0.12);
-    --danger:        #c33a3a;
-    --danger-soft:   rgba(195, 58, 58, 0.12);
-    --yugi:          #6a3a9a;
-    --yugi-soft:     rgba(106, 58, 154, 0.12);
-    --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
-    --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
-    --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
-    --code-bg:       #f7f2e3;
-}
-
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
-
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    background-image:
-        radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
-        radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.5;
-    transition: background 0.3s ease, color 0.3s ease;
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 24px;
-}
-
-/* HEADER */
-.app-header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(14px);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm);
-    margin: -24px -24px 24px -24px;
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.brand-logo {
-    font-size: 1.7rem;
-    color: var(--gold);
-    filter: drop-shadow(0 0 8px var(--gold-glow));
-}
-
-h1 {
-    font-family: 'Cinzel', Georgia, serif;
-    font-size: 1.25rem;
-    margin: 0 0 2px;
-    color: var(--gold);
-    font-weight: 700;
-}
-
-.sub { color: var(--text-muted); font-size: 12px; margin: 0; }
-
-.icon-btn {
-    width: 40px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    cursor: pointer;
-    font-size: 1.05rem;
-    transition: all 0.18s ease;
-}
-
-.icon-btn:hover {
-    background: var(--gold-soft);
-    border-color: var(--gold);
-    color: var(--gold);
-}
-
-[data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
-[data-theme="light"] #theme-toggle::before { content: "☀️"; }
-
-/* PANELS */
-.panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: var(--shadow-sm);
-}
-
-.panel-title {
-    font-family: 'Cinzel', Georgia, serif;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--gold);
-    margin: 0 0 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-label {
-    display: block; font-weight: 600; font-size: 13px;
-    margin-bottom: 6px; color: var(--text);
-}
-
-input[type="text"] {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    font-size: 14px;
-    font-family: inherit;
-    background: var(--surface-2);
-    color: var(--text);
-    margin-bottom: 12px;
-}
-input[type="text"]:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
-
-.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-
-button:not(.icon-btn) {
-    padding: 11px 20px;
-    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
-    color: #1a1408;
-    border: 1px solid var(--gold);
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    box-shadow: 0 2px 8px var(--gold-glow);
-    transition: all 0.18s ease;
-}
-button:not(.icon-btn):hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--gold-light), var(--gold));
-    transform: translateY(-1px);
-}
-button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
-
-/* CONSOLE LOGS */
-.console-box {
-    background: var(--code-bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
-    font-family: monospace;
-    font-size: 0.82rem;
-    height: 220px;
-    overflow-y: auto;
-    color: var(--text-muted);
-    line-height: 1.6;
-}
-
-/* TOASTS */
-.toasts {
-    position: fixed; bottom: 24px; right: 24px;
-    display: flex; flex-direction: column; gap: 10px;
-    z-index: 200; pointer-events: none;
-}
-.toast {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px; border-radius: 12px;
-    background: var(--surface); border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg); font-size: 0.88rem; font-weight: 600;
-    color: var(--text); pointer-events: auto; animation: toastIn 0.3s ease;
-}
-.toast.ok { border-left: 3px solid var(--success); }
-.toast.err { border-left: 3px solid var(--danger); }
-@keyframes toastIn {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
-}
-</style>
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
 </head>
 <body>
 
 <header class="app-header">
-    <div class="brand">
-        <div class="brand-logo"><i class="fa-solid fa-file-pen"></i></div>
-        <div>
-            <h1>Générateur de Scripts Modifiés</h1>
-            <div class="sub">Isolation des cartes modifiées (taguées) avec en-tête de travail</div>
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
         </div>
     </div>
-    <button class="icon-btn" id="theme-toggle" title="Changer de thème"></button>
 </header>
 
-<div class="panel">
-    <div class="panel-title"><i class="fa-solid fa-gear"></i> Configuration des paramètres</div>
-    
-    <label>Tag des cartes modifiées à isoler :</label>
-    <input type="text" id="customTag" value="[CUSTOM]">
-
-    <div class="row">
-        <div style="flex:1;">
-            <label>Fichier CDB Custom (Anglais) :</label>
-            <input type="file" id="cdbFile" accept=".cdb">
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-file-pen"></i></div>
+        <div>
+            <h1>Générateur de scripts modifiés</h1>
+            <p>Isole les cartes taguées et copie leur script officiel avec un en-tête de travail prêt à modifier.</p>
         </div>
-        <div style="flex:1;">
-            <label>Dossier des scripts officiels (.lua) :</label>
-            <input type="file" id="luaFolder" webkitdirectory directory multiple>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
+
+        <div class="field">
+            <label for="customTag">Tag des cartes modifiées à isoler</label>
+            <input type="text" id="customTag" value="[CUSTOM]" autocomplete="off">
+        </div>
+
+        <div class="grid-2">
+            <div class="field">
+                <label for="cdbFile">Fichier CDB custom (anglais)</label>
+                <input type="file" id="cdbFile" accept=".cdb">
+            </div>
+            <div class="field">
+                <label for="luaFolder">Dossier des scripts officiels (.lua)</label>
+                <input type="file" id="luaFolder" webkitdirectory directory multiple>
+                <span class="hint" id="luaHint"></span>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Lancer la génération des scripts modifiés</button>
         </div>
     </div>
 
-    <button id="startBtn" style="margin-top:10px;"><i class="fa-solid fa-play"></i> Lancer la génération des scripts modifiés</button>
-</div>
-
-<div class="panel">
-    <div class="panel-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</div>
-    <div id="console-log" class="console-box">
-        [Système] Prêt à traiter les cartes modifiées...<br>
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
     </div>
-</div>
+</main>
 
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
-
-<!-- Inclusion de sql.js et jszip -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
 <script>
-// Thème unifié
-const themeToggle = document.getElementById('theme-toggle');
-const htmlEl = document.documentElement;
-
-themeToggle.addEventListener('click', () => {
-    const current = htmlEl.getAttribute('data-theme');
-    const next = current === 'light' ? 'dark' : 'light';
-    htmlEl.setAttribute('data-theme', next);
-    localStorage.setItem('ygo_theme', next);
-});
-
-function showToast(message, type = 'ok') {
-    const container = document.getElementById('toasts');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `<i class="fa-solid ${type === 'ok' ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'}"></i><span>${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
-}
-
-const consoleLog = document.getElementById('console-log');
-function log(msg, isError = false) {
-    const time = new Date().toLocaleTimeString();
-    consoleLog.innerHTML += `<span style="color:var(--text-dim)">[${time}]</span> <span style="color:${isError ? 'var(--danger)' : 'var(--text)'}">${msg}</span><br>`;
-    consoleLog.scrollTop = consoleLog.scrollHeight;
-}
-
-function norm(s) {
-    return String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
-}
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const btn = $('startBtn');
+YGO.bindFileCount($('luaFolder'), $('luaHint'), /^c\d+\.lua$/i);
 
 let SQL = null;
-initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` }).then(aliasedSQL => {
-    SQL = aliasedSQL;
-    log("[Système] Moteur SQL initialisé avec succès.");
-});
+YGO.initSql()
+    .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
+    .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
 
-document.getElementById('startBtn').addEventListener('click', async () => {
-    if (!SQL) {
-        showToast("Moteur SQL en cours de chargement...", "err");
-        return;
-    }
+const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
-    const cdbInput = document.getElementById('cdbFile').files[0];
-    const luaFiles = document.getElementById('luaFolder').files;
-    const tag = document.getElementById('customTag').value.trim();
-
-    if (!cdbInput) {
-        showToast("Veuillez sélectionner un fichier CDB.", "err");
-        return;
-    }
-    if (luaFiles.length === 0) {
-        showToast("Veuillez sélectionner le dossier des scripts Lua.", "err");
-        return;
-    }
-
-    consoleLog.innerHTML = "";
-    log("📂 Lecture du fichier CDB des cartes modifiées...");
-
+function readCdb(buffer) {
+    const db = new SQL.Database(new Uint8Array(buffer));
     try {
-        const cdbBuffer = await cdbInput.arrayBuffer();
-        const db = new SQL.Database(new Uint8Array(cdbBuffer));
-        
-        const customCards = {};
-        const stmt = db.prepare("SELECT id, name, desc FROM texts");
-        while (stmt.step()) {
-            const row = stmt.get();
-            const cid = row[0];
-            const name = row[1];
-            const desc = row[2] || "";
-            customCards[cid] = { name, desc };
-        }
-        stmt.free();
-        db.close();
+        const res = db.exec('SELECT id, name, "desc" FROM texts');
+        return res.length ? res[0].values.map(([id, name, desc]) => ({ id, name: name || '', desc: desc || '' })) : [];
+    } finally { db.close(); }
+}
 
-        log(`→ ${Object.keys(customCards).length} cartes lues au total.`);
+async function readLua(files) {
+    const list = [...files].filter((f) => /^c\d+\.lua$/i.test(f.name));
+    const map = new Map();
+    for (let i = 0; i < list.length; i += 64) {          // lecture par paquets en parallèle
+        const slice = list.slice(i, i + 64);
+        const texts = await Promise.all(slice.map((f) => f.text()));
+        slice.forEach((f, k) => map.set(parseInt(f.name.match(/\d+/)[0], 10), texts[k]));
+    }
+    return map;
+}
 
-        log("📂 Analyse des scripts Lua...");
-        const luaMap = {};
-        for (const file of luaFiles) {
-            const match = file.name.match(/^c(\d+)\.lua$/i);
-            if (match) {
-                const oid = parseInt(match[1], 10);
-                const content = await file.text();
-                luaMap[oid] = content;
-            }
-        }
-        log(`→ ${Object.keys(luaMap).length} scripts Lua chargés.`);
+/** Cherche le script source : même ID, sinon un script qui cite le nom de la carte. */
+function makeFinder(luaMap) {
+    let lower = null;
+    return (cid, name) => {
+        if (luaMap.has(cid)) return cid;
+        const n = norm(name);
+        if (!n) return null;
+        if (!lower) lower = [...luaMap].map(([oid, code]) => [oid, code.toLowerCase()]);
+        for (const [oid, code] of lower) if (code.includes(n)) return oid;
+        return null;
+    };
+}
 
-        log("🔄 Isolation et traitement des cartes taguées (modifiées)...");
+/** Remplace l'ancien ID par le nouveau (cOLD -> cNEW puis OLD -> NEW). */
+function retarget(code, oid, cid) {
+    return code
+        .replace(new RegExp('\\bc' + oid + '\\b', 'g'), 'c' + cid)
+        .replace(new RegExp('\\b' + oid + '\\b', 'g'), String(cid));
+}
+
+async function zipAndDownload(zip, filename) {
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    return YGO.download(blob, filename);
+}
+
+out.log('Prêt à traiter les cartes modifiées…');
+
+btn.addEventListener('click', async () => {
+    if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
+    const cdb = $('cdbFile').files[0];
+    const luaFiles = $('luaFolder').files;
+    const tag = $('customTag').value.trim().toLowerCase();
+    if (!cdb) return YGO.toast('Sélectionne un fichier CDB.', 'err');
+    if (!luaFiles.length) return YGO.toast('Sélectionne le dossier des scripts Lua.', 'err');
+    if (!tag) return YGO.toast('Indique le tag des cartes modifiées.', 'err');
+
+    btn.disabled = true;
+    out.clear();
+    try {
+        out.log('📂 Lecture du CDB des cartes modifiées…');
+        const cards = readCdb(await cdb.arrayBuffer());
+        out.log(`→ ${cards.length} cartes lues.`);
+
+        out.log('📂 Lecture des scripts Lua…');
+        const luaMap = await readLua(luaFiles);
+        out.log(`→ ${luaMap.size} scripts valides.`);
+        const find = makeFinder(luaMap);
+
+        out.log('🔄 Isolation des cartes taguées…');
         const zip = new JSZip();
-        let generatedCount = 0;
-        let ignoredCount = 0;
+        let generated = 0, ignored = 0, noMatch = 0;
 
-        for (const [cidStr, data] of Object.entries(customCards)) {
-            const cid = parseInt(cidStr, 10);
-            const name = data.name;
-            const desc = data.desc;
+        for (const { id: cid, name, desc } of cards) {
+            if (!desc.toLowerCase().includes(tag)) { ignored++; continue; }
+            const oid = find(cid, name);
+            if (oid == null) { noMatch++; out.log(`! Aucun script source pour ${name} (${cid})`, 'warn'); continue; }
 
-            // Traiter uniquement les cartes taguées
-            if (!tag || !desc.toLowerCase().includes(tag.toLowerCase())) {
-                ignoredCount++;
-                continue;
-            }
-
-            let targetOid = null;
-            if (luaMap[cid]) {
-                targetOid = cid;
-            } else {
-                for (const [oid, content] of Object.entries(luaMap)) {
-                    if (content.toLowerCase().includes(norm(name))) {
-                        targetOid = parseInt(oid, 10);
-                        break;
-                    }
-                }
-            }
-
-            if (targetOid && luaMap[targetOid]) {
-                let code = luaMap[targetOid];
-                code = code.replace(new RegExp(`\\bc${targetOid}\\b`, "g"), `c${cid}`);
-                code = code.replace(new RegExp(`\\b${targetOid}\\b`, "g"), String(cid));
-
-                // Ajout de l'en-tête de commentaire personnalisé
-                const header = `--[MODIFIED] base copiée de c${targetOid}.lua (${name}) - à modifier\n`;
-                code = header + code;
-
-                zip.file(`c${cid}.lua`, code);
-                generatedCount++;
-            }
+            const code = retarget(luaMap.get(oid), oid, cid);
+            zip.file(`c${cid}.lua`, `--[MODIFIED] base copiée de c${oid}.lua (${name}) - à modifier\n` + code);
+            generated++;
         }
 
-        if (generatedCount > 0) {
-            log(`📦 Compression de ${generatedCount} scripts modifiés dans un ZIP...`);
-            const content = await zip.generateAsync({ type: "blob" });
-            const url = URL.createObjectURL(content);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "scripts_modifies_overwrite.zip";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            log(`✅ Terminé ! ${generatedCount} scripts modifiés extraits (${ignoredCount} cartes non taguées ignorées).`);
-            showToast(`${generatedCount} scripts modifiés exportés avec succès !`, 'ok');
-        } else {
-            log(`⚠️ Aucune carte modifiée/taguée n'a généré de script.`);
-            showToast("Aucun script généré.", "err");
+        if (!generated) {
+            out.log('⚠️ Aucune carte taguée n\'a produit de script.', 'warn');
+            return YGO.toast('Aucun script généré.', 'err');
         }
-
+        out.log(`📦 Compression de ${generated} scripts…`);
+        const size = await zipAndDownload(zip, 'scripts_modifies_overwrite.zip');
+        out.log(`✅ ${generated} scripts exportés (${YGO.fmtBytes(size)}) · ${ignored} cartes non taguées ignorées · ${noMatch} sans script.`, 'ok');
+        YGO.toast(`${generated} scripts modifiés exportés !`);
     } catch (err) {
-        log(`❌ Erreur critique : ${err.message}`, true);
-        showToast("Une erreur est survenue.", "err");
+        out.log('❌ Erreur critique : ' + err.message, 'err');
+        YGO.toast('Une erreur est survenue.', 'err');
+    } finally {
+        btn.disabled = false;
     }
 });
 </script>

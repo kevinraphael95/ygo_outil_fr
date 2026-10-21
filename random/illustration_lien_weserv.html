@@ -2,685 +2,230 @@
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<title>Convertisseur d'URL images — multi</title>
-<!-- Google Fonts -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convertisseur d'URL images · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- FontAwesome Icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<!-- ⚡ Anti-flash : applique le thème AVANT que le CSS ne s'affiche -->
-<script>
-    (function() {
-        try {
-            var saved = localStorage.getItem('ygo_theme');
-            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            var theme = saved || (prefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
-        } catch (e) {}
-    })();
-</script>
-
-<style>
-/* ============================================================
-   DESIGN SYSTEM — Thème YGO (Harmonisé global)
-   ============================================================ */
-:root,
-[data-theme="dark"] {
-    --bg:            #0d0a1a;
-    --bg-pattern:    rgba(212, 175, 55, 0.025);
-    --surface:       #16112a;
-    --surface-2:     #1f1838;
-    --surface-3:     #2a2148;
-    --border:        #3a2d5c;
-    --border-strong: #4d3d75;
-    --text:          #f5ecd8;
-    --text-muted:    #a89b82;
-    --text-dim:      #6b6252;
-    --gold:          #d4af37;
-    --gold-light:    #e8c85a;
-    --gold-dark:     #a67c00;
-    --gold-soft:     rgba(212, 175, 55, 0.12);
-    --gold-glow:     rgba(212, 175, 55, 0.35);
-    --success:       #5fd07f;
-    --success-soft:  rgba(95, 208, 127, 0.14);
-    --warning:       #e0b64c;
-    --warning-soft:  rgba(224, 182, 76, 0.14);
-    --danger:        #e07a7a;
-    --danger-soft:   rgba(224, 122, 122, 0.14);
-    --yugi:          #b88ae0;
-    --yugi-soft:     rgba(155, 107, 196, 0.15);
-    --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
-    --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
-    --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
-    --code-bg:       #0a0715;
-}
-
-[data-theme="light"] {
-    --bg:            #f0e8d8;
-    --bg-pattern:    rgba(166, 124, 0, 0.04);
-    --surface:       #faf5e8;
-    --surface-2:     #f2ebd9;
-    --surface-3:     #e8dfc5;
-    --border:        #d4c8b0;
-    --border-strong: #b8a888;
-    --text:          #2a1f14;
-    --text-muted:    #6b5d47;
-    --text-dim:      #9a8b70;
-    --gold:          #a67c00;
-    --gold-light:    #c49616;
-    --gold-dark:     #7a5a00;
-    --gold-soft:     rgba(166, 124, 0, 0.10);
-    --gold-glow:     rgba(166, 124, 0, 0.25);
-    --success:       #1f8a3d;
-    --success-soft:  rgba(31, 138, 61, 0.12);
-    --warning:       #a67c00;
-    --warning-soft:  rgba(166, 124, 0, 0.12);
-    --danger:        #c33a3a;
-    --danger-soft:   rgba(195, 58, 58, 0.12);
-    --yugi:          #6a3a9a;
-    --yugi-soft:     rgba(106, 58, 154, 0.12);
-    --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
-    --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
-    --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
-    --code-bg:       #f7f2e3;
-}
-
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
-
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    background-image:
-        radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
-        radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.5;
-    transition: background 0.3s ease, color 0.3s ease;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 24px;
-}
-
-/* HEADER */
-.app-header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(14px);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm);
-    margin: -24px -24px 24px -24px;
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.brand-logo {
-    font-size: 1.7rem;
-    color: var(--gold);
-    filter: drop-shadow(0 0 8px var(--gold-glow));
-}
-
-h1 {
-    font-family: 'Cinzel', Georgia, serif;
-    font-size: 1.25rem;
-    margin: 0 0 2px;
-    color: var(--gold);
-    font-weight: 700;
-}
-
-.sub { color: var(--text-muted); font-size: 12px; margin: 0; }
-
-.icon-btn {
-    width: 40px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    cursor: pointer;
-    font-size: 1.05rem;
-    transition: all 0.18s ease;
-}
-
-.icon-btn:hover {
-    background: var(--gold-soft);
-    border-color: var(--gold);
-    color: var(--gold);
-}
-
-[data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
-[data-theme="light"] #theme-toggle::before { content: "☀️"; }
-
-/* PANELS */
-.panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 16px;
-    box-shadow: var(--shadow-sm);
-}
-
-label {
-    display: block; font-weight: 600; font-size: 13px;
-    margin-bottom: 8px; color: var(--text);
-}
-
-textarea {
-    width: 100%; min-height: 150px;
-    padding: 12px 14px;
-    border: 1px solid var(--border); border-radius: 12px;
-    font-family: 'SF Mono', Consolas, monospace; font-size: 12px;
-    background: var(--code-bg); color: var(--text);
-    resize: vertical; line-height: 1.5;
-}
-textarea:focus {
-    outline: none; border-color: var(--gold);
-    box-shadow: 0 0 0 3px var(--gold-soft);
-}
-
-.row {
-    display: flex; gap: 12px; align-items: center;
-    flex-wrap: wrap; margin-top: 12px;
-}
-
-button:not(.icon-btn) {
-    padding: 11px 20px;
-    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
-    color: #1a1408;
-    border: 1px solid var(--gold);
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    box-shadow: 0 2px 8px var(--gold-glow);
-    transition: all 0.18s ease;
-}
-button:not(.icon-btn):hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--gold-light), var(--gold));
-    transform: translateY(-1px);
-}
-button.btn-secondary {
-    background: var(--surface-2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    box-shadow: none;
-}
-button.btn-secondary:hover:not(:disabled) {
-    background: var(--gold-soft);
-    border-color: var(--gold);
-    color: var(--gold);
-}
-.btn-mini {
-    padding: 5px 10px; font-size: 11px; border-radius: 8px;
-    background: var(--gold-soft); color: var(--gold);
-    border: 1px solid var(--gold-soft); font-weight: 600;
-}
-.btn-mini:hover { background: var(--gold); color: #1a1408; }
-.btn-mini.copied { background: var(--success); color: #fff; border-color: var(--success); }
-
-.stats {
-    font-size: 13px; color: var(--text-muted);
-    margin-top: 10px; min-height: 18px;
-}
-.stats .ok { color: var(--success); font-weight: 700; }
-.stats .warn { color: var(--warning); font-weight: 700; }
-.stats .err { color: var(--danger); font-weight: 700; }
-
-.table-wrap {
-    overflow-x: auto; border: 1px solid var(--border);
-    border-radius: 12px; background: var(--code-bg);
-    max-height: 500px;
-}
-table {
-    width: 100%; border-collapse: collapse; font-size: 12px;
-    font-family: 'SF Mono', Consolas, monospace;
-}
-th, td {
-    padding: 10px 14px; text-align: left;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-}
-th {
-    background: var(--surface-2); font-weight: 700; font-size: 11px;
-    text-transform: uppercase; letter-spacing: .06em;
-    color: var(--text-muted); position: sticky; top: 0; z-index: 2;
-}
-tr:hover td { background: var(--surface-2); }
-td.url-cell { max-width: 360px; word-break: break-all; }
-td.url-cell .val {
-    user-select: all; line-height: 1.4;
-    color: var(--text);
-}
-td.url-cell .val.ok { color: var(--success); }
-td.url-cell .val.warn { color: var(--warning); }
-td.url-cell .val.err { color: var(--danger); }
-
-td.preview-cell { width: 60px; text-align: center; }
-td.preview-cell img {
-    width: 40px; height: auto; border-radius: 6px; border: 1px solid var(--border);
-    cursor: pointer; transition: transform .15s;
-}
-td.preview-cell img:hover { transform: scale(3); z-index: 10; position: relative; }
-
-.empty {
-    text-align: center; padding: 40px 20px;
-    color: var(--text-muted); font-size: 13px;
-}
-
-.toolbar {
-    display: flex; justify-content: space-between;
-    align-items: center; flex-wrap: wrap; gap: 10px;
-    margin-bottom: 12px;
-}
-.toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-.filter {
-    padding: 7px 12px; border: 1px solid var(--border);
-    border-radius: 8px; background: var(--surface-2);
-    color: var(--text); font-size: 12px; font-family: inherit;
-    cursor: pointer; transition: all 0.15s;
-}
-.filter:hover { border-color: var(--gold); }
-.filter.active {
-    background: var(--gold-soft); border-color: var(--gold);
-    color: var(--gold); font-weight: 700;
-}
-
-.hidden { display: none !important; }
-
-/* TOASTS */
-.toasts {
-    position: fixed; bottom: 24px; right: 24px;
-    display: flex; flex-direction: column; gap: 10px;
-    z-index: 200; pointer-events: none;
-}
-.toast {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px; border-radius: 12px;
-    background: var(--surface); border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg); font-size: 0.88rem; font-weight: 600;
-    color: var(--text); pointer-events: auto; animation: toastIn 0.3s ease;
-}
-.toast.ok { border-left: 3px solid var(--success); }
-.toast.err { border-left: 3px solid var(--danger); }
-@keyframes toastIn {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
-}
-</style>
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
 </head>
 <body>
 
 <header class="app-header">
-    <div class="brand">
-        <div class="brand-logo"><i class="fa-solid fa-link"></i></div>
-        <div>
-            <h1>Convertisseur d'URL images</h1>
-            <div class="sub">Multi-conversion d'URLs Yugipedia & génération de patchs</div>
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
         </div>
     </div>
-    <button class="icon-btn" id="theme-toggle" title="Changer de thème"></button>
 </header>
 
-<div class="panel">
-    <label for="input">URLs à convertir (une par ligne)</label>
-    <textarea id="input" placeholder="https://ms.yugipedia.com/0/09/NaturalSelection-OW.png
-https://ms.yugipedia.com/X/YY/Excalibur-OW.png
-https://yugipedia.com/wiki/Special:Redirect/file/SpellbindingIllusion-JP-Manga-R-CA.png
-File.png"></textarea>
-
-    <div class="row">
-        <button class="btn-primary" id="convertBtn"><i class="fa-solid fa-rotate"></i> Convertir</button>
-        <button class="btn-secondary" id="clearBtn"><i class="fa-solid fa-trash"></i> Effacer</button>
-        <button class="btn-secondary" id="exampleBtn"><i class="fa-solid fa-file-import"></i> Exemple</button>
-    </div>
-
-    <div class="stats" id="stats"></div>
-</div>
-
-<div id="results-panel" class="hidden">
-    <div class="toolbar">
-        <div class="toolbar-actions">
-            <button class="filter active" data-filter="all">Tout</button>
-            <button class="filter" data-filter="ok">✅ OK</button>
-            <button class="filter" data-filter="warn">⚠️ Fallback</button>
-            <button class="filter" data-filter="err">❌ Invalide</button>
+<main class="container wide">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-link"></i></div>
+        <div>
+            <h1>Convertisseur d'URL images</h1>
+            <p>Convertit en masse des URLs Yugipedia en liens directs et weserv, puis génère un patch d'images.</p>
         </div>
-        <div class="toolbar-actions">
-            <button class="btn-secondary" id="copyAllDirect"><i class="fa-solid fa-copy"></i> URLs directes</button>
-            <button class="btn-secondary" id="copyAllWeserv"><i class="fa-solid fa-copy"></i> URLs weserv</button>
-            <button class="btn-secondary" id="exportTxt"><i class="fa-solid fa-download"></i> .txt</button>
-            <button class="btn-secondary" id="exportJson"><i class="fa-solid fa-download"></i> .json</button>
+    </section>
+
+    <div class="card">
+        <div class="field">
+            <label for="input">URLs à convertir (une par ligne)</label>
+            <textarea id="input" placeholder="https://ms.yugipedia.com/0/09/NaturalSelection-OW.png&#10;https://yugipedia.com/wiki/Special:Redirect/file/SpellbindingIllusion-JP-Manga-R-CA.png&#10;File.png"></textarea>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary" id="convertBtn" type="button"><i class="fa-solid fa-rotate"></i> Convertir</button>
+            <button class="btn" id="exampleBtn" type="button"><i class="fa-solid fa-file-import"></i> Exemple</button>
+            <button class="btn btn-danger" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Effacer</button>
+        </div>
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <div id="results-panel" class="card hidden">
+        <div class="toolbar">
+            <div class="tabs" role="tablist">
+                <button class="tab active" data-filter="all" type="button">Tout</button>
+                <button class="tab" data-filter="ok" type="button">✅ OK</button>
+                <button class="tab" data-filter="warn" type="button">⚠️ Fallback</button>
+                <button class="tab" data-filter="err" type="button">❌ Invalide</button>
+            </div>
+            <div class="actions" style="margin:0;">
+                <button class="btn btn-sm" id="copyAllDirect" type="button"><i class="fa-solid fa-copy"></i> URLs directes</button>
+                <button class="btn btn-sm" id="copyAllWeserv" type="button"><i class="fa-solid fa-copy"></i> URLs weserv</button>
+                <button class="btn btn-sm" id="exportTxt" type="button"><i class="fa-solid fa-download"></i> .txt</button>
+                <button class="btn btn-sm" id="exportJson" type="button"><i class="fa-solid fa-download"></i> .json</button>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:64px;">Aperçu</th>
+                        <th style="width:200px;">Nom de fichier</th>
+                        <th>URL directe</th>
+                        <th>URL weserv</th>
+                        <th style="width:190px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
         </div>
     </div>
 
-    <div class="table-wrap">
-        <table id="resultsTable">
-            <thead>
-                <tr>
-                    <th style="width:50px;">Aperçu</th>
-                    <th style="width:200px;">Nom de fichier</th>
-                    <th>URL directe</th>
-                    <th>URL weserv</th>
-                    <th style="width:160px;">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="resultsBody"></tbody>
-        </table>
+    <div class="card" id="empty-panel">
+        <div class="empty"><i class="fa-regular fa-image"></i>Colle des URLs ci-dessus, puis clique sur <strong>Convertir</strong>.</div>
     </div>
-</div>
+</main>
 
-<div class="panel" id="empty-panel">
-    <div class="empty">
-        Colle des URLs ci-dessus, puis clique sur <strong>Convertir</strong>.
-    </div>
-</div>
-
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
 
 <script>
-// ============================================================================
-// THÈME UNIFIÉ AVEC PERSISTENCE LOCALSTORAGE
-// ============================================================================
-const themeToggle = document.getElementById('theme-toggle');
-const htmlEl = document.documentElement;
-
-themeToggle.addEventListener('click', () => {
-    const current = htmlEl.getAttribute('data-theme');
-    const next = current === 'light' ? 'dark' : 'light';
-    htmlEl.setAttribute('data-theme', next);
-    localStorage.setItem('ygo_theme', next);
-});
-
-// Toasts
-function showToast(message, type = 'ok') {
-    const container = document.getElementById('toasts');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `<i class="fa-solid ${type === 'ok' ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'}"></i><span>${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
-}
-
-// ============================================================================
-// ÉTAT & CONVERSION
-// ============================================================================
+const { $, el } = YGO;
 let allResults = [];
 let currentFilter = 'all';
 
-function parseUrl(raw) {
-    let s = String(raw || '').trim();
-    if (!s) return null;
+const weserv = (hostAndPath) => 'https://images.weserv.nl/?url=' + encodeURIComponent(hostAndPath);
+const stripProto = (u) => u.replace(/^https?:\/\//, '');
+const lastSegment = (u) => u.split('/').pop().split('?')[0];
 
-    if (/^https?:\/\/ms\.yugipedia\.com\//i.test(s)) {
-        const filename = s.split('/').pop().split('?')[0];
-        return {
-            filename,
-            directUrl: s,
-            weservUrl: `https://images.weserv.nl/?url=${encodeURIComponent(s.replace(/^https?:\/\//, ''))}`,
-            status: 'ok',
-        };
-    }
-
-    let m = s.match(/Special:Redirect\/file\/(.+?)(?:\?|$)/i);
-    if (m) return buildFromFilename(decodeURIComponent(m[1]));
-
-    m = s.match(/\/wiki\/File:(.+?)(?:\?|$)/i);
-    if (m) return buildFromFilename(decodeURIComponent(m[1]));
-
-    if (/\.(png|jpg|jpeg|gif|webp)$/i.test(s) && !s.includes('/')) {
-        return buildFromFilename(s);
-    }
-
-    if (/^https?:\/\//i.test(s)) {
-        const filename = s.split('/').pop().split('?')[0];
-        return {
-            filename,
-            directUrl: s,
-            weservUrl: `https://images.weserv.nl/?url=${encodeURIComponent(s.replace(/^https?:\/\//, ''))}`,
-            status: 'warn',
-            note: 'Domaine non-Yugipedia',
-        };
-    }
-
-    return {
-        filename: s,
-        directUrl: null,
-        weservUrl: null,
-        status: 'err',
-        note: 'Format non reconnu',
-    };
-}
-
-function buildFromFilename(filename) {
+function fromFilename(filename) {
+    const path = 'yugipedia.com/wiki/Special:Redirect/file/' + encodeURIComponent(filename);
     return {
         filename,
-        directUrl: `https://yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(filename)}`,
-        weservUrl: `https://images.weserv.nl/?url=yugipedia.com/wiki/Special:Redirect/file/${encodeURIComponent(filename)}`,
+        directUrl: 'https://' + path,
+        weservUrl: 'https://images.weserv.nl/?url=' + path,
         status: 'warn',
         note: 'Chemin inconnu — utilise Special:Redirect',
     };
 }
 
+function parseUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+
+    if (/^https?:\/\/ms\.yugipedia\.com\//i.test(s)) {
+        return { filename: lastSegment(s), directUrl: s, weservUrl: weserv(stripProto(s)), status: 'ok' };
+    }
+    let m = s.match(/Special:Redirect\/file\/(.+?)(?:\?|$)/i);
+    if (m) return fromFilename(decodeURIComponent(m[1]));
+    m = s.match(/\/wiki\/File:(.+?)(?:\?|$)/i);
+    if (m) return fromFilename(decodeURIComponent(m[1]));
+    if (/\.(png|jpe?g|gif|webp)$/i.test(s) && !s.includes('/')) return fromFilename(s);
+
+    if (/^https?:\/\//i.test(s)) {
+        return { filename: lastSegment(s), directUrl: s, weservUrl: weserv(stripProto(s)), status: 'warn', note: 'Domaine non-Yugipedia' };
+    }
+    return { filename: s, directUrl: null, weservUrl: null, status: 'err', note: 'Format non reconnu' };
+}
+
 function processInput() {
-    const text = document.getElementById('input').value;
-    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-
-    if (!lines.length) {
-        allResults = [];
-        renderResults();
-        return;
-    }
-
-    const seen = new Set();
-    const unique = [];
-    for (const line of lines) {
-        if (seen.has(line)) continue;
-        seen.add(line);
-        unique.push(line);
-    }
-
-    allResults = unique.map((raw) => {
-        const parsed = parseUrl(raw);
-        if (!parsed) return { raw, status: 'err', filename: '', directUrl: null, weservUrl: null };
-        return { raw, ...parsed };
-    });
-
+    const lines = [...new Set($('input').value.split('\n').map((l) => l.trim()).filter(Boolean))];
+    allResults = lines.map((raw) => ({ raw, ...parseUrl(raw) }));
     renderResults();
-    showToast(`${allResults.length} URL(s) convertie(s) avec succès !`, 'ok');
+    if (allResults.length) YGO.toast(`${allResults.length} URL(s) convertie(s) !`);
+}
+
+function copyButton(label, title, value) {
+    const b = el('button', { className: 'btn btn-sm', type: 'button', title, text: label });
+    b.addEventListener('click', async () => {
+        await YGO.copy(value, null);
+        const old = b.textContent;
+        b.textContent = '✅ Copié';
+        b.classList.add('btn-copied');
+        setTimeout(() => { b.textContent = old; b.classList.remove('btn-copied'); }, 1200);
+    });
+    return b;
 }
 
 function renderResults() {
-    const tbody = document.getElementById('resultsBody');
-    const stats = document.getElementById('stats');
-    const resultsPanel = document.getElementById('results-panel');
-    const emptyPanel = document.getElementById('empty-panel');
+    const has = allResults.length > 0;
+    $('results-panel').classList.toggle('hidden', !has);
+    $('empty-panel').classList.toggle('hidden', has);
+    if (!has) { $('stats').textContent = ''; return; }
 
-    if (!allResults.length) {
-        resultsPanel.classList.add('hidden');
-        emptyPanel.style.display = 'block';
-        stats.textContent = '';
-        return;
+    const body = $('resultsBody');
+    body.replaceChildren();
+    const rows = currentFilter === 'all' ? allResults : allResults.filter((r) => r.status === currentFilter);
+
+    for (const r of rows) {
+        const preview = el('td', { className: 'preview-cell' });
+        if (r.weservUrl) {
+            const img = el('img', { src: r.weservUrl, alt: '', loading: 'lazy', title: r.filename });
+            img.onerror = () => { img.style.opacity = '.25'; img.title = 'Image indisponible'; };
+            preview.append(img);
+        } else preview.textContent = '—';
+
+        const actions = el('td', {});
+        if (r.directUrl) actions.append(copyButton('📋 Direct', "Copier l'URL directe", r.directUrl), ' ', copyButton('📋 Weserv', "Copier l'URL weserv", r.weservUrl));
+        else actions.textContent = '—';
+
+        body.append(el('tr', { dataset: { status: r.status } },
+            preview,
+            el('td', {}, el('div', { className: 'val', text: r.filename || '—' })),
+            el('td', {}, el('div', { className: 'val ' + (r.directUrl ? (r.status === 'ok' ? 'ok' : 'warn') : 'err'), text: r.directUrl || r.raw, title: r.note || '' })),
+            el('td', {}, el('div', { className: 'val' + (r.weservUrl ? '' : ' err'), text: r.weservUrl || '—' })),
+            actions));
     }
 
-    resultsPanel.classList.remove('hidden');
-    emptyPanel.style.display = 'none';
-    tbody.innerHTML = '';
-
-    const filtered = allResults.filter((r) => {
-        if (currentFilter === 'all') return true;
-        return r.status === currentFilter;
-    });
-
-    for (let i = 0; i < filtered.length; i++) {
-        const r = filtered[i];
-        const tr = document.createElement('tr');
-        tr.dataset.status = r.status;
-
-        const previewCell = document.createElement('td');
-        previewCell.className = 'preview-cell';
-        if (r.weservUrl) {
-            const img = document.createElement('img');
-            img.src = r.weservUrl;
-            img.alt = '';
-            img.loading = 'lazy';
-            img.title = r.filename;
-            img.onerror = () => { img.style.opacity = '0.2'; img.title = 'Image indisponible'; };
-            previewCell.appendChild(img);
-        } else {
-            previewCell.textContent = '—';
-        }
-        tr.appendChild(previewCell);
-
-        const fnCell = document.createElement('td');
-        fnCell.className = 'url-cell';
-        fnCell.innerHTML = `<div class="val">${escapeHtml(r.filename || '—')}</div>`;
-        tr.appendChild(fnCell);
-
-        const directCell = document.createElement('td');
-        directCell.className = 'url-cell';
-        if (r.directUrl) {
-            const cls = r.status === 'ok' ? 'ok' : 'warn';
-            directCell.innerHTML = `<div class="val ${cls}">${escapeHtml(r.directUrl)}</div>`;
-        } else {
-            directCell.innerHTML = `<div class="val err">${escapeHtml(r.raw)}</div>`;
-        }
-        tr.appendChild(directCell);
-
-        const weservCell = document.createElement('td');
-        weservCell.className = 'url-cell';
-        if (r.weservUrl) {
-            weservCell.innerHTML = `<div class="val">${escapeHtml(r.weservUrl)}</div>`;
-        } else {
-            weservCell.innerHTML = `<div class="val err">—</div>`;
-        }
-        tr.appendChild(weservCell);
-
-        const actionsCell = document.createElement('td');
-        if (r.directUrl) {
-            actionsCell.innerHTML = `
-                <button class="btn-mini" data-copy="${escapeAttr(r.directUrl)}" title="Copier l'URL directe">📋 Direct</button>
-                <button class="btn-mini" data-copy="${escapeAttr(r.weservUrl)}" title="Copier l'URL weserv">📋 Weserv</button>
-            `;
-        } else {
-            actionsCell.textContent = '—';
-        }
-        tr.appendChild(actionsCell);
-
-        tbody.appendChild(tr);
-    }
-
-    const ok = allResults.filter((r) => r.status === 'ok').length;
-    const warn = allResults.filter((r) => r.status === 'warn').length;
-    const err = allResults.filter((r) => r.status === 'err').length;
-    stats.innerHTML = `
-        ${allResults.length} URL${allResults.length > 1 ? 's' : ''} traitée${allResults.length > 1 ? 's' : ''}
-        · <span class="ok">${ok} OK</span>
-        · <span class="warn">${warn} fallback</span>
-        · <span class="err">${err} invalide${err > 1 ? 's' : ''}</span>
-    `;
-
-    tbody.querySelectorAll('button[data-copy]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            navigator.clipboard.writeText(btn.dataset.copy).then(() => {
-                const original = btn.textContent;
-                btn.textContent = '✅ Copié';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = original;
-                    btn.classList.remove('copied');
-                }, 1200);
-            });
-        });
-    });
+    const count = (s) => allResults.filter((r) => r.status === s).length;
+    const n = allResults.length, err = count('err');
+    $('stats').replaceChildren(
+        el('span', { className: 'chip', text: `${n} URL${n > 1 ? 's' : ''} traitée${n > 1 ? 's' : ''}` }),
+        el('span', { className: 'chip ok', text: `${count('ok')} OK` }),
+        el('span', { className: 'chip warn', text: `${count('warn')} fallback` }),
+        el('span', { className: 'chip err', text: `${err} invalide${err > 1 ? 's' : ''}` }));
 }
 
-document.querySelectorAll('.filter').forEach((btn) => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.filter').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentFilter = btn.dataset.filter;
-        renderResults();
-    });
-});
-
-document.getElementById('convertBtn').addEventListener('click', processInput);
-document.getElementById('clearBtn').addEventListener('click', () => {
-    document.getElementById('input').value = '';
-    allResults = [];
+document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentFilter = tab.dataset.filter;
     renderResults();
-    showToast("Champ effacé.", "ok");
-});
-document.getElementById('exampleBtn').addEventListener('click', () => {
-    document.getElementById('input').value = `https://ms.yugipedia.com/0/09/NaturalSelection-OW.png
-https://yugipedia.com/wiki/Special:Redirect/file/Excalibur-OW.png
-https://yugipedia.com/wiki/File:SpellbindingIllusion-JP-Manga-R-CA.png
-File.png
-https://exemple.com/image.png`;
+}));
+
+$('convertBtn').addEventListener('click', processInput);
+$('input').addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') processInput(); });
+$('clearBtn').addEventListener('click', () => { $('input').value = ''; allResults = []; renderResults(); YGO.toast('Champ effacé.'); });
+$('exampleBtn').addEventListener('click', () => {
+    $('input').value = [
+        'https://ms.yugipedia.com/0/09/NaturalSelection-OW.png',
+        'https://yugipedia.com/wiki/Special:Redirect/file/Excalibur-OW.png',
+        'https://yugipedia.com/wiki/File:SpellbindingIllusion-JP-Manga-R-CA.png',
+        'File.png',
+        'https://exemple.com/image.png',
+    ].join('\n');
     processInput();
 });
 
-document.getElementById('copyAllDirect').addEventListener('click', () => {
-    const urls = allResults.filter((r) => r.directUrl).map((r) => r.directUrl).join('\n');
-    navigator.clipboard.writeText(urls).then(() => showToast("Toutes les URLs directes ont été copiées !", "ok"));
-});
+const joinUrls = (key) => allResults.filter((r) => r[key]).map((r) => r[key]).join('\n');
+$('copyAllDirect').addEventListener('click', () => YGO.copy(joinUrls('directUrl'), 'Toutes les URLs directes ont été copiées !'));
+$('copyAllWeserv').addEventListener('click', () => YGO.copy(joinUrls('weservUrl'), 'Toutes les URLs weserv ont été copiées !'));
 
-document.getElementById('copyAllWeserv').addEventListener('click', () => {
-    const urls = allResults.filter((r) => r.weservUrl).map((r) => r.weservUrl).join('\n');
-    navigator.clipboard.writeText(urls).then(() => showToast("Toutes les URLs weserv ont été copiées !", "ok"));
+$('exportTxt').addEventListener('click', () => {
+    const txt = allResults.map((r) => `# ${r.filename}\ndirect: ${r.directUrl || '—'}\nweserv: ${r.weservUrl || '—'}\n`).join('\n');
+    YGO.download(txt, 'urls-images.txt', 'text/plain;charset=utf-8');
+    YGO.toast('Export .txt réussi !');
 });
-
-document.getElementById('exportTxt').addEventListener('click', () => {
-    const lines = allResults.map((r) => {
-        return [`# ${r.filename}`, `direct: ${r.directUrl || '—'}`, `weserv: ${r.weservUrl || '—'}`, ''].join('\n');
-    }).join('\n');
-    downloadFile('urls-images.txt', lines, 'text/plain');
-    showToast("Exportation .txt réussie !", "ok");
-});
-
-document.getElementById('exportJson').addEventListener('click', () => {
+$('exportJson').addEventListener('click', () => {
     const obj = {};
     for (const r of allResults) {
-        if (r.filename && r.directUrl) {
-            const key = r.filename.replace(/\.[a-z0-9]+$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            obj[key] = r.directUrl;
-        }
+        if (!r.filename || !r.directUrl) continue;
+        obj[r.filename.replace(/\.[a-z0-9]+$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '')] = r.directUrl;
     }
-    downloadFile('patch-images.json', JSON.stringify(obj, null, 2), 'application/json');
-    showToast("Exportation .json réussie !", "ok");
+    YGO.download(JSON.stringify(obj, null, 2), 'patch-images.json', 'application/json;charset=utf-8');
+    YGO.toast('Export .json réussi !');
 });
-
-function escapeHtml(s) {
-    return String(s || '').replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-}
-function escapeAttr(s) { return String(s || '').replace(/"/g, '&quot;'); }
-function downloadFile(filename, content, mime) {
-    const blob = new Blob([content], { type: mime + ';charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 </script>
-
 </body>
 </html>

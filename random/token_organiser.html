@@ -2,481 +2,180 @@
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<title>Réorganisateur de Tokens CDB</title>
-<!-- Google Fonts -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Réorganisateur de tokens CDB · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- FontAwesome Icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<!-- ⚡ Anti-flash : applique le thème AVANT que le CSS ne s'affiche -->
-<script>
-    (function() {
-        try {
-            var saved = localStorage.getItem('ygo_theme');
-            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            var theme = saved || (prefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
-        } catch (e) {}
-    })();
-</script>
-
-<style>
-/* ============================================================
-   DESIGN SYSTEM — Thème YGO (Harmonisé global)
-   ============================================================ */
-:root,
-[data-theme="dark"] {
-    --bg:            #0d0a1a;
-    --bg-pattern:    rgba(212, 175, 55, 0.025);
-    --surface:       #16112a;
-    --surface-2:     #1f1838;
-    --surface-3:     #2a2148;
-    --border:        #3a2d5c;
-    --border-strong: #4d3d75;
-    --text:          #f5ecd8;
-    --text-muted:    #a89b82;
-    --text-dim:      #6b6252;
-    --gold:          #d4af37;
-    --gold-light:    #e8c85a;
-    --gold-dark:     #a67c00;
-    --gold-soft:     rgba(212, 175, 55, 0.12);
-    --gold-glow:     rgba(212, 175, 55, 0.35);
-    --success:       #5fd07f;
-    --success-soft:  rgba(95, 208, 127, 0.14);
-    --warning:       #e0b64c;
-    --warning-soft:  rgba(224, 182, 76, 0.14);
-    --danger:        #e07a7a;
-    --danger-soft:   rgba(224, 122, 122, 0.14);
-    --yugi:          #b88ae0;
-    --yugi-soft:     rgba(155, 107, 196, 0.15);
-    --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
-    --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
-    --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
-    --code-bg:       #0a0715;
-}
-
-[data-theme="light"] {
-    --bg:            #f0e8d8;
-    --bg-pattern:    rgba(166, 124, 0, 0.04);
-    --surface:       #faf5e8;
-    --surface-2:     #f2ebd9;
-    --surface-3:     #e8dfc5;
-    --border:        #d4c8b0;
-    --border-strong: #b8a888;
-    --text:          #2a1f14;
-    --text-muted:    #6b5d47;
-    --text-dim:      #9a8b70;
-    --gold:          #a67c00;
-    --gold-light:    #c49616;
-    --gold-dark:     #7a5a00;
-    --gold-soft:     rgba(166, 124, 0, 0.10);
-    --gold-glow:     rgba(166, 124, 0, 0.25);
-    --success:       #1f8a3d;
-    --success-soft:  rgba(31, 138, 61, 0.12);
-    --warning:       #a67c00;
-    --warning-soft:  rgba(166, 124, 0, 0.12);
-    --danger:        #c33a3a;
-    --danger-soft:   rgba(195, 58, 58, 0.12);
-    --yugi:          #6a3a9a;
-    --yugi-soft:     rgba(106, 58, 154, 0.12);
-    --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
-    --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
-    --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
-    --code-bg:       #f7f2e3;
-}
-
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
-
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    background-image:
-        radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
-        radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.5;
-    transition: background 0.3s ease, color 0.3s ease;
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 24px;
-}
-
-/* HEADER */
-.app-header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(14px);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm);
-    margin: -24px -24px 24px -24px;
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.brand-logo {
-    font-size: 1.7rem;
-    color: var(--gold);
-    filter: drop-shadow(0 0 8px var(--gold-glow));
-}
-
-h1 {
-    font-family: 'Cinzel', Georgia, serif;
-    font-size: 1.25rem;
-    margin: 0 0 2px;
-    color: var(--gold);
-    font-weight: 700;
-}
-
-.sub { color: var(--text-muted); font-size: 12px; margin: 0; }
-
-.icon-btn {
-    width: 40px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    cursor: pointer;
-    font-size: 1.05rem;
-    transition: all 0.18s ease;
-}
-
-.icon-btn:hover {
-    background: var(--gold-soft);
-    border-color: var(--gold);
-    color: var(--gold);
-}
-
-[data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
-[data-theme="light"] #theme-toggle::before { content: "☀️"; }
-
-/* PANELS */
-.panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: var(--shadow-sm);
-}
-
-.panel-title {
-    font-family: 'Cinzel', Georgia, serif;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--gold);
-    margin: 0 0 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-label {
-    display: block; font-weight: 600; font-size: 13px;
-    margin-bottom: 6px; color: var(--text);
-}
-
-input[type="file"] {
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    font-size: 14px;
-    font-family: inherit;
-    background: var(--surface-2);
-    color: var(--text);
-    width: 100%;
-    margin-bottom: 12px;
-}
-
-button:not(.icon-btn) {
-    padding: 11px 20px;
-    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
-    color: #1a1408;
-    border: 1px solid var(--gold);
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    box-shadow: 0 2px 8px var(--gold-glow);
-    transition: all 0.18s ease;
-}
-button:not(.icon-btn):hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--gold-light), var(--gold));
-    transform: translateY(-1px);
-}
-button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
-
-/* CONSOLE LOGS */
-.console-box {
-    background: var(--code-bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
-    font-family: monospace;
-    font-size: 0.82rem;
-    height: 220px;
-    overflow-y: auto;
-    color: var(--text-muted);
-    line-height: 1.6;
-}
-
-/* TOASTS */
-.toasts {
-    position: fixed; bottom: 24px; right: 24px;
-    display: flex; flex-direction: column; gap: 10px;
-    z-index: 200; pointer-events: none;
-}
-.toast {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px; border-radius: 12px;
-    background: var(--surface); border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg); font-size: 0.88rem; font-weight: 600;
-    color: var(--text); pointer-events: auto; animation: toastIn 0.3s ease;
-}
-.toast.ok { border-left: 3px solid var(--success); }
-.toast.err { border-left: 3px solid var(--danger); }
-@keyframes toastIn {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
-}
-</style>
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
 </head>
 <body>
 
 <header class="app-header">
-    <div class="brand">
-        <div class="brand-logo"><i class="fa-solid fa-clone"></i></div>
-        <div>
-            <h1>Réorganisateur de Tokens CDB</h1>
-            <div class="sub">Place chaque token juste après la carte qui l'invoque</div>
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
         </div>
     </div>
-    <button class="icon-btn" id="theme-toggle" title="Changer de thème"></button>
 </header>
 
-<div class="panel">
-    <div class="panel-title"><i class="fa-solid fa-file-arrow-up"></i> Fichier CDB source</div>
-    
-    <label>Sélectionnez votre fichier .cdb :</label>
-    <input type="file" id="cdbFile" accept=".cdb">
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-clone"></i></div>
+        <div>
+            <h1>Réorganisateur de tokens CDB</h1>
+            <p>Place chaque token juste après la carte qui l'invoque et renumérote les IDs.</p>
+        </div>
+    </section>
 
-    <button id="startBtn"><i class="fa-solid fa-play"></i> Réorganiser et télécharger</button>
-</div>
-
-<div class="panel">
-    <div class="panel-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</div>
-    <div id="console-log" class="console-box">
-        [Système] En attente du fichier CDB...<br>
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-file-arrow-up"></i> Fichier CDB source</h2>
+        <div class="field">
+            <label for="cdbFile">Sélectionne ton fichier .cdb</label>
+            <input type="file" id="cdbFile" accept=".cdb">
+        </div>
+        <div class="actions">
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Réorganiser et télécharger</button>
+        </div>
     </div>
-</div>
 
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
-
-<!-- sql.js pour manipuler les bases SQLite dans le navigateur -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
-
 <script>
-// Thème unifié
-const themeToggle = document.getElementById('theme-toggle');
-const htmlEl = document.documentElement;
-
-themeToggle.addEventListener('click', () => {
-    const current = htmlEl.getAttribute('data-theme');
-    const next = current === 'light' ? 'dark' : 'light';
-    htmlEl.setAttribute('data-theme', next);
-    localStorage.setItem('ygo_theme', next);
-});
-
-function showToast(message, type = 'ok') {
-    const container = document.getElementById('toasts');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `<i class="fa-solid ${type === 'ok' ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'}"></i><span>${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
-}
-
-const consoleLog = document.getElementById('console-log');
-function log(msg, isError = false) {
-    const time = new Date().toLocaleTimeString();
-    consoleLog.innerHTML += `<span style="color:var(--text-dim)">[${time}]</span> <span style="color:${isError ? 'var(--danger)' : 'var(--text)'}">${msg}</span><br>`;
-    consoleLog.scrollTop = consoleLog.scrollHeight;
-}
-
+const { $ } = YGO;
 const TOKEN_TYPE = 0x4000;
+const out = YGO.console($('console'));
+const btn = $('startBtn');
+out.log('En attente du fichier CDB…');
 
 let SQL = null;
-initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` }).then(aliasedSQL => {
-    SQL = aliasedSQL;
-    log("[Système] Moteur SQL prêt.");
-});
+YGO.initSql()
+    .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
+    .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
 
-document.getElementById('startBtn').addEventListener('click', async () => {
-    if (!SQL) {
-        showToast("Moteur SQL en cours de chargement...", "err");
-        return;
-    }
+/** Lit toute une table en un seul passage : { columns, rows }. */
+function readTable(db, table) {
+    const res = db.exec(`SELECT * FROM ${table} ORDER BY id`);
+    return res.length ? { columns: res[0].columns, rows: res[0].values } : { columns: [], rows: [] };
+}
 
-    const fileInput = document.getElementById('cdbFile').files[0];
-    if (!fileInput) {
-        showToast("Veuillez sélectionner un fichier .cdb", "err");
-        return;
-    }
+btn.addEventListener('click', async () => {
+    if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
+    const file = $('cdbFile').files[0];
+    if (!file) return YGO.toast('Sélectionne un fichier .cdb', 'err');
 
-    consoleLog.innerHTML = "";
-    log("📂 Chargement du fichier CDB...");
-
+    btn.disabled = true;
+    out.clear();
+    let srcDb = null, dstDb = null;
     try {
-        const buffer = await fileInput.arrayBuffer();
-        const srcDb = new SQL.Database(new Uint8Array(buffer));
+        out.log('📂 Chargement du fichier CDB…');
+        srcDb = new SQL.Database(new Uint8Array(await file.arrayBuffer()));
 
-        // Récupération des lignes
-        const rows = [];
-        const res = srcDb.exec("SELECT d.id, d.type, d.alias, d.setcode, d.atk, d.def, d.level, d.race, d.attribute, d.category, t.name, t.desc FROM datas d JOIN texts t ON t.id = d.id ORDER BY d.id");
-        
-        if (res.length > 0) {
-            for (const row of res[0].values) {
-                rows.push({
-                    id: row[0],
-                    type: row[1],
-                    alias: row[2],
-                    setcode: row[3],
-                    atk: row[4],
-                    def: row[5],
-                    level: row[6],
-                    race: row[7],
-                    attribute: row[8],
-                    category: row[9],
-                    name: row[10],
-                    desc: row[11] || ""
-                });
-            }
+        const datas = readTable(srcDb, 'datas');
+        const texts = readTable(srcDb, 'texts');
+        const col = (cols, n) => cols.indexOf(n);
+        const D = { id: col(datas.columns, 'id'), type: col(datas.columns, 'type'), alias: col(datas.columns, 'alias') };
+        const T = { id: col(texts.columns, 'id'), name: col(texts.columns, 'name'), desc: col(texts.columns, 'desc') };
+        if (Object.values(D).includes(-1) || Object.values(T).includes(-1)) {
+            throw new Error('Ce fichier ne ressemble pas à un CDB YGOPro (tables datas/texts).');
         }
 
-        const cards = rows.filter(r => !(r.type & TOKEN_TYPE));
-        const tokens = rows.filter(r => (r.type & TOKEN_TYPE));
+        const textById = new Map(texts.rows.map((r) => [r[T.id], r]));
+        const entries = [];
+        for (const d of datas.rows) {
+            const t = textById.get(d[D.id]);
+            if (!t) continue;
+            entries.push({ id: d[D.id], type: d[D.type], d, t, name: t[T.name] || '', desc: t[T.desc] || '' });
+        }
+        if (!entries.length) throw new Error('Aucune carte trouvée dans ce CDB.');
+        out.log(`→ ${entries.length} entrées lues.`);
 
-        const byName = {};
+        const cards = entries.filter((e) => !(e.type & TOKEN_TYPE));
+        const tokens = entries.filter((e) => e.type & TOKEN_TYPE);
+
+        const byName = new Map();
         for (const c of cards) {
-            byName[c.name] = byName[c.name] || [];
-            byName[c.name].push(c);
+            if (!byName.has(c.name)) byName.set(c.name, []);
+            byName.get(c.name).push(c);
         }
 
-        const after = {}; // id carte -> [tokens]
-        let orphans = [];
-
-        for (const t of tokens) {
-            const m = t.desc.match(/"([^"]+)"/);
-            const cands = m ? byName[m[1]] : null;
-            if (!cands) {
-                orphans.push(t);
-                continue;
-            }
-            let targetCands = cands;
+        /* Rattachement de chaque token à la carte qui l'invoque */
+        const after = new Map();
+        const orphans = [];
+        for (const tk of tokens) {
+            const m = tk.desc.match(/"([^"]+)"/);
+            const cands = m ? byName.get(m[1]) : null;
+            if (!cands) { orphans.push(tk); continue; }
+            let pool = cands;
             if (cands.length > 1) {
-                const citing = cands.filter(c => c.desc.includes(t.name));
-                if (citing.length > 0) {
-                    targetCands = citing;
-                } else {
-                    log(`! Ambigu : ${t.name} (${t.id}) -> plusieurs cartes '${m[1]}', la première est prise`);
-                }
+                const citing = cands.filter((c) => c.desc.includes(tk.name));
+                if (citing.length) pool = citing;
+                else out.log(`! Ambigu : ${tk.name} (${tk.id}) → plusieurs cartes « ${m[1]} », la première est prise`, 'warn');
             }
-            after[targetCands[0].id] = after[targetCands[0].id] || [];
-            after[targetCands[0].id].push(t);
+            const host = pool[0].id;
+            if (!after.has(host)) after.set(host, []);
+            after.get(host).push(tk);
         }
 
-        // Nouvel ordre
+        /* Nouvel ordre + renumérotation à partir du premier ID */
         const order = [];
-        for (const c of cards) {
-            order.push(c);
-            if (after[c.id]) {
-                order.push(...after[c.id]);
-            }
-        }
+        for (const c of cards) { order.push(c); if (after.has(c.id)) order.push(...after.get(c.id)); }
         order.push(...orphans);
 
-        const startId = rows[0].id;
-        const mapping = {};
-        order.forEach((item, idx) => {
-            mapping[item.id] = startId + idx;
-        });
+        const startId = entries[0].id;
+        const mapping = new Map(order.map((e, i) => [e.id, startId + i]));
 
-        // Création de la nouvelle base de données SQLite de sortie
-        const dstDb = new SQL.Database();
-        
-        // Copie des schémas de table
-        const schemas = srcDb.exec("SELECT sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL");
-        schemas[0].values.forEach(val => {
-            dstDb.run(val[0]);
-        });
+        /* Base de sortie : mêmes schémas, lignes réinsérées dans le nouvel ordre */
+        dstDb = new SQL.Database();
+        const schemas = srcDb.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type DESC");
+        if (schemas.length) for (const [sql] of schemas[0].values) dstDb.run(sql);
 
-        dstDb.run("BEGIN TRANSACTION;");
-
-        const insertData = dstDb.prepare("INSERT INTO datas VALUES (?,?,?,?,?,?,?,?,?,?,?)");
-        const insertText = dstDb.prepare("INSERT INTO texts VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
-
-        for (const oldItem of order) {
-            const newId = mapping[oldItem.id];
-            
-            // Données datas d'origine
-            const dRow = srcDb.exec(`SELECT * FROM datas WHERE id=${oldItem.id}`)[0].values[0];
-            dRow[0] = newId;
-            if (dRow[2]) { // alias
-                dRow[2] = mapping[dRow[2]] || dRow[2];
-            }
-            insertData.run(dRow);
-
-            // Données texts d'origine
-            const tRow = srcDb.exec(`SELECT * FROM texts WHERE id=${oldItem.id}`)[0].values[0];
-            tRow[0] = newId;
-            insertText.run(tRow);
+        const qs = (n) => Array(n).fill('?').join(',');
+        const insD = dstDb.prepare(`INSERT INTO datas VALUES (${qs(datas.columns.length)})`);
+        const insT = dstDb.prepare(`INSERT INTO texts VALUES (${qs(texts.columns.length)})`);
+        dstDb.run('BEGIN TRANSACTION;');
+        for (const e of order) {
+            const newId = mapping.get(e.id);
+            const d = e.d.slice(); d[D.id] = newId;
+            if (d[D.alias]) d[D.alias] = mapping.get(d[D.alias]) ?? d[D.alias];
+            insD.run(d);
+            const t = e.t.slice(); t[T.id] = newId;
+            insT.run(t);
         }
+        dstDb.run('COMMIT;');
+        insD.free(); insT.free();
 
-        insertData.free();
-        insertText.free();
-        dstDb.run("COMMIT;");
+        const stem = file.name.replace(/\.[^/.]+$/, '');
+        const size = YGO.download(dstDb.export(), `${stem}_tokens.cdb`, 'application/x-sqlite3');
 
-        // Export du fichier binaire SQLite
-        const binaryArray = dstDb.export();
-        const blob = new Blob([binaryArray], { type: "application/x-sqlite3" });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        const stem = fileInput.name.replace(/\.[^/.]+$/, "");
-        a.download = `${stem}_tokens.cdb`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        log(`✅ ${tokens.length - orphans.length} tokens replacés, ${orphans.length} orphelins.`);
-        orphans.forEach(o => log(`  orphelin : ${o.name} (${o.id})`));
-        log(`-> Fichier téléchargé avec succès !`);
-        showToast("Réorganisation terminée avec succès !", "ok");
-
-        srcDb.close();
-        dstDb.close();
-
+        out.log(`✅ ${tokens.length - orphans.length} tokens replacés, ${orphans.length} orphelin(s) · ${YGO.fmtBytes(size)}.`, 'ok');
+        orphans.forEach((o) => out.log(`  orphelin : ${o.name} (${o.id})`, 'warn'));
+        out.log('→ Fichier téléchargé avec succès !', 'ok');
+        YGO.toast('Réorganisation terminée !');
     } catch (err) {
-        log(`❌ Erreur : ${err.message}`, true);
-        showToast("Erreur lors du traitement du CDB.", "err");
+        out.log('❌ Erreur : ' + err.message, 'err');
+        YGO.toast('Erreur lors du traitement du CDB.', 'err');
+    } finally {
+        if (srcDb) srcDb.close();
+        if (dstDb) dstDb.close();
+        btn.disabled = false;
     }
 });
 </script>

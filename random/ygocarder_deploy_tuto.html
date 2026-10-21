@@ -2,346 +2,73 @@
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<title>Tuto — Déployer ygocarder sur GitHub Pages</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- Google Fonts -->
+<title>Tuto ygocarder → GitHub Pages · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- FontAwesome Icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<!-- ⚡ Anti-flash : applique le thème AVANT que le CSS ne s'affiche -->
-<script>
-    (function() {
-        try {
-            var saved = localStorage.getItem('ygo_theme');
-            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            var theme = saved || (prefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
-        } catch (e) {}
-    })();
-</script>
-
-<style>
-/* ============================================================
-   DESIGN SYSTEM — Thème YGO (Harmonisé global)
-   ============================================================ */
-:root,
-[data-theme="dark"] {
-    --bg:            #0d0a1a;
-    --bg-pattern:    rgba(212, 175, 55, 0.025);
-    --surface:       #16112a;
-    --surface-2:     #1f1838;
-    --surface-3:     #2a2148;
-    --border:        #3a2d5c;
-    --border-strong: #4d3d75;
-    --text:          #f5ecd8;
-    --text-muted:    #a89b82;
-    --text-dim:      #6b6252;
-    --gold:          #d4af37;
-    --gold-light:    #e8c85a;
-    --gold-dark:     #a67c00;
-    --gold-soft:     rgba(212, 175, 55, 0.12);
-    --gold-glow:     rgba(212, 175, 55, 0.35);
-    --success:       #5fd07f;
-    --success-soft:  rgba(95, 208, 127, 0.14);
-    --warning:       #e0b64c;
-    --warning-soft:  rgba(224, 182, 76, 0.14);
-    --danger:        #e07a7a;
-    --danger-soft:   rgba(224, 122, 122, 0.14);
-    --yugi:          #b88ae0;
-    --yugi-soft:     rgba(155, 107, 196, 0.15);
-    --shadow-sm:     0 1px 3px rgba(0,0,0,0.5);
-    --shadow-md:     0 4px 20px rgba(0,0,0,0.55);
-    --shadow-lg:     0 16px 48px rgba(0,0,0,0.7);
-    --code-bg:       #0a0715;
-}
-
-[data-theme="light"] {
-    --bg:            #f0e8d8;
-    --bg-pattern:    rgba(166, 124, 0, 0.04);
-    --surface:       #faf5e8;
-    --surface-2:     #f2ebd9;
-    --surface-3:     #e8dfc5;
-    --border:        #d4c8b0;
-    --border-strong: #b8a888;
-    --text:          #2a1f14;
-    --text-muted:    #6b5d47;
-    --text-dim:      #9a8b70;
-    --gold:          #a67c00;
-    --gold-light:    #c49616;
-    --gold-dark:     #7a5a00;
-    --gold-soft:     rgba(166, 124, 0, 0.10);
-    --gold-glow:     rgba(166, 124, 0, 0.25);
-    --success:       #1f8a3d;
-    --success-soft:  rgba(31, 138, 61, 0.12);
-    --warning:       #a67c00;
-    --warning-soft:  rgba(166, 124, 0, 0.12);
-    --danger:        #c33a3a;
-    --danger-soft:   rgba(195, 58, 58, 0.12);
-    --yugi:          #6a3a9a;
-    --yugi-soft:     rgba(106, 58, 154, 0.12);
-    --shadow-sm:     0 1px 2px rgba(60,40,10,0.08);
-    --shadow-md:     0 4px 16px rgba(60,40,10,0.10);
-    --shadow-lg:     0 16px 48px rgba(60,40,10,0.18);
-    --code-bg:       #f7f2e3;
-}
-
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
-
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    background-image:
-        radial-gradient(circle at 20% 10%, var(--bg-pattern) 0%, transparent 45%),
-        radial-gradient(circle at 80% 90%, var(--bg-pattern) 0%, transparent 45%);
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.6;
-    transition: background 0.3s ease, color 0.3s ease;
-}
-
-.wrap { max-width: 850px; margin: 0 auto; padding: 24px; }
-
-/* HEADER */
-.app-header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(14px);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm);
-    margin: -24px -24px 30px -24px;
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.brand-logo {
-    font-size: 1.7rem;
-    color: var(--gold);
-    filter: drop-shadow(0 0 8px var(--gold-glow));
-}
-
-h1 {
-    font-family: 'Cinzel', Georgia, serif;
-    font-size: 1.3rem;
-    margin: 0 0 2px;
-    color: var(--gold);
-    font-weight: 700;
-}
-
-.sub { color: var(--text-muted); font-size: 12px; margin: 0; }
-
-.icon-btn {
-    width: 40px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    cursor: pointer;
-    font-size: 1.05rem;
-    transition: all 0.18s ease;
-}
-
-.icon-btn:hover {
-    background: var(--gold-soft);
-    border-color: var(--gold);
-    color: var(--gold);
-}
-
-[data-theme="dark"]  #theme-toggle::before { content: "🌙"; }
-[data-theme="light"] #theme-toggle::before { content: "☀️"; }
-
-h2 { 
-    font-family: 'Cinzel', Georgia, serif;
-    font-size: 1.1rem; 
-    margin: 40px 0 14px; 
-    padding-bottom: 6px; 
-    border-bottom: 1px solid var(--border); 
-    color: var(--gold); 
-}
-h3 { font-size: 1rem; margin: 24px 0 8px; color: var(--gold-light); }
-p { margin: 8px 0; }
-.muted { color: var(--text-muted); font-size: 0.9rem; }
-
-code {
-    background: var(--code-bg);
-    color: var(--text);
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-family: "Consolas", "Monaco", monospace;
-    font-size: 0.9em;
-    border: 1px solid var(--border);
-}
-
-pre {
-    background: var(--code-bg);
-    color: var(--text);
-    padding: 16px;
-    border-radius: 12px;
-    overflow-x: auto;
-    border: 1px solid var(--border);
-    font-family: "Consolas", "Monaco", monospace;
-    font-size: 0.85em;
-    line-height: 1.5;
-    position: relative;
-    box-shadow: var(--shadow-sm);
-}
-pre code { background: none; padding: 0; border-radius: 0; border: none; }
-
-ol, ul { padding-left: 22px; }
-li { margin: 6px 0; }
-
-.warn, .ok, .err {
-    padding: 14px 18px; margin: 16px 0; border-radius: 12px; font-size: 0.92rem;
-    box-shadow: var(--shadow-sm);
-}
-.warn { background: var(--warning-soft); border-left: 4px solid var(--warning); color: var(--text); }
-.ok { background: var(--success-soft); border-left: 4px solid var(--success); color: var(--text); }
-.err { background: var(--danger-soft); border-left: 4px solid var(--danger); color: var(--text); }
-
-.step {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 22px 24px;
-    margin: 20px 0;
-    box-shadow: var(--shadow-sm);
-}
-.step h2 { margin-top: 0; border: none; padding: 0; }
-
-.num {
-    display: inline-block;
-    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
-    color: #1a1408;
-    width: 30px; height: 30px;
-    line-height: 30px;
-    text-align: center;
-    border-radius: 50%;
-    font-weight: bold;
-    margin-right: 10px;
-    font-size: 0.9rem;
-    box-shadow: 0 2px 6px var(--gold-glow);
-}
-
-.copy {
-    position: absolute;
-    top: 10px; right: 10px;
-    background: var(--surface-2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 12px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 600;
-    transition: all 0.18s ease;
-}
-.copy:hover { background: var(--gold-soft); border-color: var(--gold); color: var(--gold); }
-
-.final {
-    background: linear-gradient(135deg, var(--surface), var(--surface-2));
-    border: 1px solid var(--gold);
-    border-radius: 16px;
-    padding: 24px;
-    text-align: center;
-    margin: 30px 0;
-    box-shadow: var(--shadow-md);
-}
-.final a { color: var(--gold-light); font-size: 1.1rem; text-decoration: none; font-weight: bold; word-break: break-all; }
-.final a:hover { text-decoration: underline; }
-
-kbd {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-bottom-width: 2px;
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 0.85em;
-    font-family: inherit;
-}
-
-/* TOASTS */
-.toasts {
-    position: fixed; bottom: 24px; right: 24px;
-    display: flex; flex-direction: column; gap: 10px;
-    z-index: 200; pointer-events: none;
-}
-.toast {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px; border-radius: 12px;
-    background: var(--surface); border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg); font-size: 0.88rem; font-weight: 600;
-    color: var(--text); pointer-events: auto; animation: toastIn 0.3s ease;
-}
-.toast.ok { border-left: 3px solid var(--success); }
-@keyframes toastIn {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
-}
-</style>
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
 </head>
 <body>
 
 <header class="app-header">
-    <div class="brand">
-        <div class="brand-logo"><i class="fa-solid fa-book-open"></i></div>
-        <div>
-            <h1>Déployer ygocarder sur GitHub Pages</h1>
-            <div class="sub">Guide pas-à-pas 100% web sans terminal</div>
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
         </div>
     </div>
-    <button class="icon-btn" id="theme-toggle" title="Changer de thème"></button>
 </header>
 
-<div class="wrap">
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-book-open"></i></div>
+        <div>
+            <h1>Déployer ygocarder sur GitHub Pages</h1>
+            <p>Guide pas-à-pas 100 % web, sans terminal.</p>
+        </div>
+    </section>
 
-    <div class="ok">
-        <b>Le principe</b> — GitHub construit et publie le site tout seul (GitHub Actions) à chaque modification du code. Tu fais la configuration une seule fois.
-    </div>
+    <div class="alert ok"><i class="fa-solid fa-circle-check"></i><p><b>Le principe</b> — GitHub construit et publie le site tout seul (GitHub Actions) à chaque modification du code. Tu ne fais la configuration qu'une seule fois.</p></div>
 
-    <div class="step">
+    <section class="step">
         <h2><span class="num">1</span>Corriger le <code>homepage</code> dans <code>package.json</code></h2>
         <ol>
             <li>Sur ton repo, clique sur le fichier <code>package.json</code>.</li>
             <li>Clique sur le crayon ✏️ en haut à droite.</li>
             <li>Cherche la ligne <code>homepage</code>. Si tu vois <code>lauqerm.github.io</code>, remplace-la par :
-                <pre><code>"homepage": "https://kevinraphael95.github.io/ygocarder",</code></pre>
+                <div class="code-block"><pre><code>"homepage": "https://kevinraphael95.github.io/ygocarder",</code></pre></div>
             </li>
             <li>Clique sur <b>Commit changes</b>.</li>
         </ol>
-        <div class="warn">
-            <b>Attention</b> — <code>kevinraphael95</code> doit être <b>ton pseudo GitHub</b> et <code>ygocarder</code> <b>le nom exact de ton repo</b>. Sinon : page blanche.
-        </div>
+        <div class="alert warn"><i class="fa-solid fa-triangle-exclamation"></i><p><b>Attention</b> — <code>kevinraphael95</code> doit être <b>ton pseudo GitHub</b> et <code>ygocarder</code> <b>le nom exact de ton repo</b>. Sinon : page blanche.</p></div>
         <p class="muted">Déjà bon ? Passe à l'étape 2.</p>
-    </div>
+    </section>
 
-    <div class="step">
+    <section class="step">
         <h2><span class="num">2</span>Créer le fichier de déploiement</h2>
         <ol>
             <li>Va sur <code>github.com/kevinraphael95/ygocarder</code></li>
             <li>Clique sur <b>Add file</b> puis <b>Create new file</b></li>
             <li>Dans la case du nom, tape <b>exactement</b> :
-                <pre><code>.github/workflows/deploy.yml</code></pre>
+                <div class="code-block"><pre><code>.github/workflows/deploy.yml</code></pre></div>
                 <p class="muted">Quand tu tapes les <code>/</code>, GitHub crée les dossiers tout seul.</p>
             </li>
             <li>Colle dans le grand champ de texte le code ci-dessous :</li>
         </ol>
 
-<pre id="yml"><button class="copy" onclick="copyYml(this)"><i class="fa-solid fa-copy"></i> Copier</button><code>name: Deploy to GitHub Pages
+        <div class="code-block">
+            <button class="btn btn-sm copy" id="copyBtn" type="button"><i class="fa-solid fa-copy"></i> Copier</button>
+<pre><code id="yml">name: Deploy to GitHub Pages
 
 on:
   push:
@@ -382,28 +109,25 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4</code></pre>
+        </div>
 
         <ol start="5">
             <li>Clique sur <b>Commit changes…</b> (bouton vert en haut à droite), puis <b>Commit changes</b> dans la fenêtre.</li>
         </ol>
-        <div class="warn">
-            <b>Attention</b> — l'indentation (les espaces au début des lignes) compte. Utilise le bouton <b>Copier</b>, ne retape pas à la main.
-        </div>
-    </div>
+        <div class="alert warn"><i class="fa-solid fa-triangle-exclamation"></i><p><b>Attention</b> — l'indentation (les espaces au début des lignes) compte. Utilise le bouton <b>Copier</b>, ne retape pas à la main.</p></div>
+    </section>
 
-    <div class="step">
+    <section class="step">
         <h2><span class="num">3</span>Activer GitHub Pages en mode Actions</h2>
         <ol>
             <li>Va sur <code>github.com/kevinraphael95/ygocarder/settings/pages</code></li>
             <li>Dans <b>Build and deployment</b>, change <b>Source</b> en <code>GitHub Actions</code></li>
             <li>Rien d'autre à faire, ça s'enregistre tout seul.</li>
         </ol>
-        <div class="warn">
-            Si c'était sur <code>Deploy from a branch</code>, c'est <b>ça</b> qui causait ta page blanche : GitHub affichait ton code source au lieu du site construit.
-        </div>
-    </div>
+        <div class="alert warn"><i class="fa-solid fa-triangle-exclamation"></i><p>Si c'était sur <code>Deploy from a branch</code>, c'est <b>ça</b> qui causait ta page blanche : GitHub affichait ton code source au lieu du site construit.</p></div>
+    </section>
 
-    <div class="step">
+    <section class="step">
         <h2><span class="num">4</span>Lancer et suivre le déploiement</h2>
         <ol>
             <li>Va dans l'onglet <b>Actions</b> de ton repo.</li>
@@ -412,71 +136,46 @@ jobs:
             </li>
             <li>Attends <b>2 à 5 minutes</b>. Pastille jaune = en cours, coche verte = terminé, croix rouge = erreur.</li>
         </ol>
-    </div>
+    </section>
 
-    <div class="step">
+    <section class="step">
         <h2><span class="num">5</span>Ouvrir le site</h2>
         <p>Quand c'est vert, ouvre le lien. Fais <kbd>Ctrl</kbd> + <kbd>F5</kbd> si tu vois encore l'ancienne page blanche (cache).</p>
-    </div>
+    </section>
 
     <div class="final">
-        <p style="margin:0 0 8px; color:var(--text-muted);">Ton site sera accessible ici</p>
-        <a href="https://kevinraphael95.github.io/ygocarder/" target="_blank">
-            https://kevinraphael95.github.io/ygocarder/
-        </a>
+        <p class="muted" style="margin:0 0 8px;">Ton site sera accessible ici</p>
+        <a href="https://kevinraphael95.github.io/ygocarder/" target="_blank" rel="noopener">https://kevinraphael95.github.io/ygocarder/</a>
     </div>
 
-    <h2>Si ça ne marche pas</h2>
+    <div class="prose">
+        <h2><i class="fa-solid fa-life-ring"></i> Si ça ne marche pas</h2>
 
-    <h3>Croix rouge dans l'onglet Actions</h3>
-    <p>Clique sur le workflow raté, puis sur le job rouge (<code>build</code>). Ouvre l'étape en rouge et regarde la dernière ligne d'erreur.</p>
+        <h3>Croix rouge dans l'onglet Actions</h3>
+        <p>Clique sur le workflow raté, puis sur le job rouge (<code>build</code>). Ouvre l'étape en rouge et regarde la dernière ligne d'erreur.</p>
 
-    <h3>Erreur <code>Missing script: "build"</code></h3>
-    <p>Ouvre <code>package.json</code>, regarde la section <code>"scripts"</code> et utilise le nom de la commande qui construit le site.</p>
+        <h3>Erreur <code>Missing script: "build"</code></h3>
+        <p>Ouvre <code>package.json</code>, regarde la section <code>"scripts"</code> et utilise le nom de la commande qui construit le site.</p>
 
-    <h3>Erreur <code>path: dist</code> introuvable</h3>
-    <p>Ton projet construit peut-être dans un autre dossier (<code>build</code> par exemple). Dans <code>deploy.yml</code>, remplace <code>path: dist</code> par <code>path: build</code>.</p>
+        <h3>Erreur <code>path: dist</code> introuvable</h3>
+        <p>Ton projet construit peut-être dans un autre dossier (<code>build</code> par exemple). Dans <code>deploy.yml</code>, remplace <code>path: dist</code> par <code>path: build</code>.</p>
 
-    <h3>Le site est vert mais la page est toujours blanche</h3>
-    <p>Le chemin de base est faux. Dans <code>package.json</code>, vérifie le champ <code>homepage</code>.</p>
+        <h3>Le site est vert mais la page est toujours blanche</h3>
+        <p>Le chemin de base est faux. Dans <code>package.json</code>, vérifie le champ <code>homepage</code>.</p>
 
-    <h2>Mettre à jour le site</h2>
-    <p>Chaque modification validée sur <code>main</code> relance le déploiement automatiquement.</p>
-    <div class="ok">
-        Tu n'as plus rien à refaire. Pas de terminal, pas de <code>npm run deploy</code>.
+        <h2><i class="fa-solid fa-rotate"></i> Mettre à jour le site</h2>
+        <p>Chaque modification validée sur <code>main</code> relance le déploiement automatiquement.</p>
+        <div class="alert ok"><i class="fa-solid fa-circle-check"></i><p>Tu n'as plus rien à refaire. Pas de terminal, pas de <code>npm run deploy</code>.</p></div>
     </div>
+</main>
 
-</div>
-
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
 
 <script>
-// Thème unifié
-const themeToggle = document.getElementById('theme-toggle');
-const htmlEl = document.documentElement;
-
-themeToggle.addEventListener('click', () => {
-    const current = htmlEl.getAttribute('data-theme');
-    const next = current === 'light' ? 'dark' : 'light';
-    htmlEl.setAttribute('data-theme', next);
-    localStorage.setItem('ygo_theme', next);
+document.getElementById('copyBtn').addEventListener('click', () => {
+    YGO.copy(document.getElementById('yml').textContent, 'Code YAML copié dans le presse-papiers !');
 });
-
-function showToast(message, type = 'ok') {
-    const container = document.getElementById('toasts');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--success)"></i><span>${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-}
-
-function copyYml(btn) {
-    var code = document.querySelector('#yml code').innerText;
-    navigator.clipboard.writeText(code).then(function () {
-        showToast("Code YAML copié dans le presse-papier !");
-    });
-}
 </script>
 </body>
 </html>
