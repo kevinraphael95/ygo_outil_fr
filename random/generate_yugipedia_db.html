@@ -40,11 +40,11 @@
 
     <div class="card">
         <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Lancer l'extraction Yugipedia</h2>
-        <p class="card-sub">Parcourt les 6 templates de cartes et génère <code>yugipedia-db.json</code>. Compte plusieurs minutes (limite de débit de l'API).</p>
+        <p class="card-sub">Parcourt les 6 templates de cartes et génère <code>yugipedia-db.json</code>. Compte plusieurs minutes (limite de débit de l'API). <strong>Garde cet onglet visible</strong> pendant l'extraction.</p>
 
         <label class="check" style="margin-bottom:16px;">
-            <input type="checkbox" id="minify" checked>
-            Minifier le JSON <span class="hint">(fichier beaucoup plus léger)</span>
+            <input type="checkbox" id="minify">
+            Minifier le JSON <span class="hint">(désactivé = indenté, comme le script Node)</span>
         </label>
 
         <div class="actions">
@@ -78,23 +78,13 @@ const progress = YGO.progress($('progress'));
 const btn = $('start-btn');
 out.log('Prêt à lancer l\'extraction Yugipedia…');
 
+/** Une seule tentative, comme le script Node : toute erreur est gérée par l'appelant. */
 async function fetchJson(params) {
     const url = new URL(API);
     const q = { format: 'json', formatversion: '2', origin: '*', ...params };
     for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
-    for (let attempt = 0; attempt <= 5; attempt++) {
-        try {
-            const res = await fetch(url);
-            if (res.ok) return await res.json();
-            if (res.status !== 429 && res.status < 500) throw new Error('HTTP ' + res.status);
-        } catch (e) {
-            if (/^HTTP/.test(e.message)) throw e;          // erreur définitive (4xx)
-        }                                                   // 503 / réseau : on retente
-        const wait = 1500 * 2 ** attempt;
-        out.log(`⚠️ Yugipedia sature (503), nouvel essai dans ${wait / 1000}s…`, 'warn');
-        await YGO.sleep(wait);
-    }
-    throw new Error('Yugipedia ne répond pas (503 répétés). Réessaie dans quelques minutes.');
+    const res = await fetch(url);
+    return await res.json();
 }
 
 function clean(s) {
@@ -212,50 +202,68 @@ btn.addEventListener('click', async () => {
     progress.show();
     out.clear();
     try {
-        /* Étape 1 : titres */
-        out.log('📥 Étape 1 : récupération des pages de cartes (6 templates)…');
+        /* Étape 1 : titres (en cas d'erreur : on passe au template suivant, comme le script) */
+        out.log('📥 Récupération des pages de cartes (6 templates)...');
         const titles = new Set();
         for (let t = 0; t < TEMPLATES.length; t++) {
             const tpl = 'Template:' + TEMPLATES[t];
             progress.set(2 + (t / TEMPLATES.length) * 8, 'Titres : ' + TEMPLATES[t]);
+            out.log('📥 ' + tpl);
             let cont = null;
-            do {
+            let tplCount = 0;
+            while (true) {
                 const params = { action: 'query', list: 'embeddedin', eititle: tpl, einamespace: '0', eilimit: '500' };
                 if (cont) params.eicontinue = cont;
-                const data = await fetchJson(params);
-                for (const m of data?.query?.embeddedin || []) titles.add(m.title);
-                cont = data?.continue?.eicontinue;
-                if (cont) await YGO.sleep(DELAY);
-            } while (cont);
-            out.log(`→ ${tpl} : ${titles.size} titres cumulés`);
+                try {
+                    const data = await fetchJson(params);
+                    const members = data?.query?.embeddedin || [];
+                    for (const m of members) titles.add(m.title);
+                    tplCount += members.length;
+                    out.log(`  → ${titles.size} titres cumulés (${tplCount} pour ce template)`);
+                    cont = data?.continue?.eicontinue;
+                    if (!cont) break;
+                } catch (e) {
+                    out.log('  ⚠️ Erreur: ' + e.message, 'warn');
+                    break;
+                }
+                await YGO.sleep(DELAY);
+            }
         }
         if (!titles.size) throw new Error('Aucun titre trouvé.');
-        out.log(`✅ ${titles.size} titres collectés.`, 'ok');
+        out.log(`✅ ${titles.size} titres collectés au total`, 'ok');
 
-        /* Étape 2 : wikitexts */
-        out.log('📥 Étape 2 : récupération du contenu des pages par lots…');
+        /* Étape 2 : wikitexts (en cas d'erreur : on saute le lot, comme le script) */
         const arr = [...titles];
+        out.log(`📥 Récupération du contenu de ${arr.length} pages...`);
         const wikitexts = new Map();
+        let i = 0;
         for (let j = 0; j < arr.length; j += BATCH) {
-            const data = await fetchJson({
-                action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main',
-                titles: arr.slice(j, j + BATCH).join('|'), redirects: '1',
-            });
-            for (const p of data?.query?.pages || []) {
-                if (!p || p.missing) continue;
-                const wt = p.revisions?.[0]?.slots?.main?.content ?? p.revisions?.[0]?.content;
-                if (wt) wikitexts.set(p.title, wt);
+            try {
+                const data = await fetchJson({
+                    action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main',
+                    titles: arr.slice(j, j + BATCH).join('|'), redirects: '1',
+                });
+                for (const p of data?.query?.pages || []) {
+                    if (!p || p.missing) continue;
+                    const wt = p.revisions?.[0]?.slots?.main?.content
+                        || p.revisions?.[0]?.content
+                        || p.revisions?.[0]?.["*"];
+                    if (wt) wikitexts.set(p.title, wt);
+                }
+                i += BATCH > arr.length - j ? arr.length - j : BATCH;
+                if (i % 500 === 0 || i >= arr.length) {
+                    out.log(`  → ${i} / ${arr.length} pages (${wikitexts.size} avec contenu)`);
+                }
+            } catch (e) {
+                out.log(`  ⚠️ Erreur batch ${j}: ${e.message}`, 'warn');
             }
-            const done = Math.min(j + BATCH, arr.length);
-            progress.set(10 + (done / arr.length) * 70, `Wikitexts : ${done} / ${arr.length}`);
-            if (done % 300 < BATCH || done === arr.length) {
-                out.log(`→ ${done} / ${arr.length} traités (${wikitexts.size} chargés)`);
-            }
+            progress.set(10 + (Math.min(j + BATCH, arr.length) / arr.length) * 70, `Wikitexts : ${Math.min(j + BATCH, arr.length)} / ${arr.length}`);
             await YGO.sleep(DELAY);
         }
+        out.log(`✅ ${wikitexts.size} wikitexts récupérés`, 'ok');
 
         /* Étape 3 : parsing */
-        out.log('🔄 Étape 3 : parsing et nettoyage des cartes…');
+        out.log('🔄 Parsing...');
         progress.set(84, 'Parsing des cartes…');
         const db = {};
         let count = 0;
@@ -268,15 +276,18 @@ btn.addEventListener('click', async () => {
             const tk = normalize(title);
             if (tk && tk !== key && !db[tk]) db[tk] = card;
         }
-        out.log(`✅ ${count} cartes uniques (${Object.keys(db).length} entrées).`, 'ok');
+        out.log(`✅ ${count} cartes uniques parsées`, 'ok');
+        out.log(`✅ ${Object.keys(db).length} entrées totales`, 'ok');
 
         /* Export */
         progress.set(95, 'Génération du fichier…');
         const json = $('minify').checked ? JSON.stringify(db) : JSON.stringify(db, null, 2);
-        const size = YGO.download(json, 'yugipedia-db.json', 'application/json;charset=utf-8');
+        YGO.download(json, 'yugipedia-db.json', 'application/json;charset=utf-8');
+        const size = json.length; // comme le script : nombre de caractères
         progress.set(100, 'Terminé !');
-        out.log(`✅ yugipedia-db.json généré (${YGO.fmtBytes(size)}).`, 'ok');
-        YGO.toast(`yugipedia-db.json généré (${YGO.fmtBytes(size)}) !`);
+        const mo = (size / 1024 / 1024).toFixed(2) + ' Mo';
+        out.log(`💾 yugipedia-db.json généré : ${mo}`, 'ok');
+        YGO.toast(`yugipedia-db.json généré (${mo}) !`);
     } catch (err) {
         out.log('❌ Erreur : ' + err.message, 'err');
         YGO.toast("Erreur pendant l'extraction", 'err');
