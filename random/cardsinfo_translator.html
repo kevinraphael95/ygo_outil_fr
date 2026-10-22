@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Traducteur d'archétypes · YGO Tools</title>
+<title>Card Info Translator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -34,7 +34,7 @@
         <div class="hero-icon"><i class="fa-solid fa-language"></i></div>
         <div>
             <h1>Traducteur d'archétypes YGOPro</h1>
-            <p>Traduit les <code>##setname</code> de ton cardinfo avec les noms officiels TCG récupérés sur Yugipedia.</p>
+            <p>Traduit le cardinfo avec les noms officiels TCG récupérés sur Yugipedia.</p>
         </div>
     </section>
 
@@ -95,8 +95,7 @@
 <script>
 const { $ } = YGO;
 const YUGIPEDIA_API = 'https://yugipedia.com/api.php';
-const DELAY_MS = 200;    // pause entre deux requêtes (comme l'ancienne version)
-const MAX_RETRY = 5;     // essais en cas de 503 / 429 / coupure réseau
+const BATCH_DELAY_MS = 200;
 
 const LANGS = {
     french:  { field: 'fr_name', ext: 'fr' },
@@ -106,7 +105,7 @@ const LANGS = {
 };
 
 const progress = YGO.progress(document.querySelector('.progress'));
-let entries = [];
+let parsedEntries = [];
 let results = [];
 let stopRequested = false;
 let lastLang = 'french';
@@ -117,47 +116,47 @@ $('langSelect').addEventListener('change', () => {
 });
 
 function parseSetname(text) {
-    const found = [];
+    const lines = text.split('\n');
+    const entries = [];
     let inSetname = false;
-    for (const raw of text.split('\n')) {
+    for (const raw of lines) {
         const line = raw.replace(/\r$/, '');
         if (line.startsWith('##')) { inSetname = line.trim() === '##setname'; continue; }
         if (line.trim() === '#end') break;
         if (!inSetname || !line.trim()) continue;
         const m = line.match(/^(-?\d+|0x[0-9a-fA-F]+)[\t ]+(.+)$/);
-        if (m) found.push({ hex: m[1], label: m[2].trim() });
+        if (!m) continue;
+        entries.push({ hex: m[1], label: m[2].trim() });
     }
-    return found;
+    return entries;
 }
 
-function extractLang(wikitext, field) {
+function extractLang(wikitext) {
     if (!wikitext) return null;
-    const m = wikitext.match(new RegExp('\\|\\s*' + field + '\\s*=\\s*([^\\n|]+)', 'i'));
+    const cfg = LANGS[$('langSelect').value];
+    const re = new RegExp(`\\|\\s*${cfg.field}\\s*=\\s*([^\\n|]+)`, 'i');
+    const m = wikitext.match(re);
     if (!m) return null;
-    const val = m[1].trim()
-        .replace(/\{\{Ruby\|([^|]+)\|[^}]+\}\}/gi, '$1')
+    let val = m[1].trim()
         .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
         .replace(/\[\[([^\]]+)\]\]/g, '$1')
         .replace(/<ref[^>]*>.*?<\/ref>/gi, '')
         .split('\n')[0].trim().replace(/''/g, '');
-    return val && val !== '—' && val !== '-' ? val : null;
+    return (val && val !== '—' && val !== '-') ? val : null;
 }
 
-async function fetchWikitext(page) {
-    const params = new URLSearchParams({ action: 'parse', format: 'json', origin: '*', page, prop: 'wikitext', redirects: '1' });
-    for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
-        if (stopRequested) throw new Error('stop');
-        try {
-            const res = await fetch(`${YUGIPEDIA_API}?${params}`);
-            if (res.ok) {
-                const data = await res.json();
-                return data?.parse?.wikitext?.['*'] || null;   // page absente => null
-            }
-            if (res.status !== 429 && res.status < 500) return null;
-        } catch (e) { /* réseau : on retente */ }
-        await YGO.sleep(1500 * 2 ** attempt);                  // 503 : attente croissante
+async function fetchWikitext(pageTitle) {
+    const params = new URLSearchParams({
+        action: 'parse', format: 'json', origin: '*',
+        page: pageTitle, prop: 'wikitext', redirects: '1'
+    });
+    try {
+        const res = await fetch(`${YUGIPEDIA_API}?${params}`);
+        const data = await res.json();
+        return data?.parse?.wikitext?.['*'] || null;
+    } catch (e) {
+        return null;
     }
-    throw new Error('Yugipedia ne répond pas (503 répétés). Réessaie dans quelques minutes.');
 }
 
 function setStats(done, translated, missing, total) {
@@ -171,75 +170,72 @@ async function runScraping() {
     stopRequested = false;
     results = [];
     lastLang = $('langSelect').value;
-    const field = LANGS[lastLang].field;
-    const total = entries.length;
-    let done = 0, translated = 0, missing = 0;
-    let failure = null;
-
+    $('exportName').textContent = exportName();
+    const tbody = $('tbody');
+    tbody.replaceChildren();
     $('exportBtn').disabled = true;
     $('startBtn').disabled = true;
     $('stopBtn').disabled = false;
 
-    const tbody = $('tbody');
-    tbody.replaceChildren();
-    const rows = entries.map((e) => {
+    const total = parsedEntries.length;
+    let done = 0, translated = 0, missing = 0;
+
+    const rowMap = {};
+    for (const entry of parsedEntries) {
         const tr = YGO.el('tr', {},
-            YGO.el('td', { className: 'mono', text: e.hex }),
-            YGO.el('td', { text: e.label }),
+            YGO.el('td', { className: 'mono', text: entry.hex }),
+            YGO.el('td', { text: entry.label }),
             YGO.el('td', { className: 'dim', text: '…' }),
             YGO.el('td', { text: 'en attente' }));
         tbody.append(tr);
-        return tr;
-    });
+        rowMap[entry.hex] = tr;
+    }
     setStats(0, 0, 0, total);
 
-    try {
-        for (let i = 0; i < total && !stopRequested; i++) {      // une requête à la fois
-            const e = entries[i], tr = rows[i];
-            let val = extractLang(await fetchWikitext(e.label), field);
-            if (!val) val = extractLang(await fetchWikitext(`${e.label} (archetype)`), field);
+    for (const entry of parsedEntries) {
+        if (stopRequested) break;
+        const tr = rowMap[entry.hex];
+        let wt = await fetchWikitext(entry.label);
+        let val = extractLang(wt);
 
-            tr.children[2].className = '';
-            if (val) {
-                translated++;
-                tr.className = 'ok';
-                tr.children[2].textContent = val;
-                tr.children[3].textContent = 'officiel';
-                results[i] = { hex: e.hex, tr: val };
-            } else {
-                missing++;
-                tr.className = 'miss';
-                tr.children[2].textContent = e.label;          // garde l'anglais si absent
-                tr.children[3].textContent = 'non trouvé';
-                results[i] = { hex: e.hex, tr: e.label };
-            }
-            setStats(++done, translated, missing, total);
-            await YGO.sleep(DELAY_MS);
+        // Tentative de fallback si la page directe ne donne rien
+        if (!val) {
+            wt = await fetchWikitext(`${entry.label} (archetype)`);
+            val = extractLang(wt);
         }
-    } catch (err) {
-        if (err.message !== 'stop') failure = err;
+
+        tr.children[2].className = '';
+        if (val) {
+            translated++;
+            tr.className = 'ok';
+            tr.children[2].textContent = val;
+            tr.children[3].textContent = 'officiel';
+            results.push({ hex: entry.hex, label: entry.label, tr: val });
+        } else {
+            missing++;
+            tr.className = 'miss';
+            tr.children[2].textContent = entry.label; // garde EN en cas d'absence
+            tr.children[3].textContent = 'non trouvé';
+            results.push({ hex: entry.hex, label: entry.label, tr: entry.label });
+        }
+
+        done++;
+        setStats(done, translated, missing, total);
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
     }
 
     $('startBtn').disabled = false;
     $('stopBtn').disabled = true;
-    $('exportBtn').disabled = !results.some(Boolean);
-    $('exportName').textContent = exportName();
-    if (failure) YGO.toast(failure.message, 'err');
-    else YGO.toast(`${stopRequested ? 'Arrêté' : 'Terminé'} : ${translated} traduits, ${missing} non trouvés.`);
+    $('exportBtn').disabled = false;
 }
 
 function buildFile() {
     const lines = ['################ use tab', '##setname'];
-    for (const r of results) if (r) lines.push(`${r.hex}\t${r.tr}`);
+    for (const r of results) {
+        lines.push(`${r.hex}\t${r.tr}`);
+    }
     lines.push('#end');
     return lines.join('\n');
-}
-
-function updateParsed(text) {
-    entries = parseSetname(text);
-    $('parseStats').replaceChildren(
-        YGO.el('span', { className: 'chip' + (entries.length ? ' ok' : ''), text: `📊 ${entries.length} archétypes détectés` }));
-    return entries.length;
 }
 
 $('fileInput').addEventListener('change', async (e) => {
@@ -247,18 +243,21 @@ $('fileInput').addEventListener('change', async (e) => {
     if (!file) return;
     const text = await file.text();
     $('input').value = text;
-    YGO.toast(`${updateParsed(text)} archétypes chargés.`);
+    parsedEntries = parseSetname(text);
+    $('parseStats').replaceChildren(
+        YGO.el('span', { className: 'chip' + (parsedEntries.length ? ' ok' : ''), text: `📊 ${parsedEntries.length} archétypes détectés.` }));
 });
-$('input').addEventListener('input', () => updateParsed($('input').value));
 
 $('startBtn').addEventListener('click', () => {
-    if (!updateParsed($('input').value)) return YGO.toast('Aucun archétype valide détecté dans le texte.', 'err');
-    runScraping();
+    const text = $('input').value;
+    parsedEntries = parseSetname(text);
+    if (parsedEntries.length) runScraping();
 });
-$('stopBtn').addEventListener('click', () => { stopRequested = true; YGO.toast('Arrêt demandé…', 'err'); });
+
+$('stopBtn').addEventListener('click', () => { stopRequested = true; });
+
 $('exportBtn').addEventListener('click', () => {
     YGO.download(buildFile(), exportName(), 'text/plain;charset=utf-8');
-    YGO.toast('Fichier exporté avec succès !');
 });
 </script>
 </body>
