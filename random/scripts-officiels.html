@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scripts Finder Officiels · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
+<style>
+    .opts { display: grid; gap: 10px; margin: 6px 0 16px; }
+    .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+    .opt input { margin-top: 4px; }
+    .opt small { display: block; opacity: .7; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-code-merge"></i></div>
+        <div>
+            <h1>Scripts Finder Officiels</h1>
+            <p>Pour chaque carte custom non taguée (identique à l'officielle) : trouve la carte officielle du même nom dans les CDB officiels, copie son script en remplaçant l'ID et injecte l'effet <code>EFFECT_ADD_CODE</code>.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
+
+        <div class="field">
+            <label for="customTag">Tag d'exclusion (cartes modifiées à ignorer)</label>
+            <input type="text" id="customTag" value="vaact" autocomplete="off">
+            <span class="hint">Cherché dans la description EN et FR. Insensible à la casse.</span>
+        </div>
+
+        <div class="grid-2">
+            <div class="field">
+                <label for="cdbEn">CDB custom (anglais) *</label>
+                <input type="file" id="cdbEn" accept=".cdb">
+            </div>
+            <div class="field">
+                <label for="cdbFr">CDB custom (français) <small>(optionnel)</small></label>
+                <input type="file" id="cdbFr" accept=".cdb">
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="cdbOfficial">CDB officiels (plusieurs fichiers) *</label>
+            <input type="file" id="cdbOfficial" accept=".cdb" multiple>
+            <span class="hint" id="cdbOfficialHint"></span>
+        </div>
+
+        <div class="grid-2">
+            <div class="field">
+                <label for="luaFolder">Dossier des scripts officiels (.lua) *</label>
+                <input type="file" id="luaFolder" webkitdirectory directory multiple>
+                <span class="hint" id="luaHint">Un script d'un sous-dossier « official » est prioritaire sur les variantes (goat, rush…).</span>
+            </div>
+            <div class="field">
+                <label for="existingFolder">Dossier « script » existant <small>(optionnel)</small></label>
+                <input type="file" id="existingFolder" webkitdirectory directory multiple>
+                <span class="hint" id="existingHint">Les cartes qui ont déjà un script sont ignorées.</span>
+            </div>
+        </div>
+
+        <div class="opts">
+            <label class="opt"><input type="checkbox" id="optAddCode" checked>
+                <span>Injecter <code>EFFECT_ADD_CODE</code><small>La carte custom est considérée comme la carte officielle. Décoché : copie du script tel quel.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optForce">
+                <span>Forcer l'écrasement<small>Traite aussi les cartes taguées et celles qui ont déjà un script.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optDry">
+                <span>Simulation (dry run)<small>Affiche seulement ce qui serait fait, ne génère aucun ZIP.</small></span></label>
+        </div>
+
+        <div class="actions">
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Lancer la génération</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const btn = $('startBtn');
+const LUA_RE = /^c(\d+)\.lua$/i;
+YGO.bindFileCount($('luaFolder'), $('luaHint'), LUA_RE);
+YGO.bindFileCount($('existingFolder'), $('existingHint'), LUA_RE);
+
+let SQL = null;
+YGO.initSql()
+    .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
+    .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
+
+$('cdbOfficial').addEventListener('change', (e) => {
+    const n = e.target.files.length;
+    $('cdbOfficialHint').textContent = n ? `${n} fichier(s) CDB sélectionné(s)` : '';
+});
+
+// ============================================================
+// OUTILS
+// ============================================================
+const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+/** Lit un CDB -> [{id, name, desc}] */
+async function readCdb(file) {
+    const db = new SQL.Database(new Uint8Array(await file.arrayBuffer()));
+    try {
+        const res = db.exec('SELECT id, name, "desc" FROM texts');
+        return res.length
+            ? res[0].values.map(([id, name, desc]) => ({ id, name: name || '', desc: desc || '' }))
+            : [];
+    } finally { db.close(); }
+}
+
+// ============================================================
+// 1) CARTES VAACT (nom EN + descriptions EN et FR)
+// ============================================================
+async function loadCustom(fileEn, fileFr) {
+    const custom = new Map();   // id -> nom
+    const descs = new Map();    // id -> [desc EN, desc FR]
+    for (const c of await readCdb(fileEn)) {
+        custom.set(c.id, c.name);
+        descs.set(c.id, [c.desc]);
+    }
+    if (fileFr) {
+        for (const c of await readCdb(fileFr)) {
+            if (descs.has(c.id)) descs.get(c.id).push(c.desc);
+        }
+    } else {
+        out.log('ATTENTION : pas de CDB français (tag cherché dans la desc EN seulement).', 'warn');
+    }
+    return { custom, descs };
+}
+
+// ============================================================
+// 2) CARTES ET SCRIPTS OFFICIELS
+// ============================================================
+async function loadOfficialNames(files, custom) {
+    const official = new Map(); // nom normalisé -> Set(ids officiels)
+    for (const f of files) {
+        try {
+            const cards = await readCdb(f);
+            for (const c of cards) {
+                if (custom.has(c.id)) continue;
+                const k = norm(c.name);
+                if (!official.has(k)) official.set(k, new Set());
+                official.get(k).add(c.id);
+            }
+            out.log(`   ${f.name} : ${cards.length} cartes`);
+        } catch (e) {
+            out.log(`ignoré ${f.name} : ${e.message}`, 'warn');
+        }
+        await tick();
+    }
+    return official;
+}
+
+/** id -> File. Un script d'un dossier "official" est prioritaire. */
+function indexLua(files) {
+    const map = new Map();
+    const prio = new Set();
+    for (const f of files) {
+        const m = f.name.match(LUA_RE);
+        if (!m) continue;
+        const id = parseInt(m[1], 10);
+        const parts = (f.webkitRelativePath || '').split('/').slice(0, -1);
+        const isOfficial = parts.some((p) => p.toLowerCase() === 'official');
+        if (!map.has(id) || (isOfficial && !prio.has(id))) {
+            map.set(id, f);
+            if (isOfficial) prio.add(id);
+        }
+    }
+    return map;
+}
+
+function indexExisting(files) {
+    const s = new Set();
+    for (const f of files) {
+        const m = f.name.match(LUA_RE);
+        if (m) s.add(parseInt(m[1], 10));
+    }
+    return s;
+}
+
+// ============================================================
+// 3) GÉNÉRATION DU SCRIPT
+// ============================================================
+const INITIAL_EFFECT = /(function\s+(?:s|c\d+)\.initial_effect\s*\(\s*c\s*\))/;
+
+const ADD_CODE = (oid) => `
+	-- === AJOUT AUTO : considérée comme la carte officielle (ID ${oid}) ===
+	local e_add_code = Effect.CreateEffect(c)
+	e_add_code:SetType(EFFECT_TYPE_SINGLE)
+	e_add_code:SetCode(EFFECT_ADD_CODE)
+	e_add_code:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e_add_code:SetValue(${oid})
+	c:RegisterEffect(e_add_code)
+	-- =====================================================================`;
+
+/** Remplace l'ID officiel par l'ID custom (cOLD -> cNEW puis OLD -> NEW). */
+function retarget(code, oid, cid) {
+    return code
+        .replace(new RegExp('\\bc' + oid + '\\b', 'g'), 'c' + cid)
+        .replace(new RegExp('\\b' + oid + '\\b', 'g'), String(cid));
+}
+
+/** Retourne { code, injected } */
+function build(code, cid, oid, addCode) {
+    code = retarget(code, oid, cid);
+    let injected = true;
+    if (addCode) {
+        injected = INITIAL_EFFECT.test(code);
+        if (injected) code = code.replace(INITIAL_EFFECT, (m) => m + ADD_CODE(oid));
+    }
+    return { code, injected };
+}
+
+// ============================================================
+// 4) PROGRAMME PRINCIPAL
+// ============================================================
+btn.addEventListener('click', async () => {
+    if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
+
+    const fileEn = $('cdbEn').files[0];
+    const fileFr = $('cdbFr').files[0] || null;
+    const officialCdbs = [...$('cdbOfficial').files];
+    const luaFiles = [...$('luaFolder').files];
+    const existingFiles = [...$('existingFolder').files];
+    const tag = $('customTag').value.trim().toLowerCase();
+    const addCode = $('optAddCode').checked;
+    const force = $('optForce').checked;
+    const dry = $('optDry').checked;
+
+    if (!fileEn) return YGO.toast('Sélectionne le CDB custom (anglais).', 'err');
+    if (!officialCdbs.length) return YGO.toast('Sélectionne les CDB officiels.', 'err');
+    if (!luaFiles.length) return YGO.toast('Sélectionne le dossier des scripts officiels.', 'err');
+
+    btn.disabled = true;
+    out.clear();
+    try {
+        out.log('📂 Lecture des CDB custom…');
+        const { custom, descs } = await loadCustom(fileEn, fileFr);
+        out.log(`→ ${custom.size} cartes custom.`);
+
+        out.log('📂 Lecture des CDB officiels…');
+        const official = await loadOfficialNames(officialCdbs, custom);
+        out.log(`→ ${official.size} noms de cartes officielles.`);
+
+        out.log('📂 Indexation des scripts…');
+        const lua = indexLua(luaFiles);
+        const hasScript = indexExisting(existingFiles);
+        out.log(`→ ${lua.size} scripts officiels, ${hasScript.size} scripts déjà présents.`);
+
+        out.log(dry ? '🔄 Simulation…' : '🔄 Génération des scripts…');
+        const zip = new JSZip();
+        const rapport = [];
+        let ok = 0, skipped = 0, noInject = 0, existing = 0;
+        const ids = [...custom.keys()].sort((a, b) => a - b);
+
+        let n = 0;
+        for (const cid of ids) {
+            if (++n % 200 === 0) await tick();
+            const name = custom.get(cid);
+            const tagged = !!tag && descs.get(cid).some((d) => d.toLowerCase().includes(tag));
+            const cands = [...(official.get(norm(name)) || [])].filter((o) => lua.has(o)).sort((a, b) => a - b);
+
+            // Cartes taguées : ignorées (sauf forçage)
+            if (tagged && !force) { skipped++; continue; }
+
+            // Script déjà présent
+            if (hasScript.has(cid) && !force) {
+                existing++;
+                out.log(`${cid} ${name} : script existant (ignoré)`);
+                continue;
+            }
+
+            // Aucun équivalent officiel
+            if (!cands.length) {
+                rapport.push(`${cid} | ${name} | aucun script officiel trouvé`);
+                continue;
+            }
+
+            const oid = cands[0];
+            out.log(`${cid} ${name}  <-  c${oid}.lua`);
+            const src = await lua.get(oid).text();
+            const { code, injected } = build(src, cid, oid, addCode);
+            if (addCode && !injected) {
+                noInject++;
+                out.log('  ATTENTION : initial_effect introuvable, EFFECT_ADD_CODE non injecté', 'warn');
+            }
+            if (!dry) zip.file(`c${cid}.lua`, code);
+            ok++;
+        }
+
+        if (!dry) zip.file('rapport_scripts.txt', rapport.join('\n'));
+
+        out.log('');
+        out.log(`${skipped} cartes taguées ignorées`);
+        if (existing) out.log(`${existing} cartes avec script existant ignorées`);
+        out.log(`${ok} scripts ${dry ? 'à générer' : 'générés'}, ${rapport.length} sans correspondance`);
+        if (addCode) out.log(`${noInject} script(s) sans injection EFFECT_ADD_CODE`);
+
+        if (rapport.length) {
+            out.log('--- sans correspondance ---');
+            rapport.forEach((l) => out.log(l, 'warn'));
+        }
+
+        if (dry) {
+            out.log('✅ Simulation terminée, rien n\'a été généré.', 'ok');
+            return YGO.toast('Simulation terminée.');
+        }
+        if (!ok) {
+            out.log('⚠️ Aucun script généré (vérifie les correspondances et les fichiers).', 'warn');
+            return YGO.toast('Aucun script généré.', 'err');
+        }
+
+        out.log(`📦 Compression de ${ok} scripts…`);
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+        const size = await YGO.download(blob, 'scripts_officiels_custom.zip');
+        out.log(`✅ ${ok} scripts générés (${YGO.fmtBytes(size)}) · rapport_scripts.txt inclus.`, 'ok');
+        YGO.toast(`${ok} scripts générés !`);
+    } catch (err) {
+        out.log('❌ Erreur critique : ' + err.message, 'err');
+        YGO.toast('Une erreur est survenue.', 'err');
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+out.log('Renseigne les CDB et le dossier de scripts, puis lance le traitement.');
+</script>
+</body>
+</html>
