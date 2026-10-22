@@ -49,8 +49,8 @@
 
         <div class="field">
             <label for="customTag">Tag d'exclusion (cartes modifiées à ignorer)</label>
-            <input type="text" id="customTag" value="" autocomplete="off">
-            <span class="hint">Cherché dans la description EN et FR. Insensible à la casse.</span>
+            <input type="text" id="customTag" value="" placeholder="ex : vaact ; [custom]" autocomplete="off">
+            <span class="hint">Plusieurs tags possibles, séparés par « ; ». Cherchés dans la description EN et FR, insensible à la casse. Vide = aucune carte exclue.</span>
         </div>
 
         <div class="grid-2">
@@ -143,7 +143,7 @@ async function readCdb(file) {
 }
 
 // ============================================================
-// 1) CARTES MODIFIÉES (nom EN + descriptions EN et FR)
+// 1) CARTES VAACT (nom EN + descriptions EN et FR)
 // ============================================================
 async function loadCustom(fileEn, fileFr) {
     const custom = new Map();   // id -> nom
@@ -256,7 +256,7 @@ btn.addEventListener('click', async () => {
     const officialCdbs = [...$('cdbOfficial').files];
     const luaFiles = [...$('luaFolder').files];
     const existingFiles = [...$('existingFolder').files];
-    const tag = $('customTag').value.trim().toLowerCase();
+    const tags = $('customTag').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
     const addCode = $('optAddCode').checked;
     const force = $('optForce').checked;
     const dry = $('optDry').checked;
@@ -291,7 +291,7 @@ btn.addEventListener('click', async () => {
         for (const cid of ids) {
             if (++n % 200 === 0) await tick();
             const name = custom.get(cid);
-            const tagged = !!tag && descs.get(cid).some((d) => d.toLowerCase().includes(tag));
+            const tagged = tags.length > 0 && descs.get(cid).some((d) => { const l = d.toLowerCase(); return tags.some((t) => l.includes(t)); });
             const cands = [...(official.get(norm(name)) || [])].filter((o) => lua.has(o)).sort((a, b) => a - b);
 
             // Cartes taguées : ignorées (sauf forçage)
