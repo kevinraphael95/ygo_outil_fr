@@ -33,7 +33,7 @@
     file: null, sqlite: null, patched: null, sqlLib: null, sqlReady: false,
     nameIndexFr: null, nameIndexEn: null, missingNames: [], cancelled: false,
     running: false, resolvedCards: [], generatedFiles: [], generatedCards: [],
-    tag: "",
+    tag: "", modName: false,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -54,7 +54,7 @@
     yugiProgressWrap: $("cdb-yugi-progress-wrap"), yugiLabel: $("cdb-yugi-label"),
     yugiPct: $("cdb-yugi-pct"), yugiFill: $("cdb-yugi-fill"),
     btnCancelYugi: $("cdb-cancel-yugi"),
-    customTag: null,
+    customTag: null, customName: null,
   };
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -114,6 +114,11 @@
     if (!tag) return d;
     if (d.toLowerCase().includes(tag.toLowerCase())) return d;
     return d ? `${tag} ${d}` : tag;
+  }
+
+  // Nom d'une carte modifiée : conservé tel quel, sauf si l'option est cochée
+  function modifiedName(frName, localName) {
+    return state.modName ? frName : localName;
   }
 
   function cleanNameForApi(name) {
@@ -181,7 +186,7 @@
       if (customMode) {
         const enCard = window.memCacheEn.get(String(frMatch.id));
         if (isModified(localDesc, frMatch.desc, enCard && enCard.desc)) {
-          return { status: "translated", name: frMatch.name, desc: tagDesc(localDesc), modified: true, card: frMatch, source: "local" };
+          return { status: "translated", name: modifiedName(frMatch.name, localName), desc: tagDesc(localDesc), modified: true, card: frMatch, source: "local" };
         }
       }
       return { status: "translated", name: frMatch.name, desc: frMatch.desc || "", card: frMatch, source: "local" };
@@ -193,7 +198,7 @@
       const frById = window.memCacheFr.get(String(enMatch.id));
       if (frById) {
         if (customMode && isModified(localDesc, enMatch.desc, frById.desc)) {
-          return { status: "translated", name: frById.name, desc: tagDesc(localDesc), modified: true, card: frById, source: "local" };
+          return { status: "translated", name: modifiedName(frById.name, localName), desc: tagDesc(localDesc), modified: true, card: frById, source: "local" };
         }
         return { status: "translated", name: frById.name, desc: frById.desc || "", card: frById, source: "local" };
       }
@@ -207,7 +212,7 @@
     const frName = yugiCard.fr || yugiCard.en || localName;
     const frDesc = yugiCard.fr_lore || yugiCard.lore || localDesc;
     if (customMode && isModified(localDesc, yugiCard.lore, yugiCard.fr_lore)) {
-      return { status: "translated", name: frName, desc: tagDesc(localDesc), modified: true, card: yugiCard, source: "yugipedia" };
+      return { status: "translated", name: modifiedName(frName, localName), desc: tagDesc(localDesc), modified: true, card: yugiCard, source: "yugipedia" };
     }
     return { status: "translated", name: frName, desc: frDesc || localDesc || "", card: yugiCard, source: "yugipedia" };
   }
@@ -269,9 +274,12 @@
     box.innerHTML =
       '<label for="cdb-custom-tag" class="cdb-option-label">Tag ajouté aux cartes modifiées</label>' +
       '<input type="text" id="cdb-custom-tag" value="[CUSTOM]" autocomplete="off" placeholder="vide = aucun tag" ' +
-      'style="padding:8px 10px;border-radius:8px;border:1px solid var(--border,#555);background:transparent;color:inherit;min-width:160px;">';
+      'style="padding:8px 10px;border-radius:8px;border:1px solid var(--border,#555);background:transparent;color:inherit;min-width:160px;">' +
+      '<label class="cdb-option-label" style="flex-basis:100%;display:flex;align-items:center;gap:8px;cursor:pointer;">' +
+      '<input type="checkbox" id="cdb-custom-name"> Traduire aussi le <strong>nom</strong> des cartes modifiées (sinon nom et effet restent intacts)</label>';
     wrap.insertAdjacentElement("afterend", box);
     dom.customTag = $("cdb-custom-tag");
+    dom.customName = $("cdb-custom-name");
   }
 
   function updateActionUI() {
@@ -287,6 +295,7 @@
     if (dom.customTag) {
       const on = !isJson && dom.customMode && dom.customMode.checked;
       dom.customTag.disabled = !on;
+      if (dom.customName) dom.customName.disabled = !on;
       const tw = $("cdb-custom-tag-wrap");
       if (tw) tw.style.opacity = on ? "1" : "0.4";
     }
@@ -309,6 +318,7 @@
     const customMode = dom.customMode ? dom.customMode.checked : false;
     const yugiMode = dom.yugiMode ? dom.yugiMode.checked : false;
     state.tag = (customMode && dom.customTag) ? dom.customTag.value.trim() : "";
+    state.modName = !!(customMode && dom.customName && dom.customName.checked);
     state.cancelled = false; state.running = true; state.missingNames = [];
     dom.btnRun.disabled = true; dom.btnClear.disabled = true;
     dom.progressWrap.classList.add("visible");
@@ -830,7 +840,7 @@
     dom.results.innerHTML = "";
     if (stats.modifiedCount > 0) {
       const li = document.createElement("li");
-      li.textContent = `🛠️ ${stats.modifiedCount} carte(s) custom conservée(s) (effet non traduit)` +
+      li.textContent = `🛠️ ${stats.modifiedCount} carte(s) custom conservée(s) (effet${state.modName ? "" : " et nom"} non traduit${state.modName ? "" : "s"})` +
         (state.tag ? ` · tag ${state.tag} ajouté` : "");
       dom.results.appendChild(li);
     }
