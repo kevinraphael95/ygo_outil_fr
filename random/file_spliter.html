@@ -67,9 +67,16 @@
                 <option value="lines">Nombre de lignes / éléments par morceau</option>
                 <option value="files">Nombre de fichiers voulus</option>
                 <option value="bytes">Taille max par morceau (Ko)</option>
+                <option value="keys" data-json>Un fichier par groupe (clé de premier niveau)</option>
+                <option value="field" data-json>Regrouper par valeur d'un champ</option>
             </select>
         </div>
-        <div class="inline-field">
+        <div class="inline-field" id="rowField" style="display:none;">
+            <label for="field">Champ de regroupement</label>
+            <input type="text" id="field" placeholder="ex : type, race, attribute" style="width:260px;" autocomplete="off">
+            <span class="hint">un fichier par valeur différente (« a.b » pour un champ imbriqué)</span>
+        </div>
+        <div class="inline-field" id="rowValue">
             <label for="value">Valeur</label>
             <input type="number" id="value" value="1000" min="1" style="width:140px;">
             <span class="muted" id="unit">lignes</span>
@@ -175,8 +182,13 @@ function splitRows(text, { quoteAware, keepHeader, mode, value }) {
         .map(([a, b]) => ({ count: b - a, content: head + body.slice(a, b).join(eol) + eol }));
 }
 
-/** JSON : tableau → découpé par éléments ; objet → découpé par clés. Chaque morceau reste un JSON valide. */
-function splitJson(text, { mode, value }) {
+/**
+ * JSON : ne coupe jamais un élément. Renvoie [{ label?, count, content }].
+ * Modes : lines | files | bytes (par éléments), keys (un fichier par clé racine),
+ *         field (un fichier par valeur distincte d'un champ).
+ * Une enveloppe { "data": [ … ] } est détectée, découpée à l'intérieur et remise dans chaque morceau.
+ */
+function splitJson(text, { mode, value, field }) {
     let data;
     try { data = JSON.parse(text); }
     catch (e) { throw new Error('JSON invalide : ' + e.message); }
@@ -184,22 +196,64 @@ function splitJson(text, { mode, value }) {
     // Garde l'indentation d'origine (sinon sortie compacte)
     const m = text.match(/^\s*[\[{]\s*\r?\n([ \t]+)/);
     const indent = m ? m[1].slice(0, 10) : 0;
-    const str = (v) => JSON.stringify(v, null, indent) + '\n';
 
-    let n, sizeOf, build;
-    if (Array.isArray(data)) {
-        n = data.length;
-        sizeOf = (i) => enc.encode(JSON.stringify(data[i])).length + 2;
-        build = (a, b) => str(data.slice(a, b));
-    } else if (data && typeof data === 'object') {
-        const keys = Object.keys(data);
-        n = keys.length;
-        sizeOf = (i) => enc.encode(JSON.stringify(keys[i]) + JSON.stringify(data[keys[i]])).length + 4;
-        build = (a, b) => str(Object.fromEntries(keys.slice(a, b).map((k) => [k, data[k]])));
-    } else {
+    let wrapKey = null;
+    if (data && !Array.isArray(data) && typeof data === 'object') {
+        const ks = Object.keys(data);
+        if (ks.length === 1 && Array.isArray(data[ks[0]])) { wrapKey = ks[0]; data = data[wrapKey]; }
+    }
+    const out = (v) => JSON.stringify(wrapKey !== null ? { [wrapKey]: v } : v, null, indent) + '\n';
+
+    const isArr = Array.isArray(data);
+    if (!isArr && !(data && typeof data === 'object')) {
         throw new Error('Le JSON doit être un tableau [ … ] ou un objet { … } à la racine.');
     }
+    const keys = isArr ? null : Object.keys(data);
+    const n = isArr ? data.length : keys.length;
+    const itemAt = (i) => (isArr ? data[i] : data[keys[i]]);
+
+    /* --- un fichier par clé de premier niveau --- */
+    if (mode === 'keys') {
+        if (isArr) throw new Error('Ce mode demande un objet avec des groupes à la racine, par exemple { "Monster": …, "Spell": … }.');
+        return keys.map((k) => {
+            const v = data[k];
+            const count = Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : 1);
+            return { label: k, count, content: out(Object.fromEntries([[k, v]])) };
+        });
+    }
+
+    /* --- un fichier par valeur d'un champ --- */
+    if (mode === 'field') {
+        if (!field) throw new Error('Indique le champ de regroupement (ex. type).');
+        const get = (item) => field.split('.').reduce((o, p) => (o !== null && typeof o === 'object' ? o[p] : undefined), item);
+        const groups = new Map();
+        for (let i = 0; i < n; i++) {
+            const item = itemAt(i);
+            const v = get(item);
+            const label = v == null ? '_sans_valeur' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+            if (!groups.has(label)) groups.set(label, []);
+            groups.get(label).push(isArr ? item : [keys[i], item]);
+        }
+        return [...groups].map(([label, arr]) => ({
+            label, count: arr.length, content: out(isArr ? arr : Object.fromEntries(arr)),
+        }));
+    }
+
+    /* --- par éléments / fichiers / taille --- */
+    const sizeOf = isArr
+        ? (i) => enc.encode(JSON.stringify(data[i])).length + 2
+        : (i) => enc.encode(JSON.stringify(keys[i]) + JSON.stringify(data[keys[i]])).length + 4;
+    const build = isArr
+        ? (a, b) => out(data.slice(a, b))
+        : (a, b) => out(Object.fromEntries(keys.slice(a, b).map((k) => [k, data[k]])));
     return groupRanges(n, mode, value, sizeOf, 4).map(([a, b]) => ({ count: b - a, content: build(a, b) }));
+}
+
+/** Nom de fichier sûr à partir d'une valeur de groupe. */
+function slug(label) {
+    const s = String(label).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+    return s || 'vide';
 }
 
 // </logic>
@@ -213,7 +267,7 @@ let currentFile = null, currentText = null;
 
 const HELP = {
     csv: "Chaque morceau est un CSV valide : les cellules entre guillemets qui contiennent des retours à la ligne ne sont jamais coupées. L'en-tête peut être répété.",
-    json: "Le JSON est lu en entier puis découpé par élément (tableau) ou par clé (objet) : chaque morceau est un fichier JSON valide, avec l'indentation d'origine.",
+    json: "Le JSON est lu en entier puis découpé sans jamais couper un élément : par nombre d'éléments, de fichiers ou de Ko, ou par groupes (une clé de premier niveau, ou la valeur d'un champ comme type ou race). Chaque morceau est un JSON valide, avec l'indentation d'origine. Une enveloppe { \"data\": [ … ] } est conservée dans chaque morceau.",
     text: "Découpe ligne par ligne sans interpréter le contenu (TXT, JSONL, logs…).",
 };
 
@@ -229,7 +283,15 @@ function refreshUI(resetHeader) {
     $('keepHeader').disabled = fmt === 'json';
     if (resetHeader) $('keepHeader').checked = fmt === 'csv';
     if (fmt === 'json') $('keepHeader').checked = false;
-    $('unit').textContent = ({ lines: fmt === 'json' ? 'éléments' : 'lignes', files: 'fichiers', bytes: 'Ko' })[$('mode').value];
+    for (const o of $('mode').options) {                       // modes « groupes » : JSON uniquement
+        const off = o.hasAttribute('data-json') && fmt !== 'json';
+        o.hidden = off; o.disabled = off;
+    }
+    if ($('mode').options[$('mode').selectedIndex].disabled) { $('mode').value = 'lines'; $('value').value = 1000; }
+    const mode = $('mode').value;
+    $('rowValue').style.display = (mode === 'keys' || mode === 'field') ? 'none' : '';
+    $('rowField').style.display = mode === 'field' ? '' : 'none';
+    $('unit').textContent = ({ lines: fmt === 'json' ? 'éléments' : 'lignes', files: 'fichiers', bytes: 'Ko' })[mode] || '';
 }
 
 /* ---------- Chargement ---------- */
@@ -273,7 +335,7 @@ async function loadFile(file) {
 $('format').addEventListener('change', () => refreshUI(true));
 $('mode').addEventListener('change', () => {
     const presets = { lines: 1000, files: 5, bytes: 100 };
-    $('value').value = presets[$('mode').value];
+    if (presets[$('mode').value]) $('value').value = presets[$('mode').value];
     refreshUI(false);
 });
 
@@ -285,7 +347,10 @@ $('splitBtn').addEventListener('click', async () => {
     const fmt = effectiveFormat();
     const mode = $('mode').value;
     const value = parseInt($('value').value, 10);
-    if (!value || value < 1) return YGO.toast('Valeur invalide.', 'err');
+    const grouped = mode === 'keys' || mode === 'field';
+    if (!grouped && (!value || value < 1)) return YGO.toast('Valeur invalide.', 'err');
+    const field = $('field').value.trim();
+    if (mode === 'field' && !field) return YGO.toast('Indique le champ de regroupement (ex. type).', 'err');
     if (typeof JSZip === 'undefined') return YGO.toast('JSZip non chargé (connexion ?).', 'err');
 
     const ext = $('ext').value.trim().replace(/^\./, '') || (fmt === 'json' ? 'json' : 'txt');
@@ -300,7 +365,7 @@ $('splitBtn').addEventListener('click', async () => {
 
     try {
         const parts = fmt === 'json'
-            ? splitJson(currentText, { mode, value })
+            ? splitJson(currentText, { mode, value, field })
             : splitRows(currentText, { quoteAware: fmt === 'csv', keepHeader: $('keepHeader').checked, mode, value });
         if (!parts.length) throw new Error('Rien à découper.');
 
@@ -310,8 +375,13 @@ $('splitBtn').addEventListener('click', async () => {
         const list = $('resultList');
         let total = 0;
 
+        const used = new Set();
         parts.forEach((p, i) => {
-            const name = `${base}_part${String(i + 1).padStart(pad, '0')}.${ext}`;
+            let name = p.label !== undefined
+                ? `${base}_${slug(p.label)}.${ext}`
+                : `${base}_part${String(i + 1).padStart(pad, '0')}.${ext}`;
+            for (let k = 2; used.has(name); k++) name = name.replace(/(\.[^.]+)$/, `_${k}$1`);
+            used.add(name);
             zip.file(name, p.content);
             total += p.count;
             if (i < MAX_LISTED) {
