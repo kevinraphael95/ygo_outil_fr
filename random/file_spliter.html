@@ -34,7 +34,7 @@
         <div class="hero-icon"><i class="fa-solid fa-scissors"></i></div>
         <div>
             <h1>Découpeur de fichiers</h1>
-            <p>Coupe un gros fichier (CSV, TXT, JSON…) en plusieurs morceaux dans un ZIP téléchargeable.</p>
+            <p>Coupe un gros fichier (CSV, JSON, TXT…) en plusieurs morceaux valides, dans un ZIP téléchargeable.</p>
         </div>
     </section>
 
@@ -49,12 +49,22 @@
 
     <div class="card hidden" id="optionsCard">
         <h2 class="card-title"><i class="fa-solid fa-sliders"></i> Options de découpe</h2>
-        <p class="card-sub">Le fichier est coupé <strong>enregistrement par enregistrement</strong>. Avec l'option CSV, les retours à la ligne à l'intérieur de cellules entre guillemets ne sont jamais coupés : chaque morceau reste un CSV valide.</p>
+        <p class="card-sub" id="formatHelp"></p>
 
+        <div class="inline-field">
+            <label for="format">Format du fichier</label>
+            <select id="format">
+                <option value="auto">Auto (selon l'extension)</option>
+                <option value="csv">CSV / TSV</option>
+                <option value="json">JSON</option>
+                <option value="text">Texte brut (ligne par ligne)</option>
+            </select>
+            <span class="hint" id="detected"></span>
+        </div>
         <div class="inline-field">
             <label for="mode">Mode de découpe</label>
             <select id="mode">
-                <option value="lines">Nombre de lignes par morceau</option>
+                <option value="lines">Nombre de lignes / éléments par morceau</option>
                 <option value="files">Nombre de fichiers voulus</option>
                 <option value="bytes">Taille max par morceau (Ko)</option>
             </select>
@@ -76,13 +86,16 @@
         <div class="inline-field">
             <label class="check"><input type="checkbox" id="keepHeader" checked> Répéter l'en-tête (1<sup>re</sup> ligne) dans chaque morceau</label>
         </div>
-        <div class="inline-field">
-            <label class="check"><input type="checkbox" id="quoteAware" checked> Respecter les guillemets CSV <span class="hint">(décocher pour du texte brut)</span></label>
-        </div>
 
         <div class="actions">
             <button id="splitBtn" class="btn btn-primary" type="button" disabled><i class="fa-solid fa-scissors"></i> Découper et télécharger le ZIP</button>
         </div>
+
+        <div id="progress" class="progress hidden">
+            <div class="progress-meta"><span class="progress-text">Préparation…</span><span class="progress-percent">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+        </div>
+
         <div class="stats" id="resultStats"></div>
         <ul class="result-list" id="resultList"></ul>
     </div>
@@ -93,9 +106,131 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 const { $ } = YGO;
-const drop = $('drop'), fileInput = $('fileInput');
 const enc = new TextEncoder();
+
+/* ============================================================
+   LOGIQUE DE DÉCOUPE (pure, sans accès au DOM)
+   ============================================================ */
+// <logic>
+
+/** Détecte le format d'après l'extension. */
+function detectFormat(filename) {
+    const e = (filename.split('.').pop() || '').toLowerCase();
+    if (e === 'json') return 'json';
+    if (e === 'csv' || e === 'tsv') return 'csv';
+    return 'text';
+}
+
+/**
+ * Découpe le texte en enregistrements.
+ * quoteAware : un \n situé entre guillemets ne termine pas l'enregistrement (cellules CSV multilignes).
+ * Les \r de fin de ligne (fichiers Windows) sont retirés ; on les remet à l'écriture via eol.
+ */
+function toRecords(text, quoteAware) {
+    const rec = [];
+    const push = (s) => rec.push(s.endsWith('\r') ? s.slice(0, -1) : s);
+    if (!quoteAware) {
+        text.split('\n').forEach(push);
+    } else {
+        let start = 0, inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+            const c = text.charCodeAt(i);
+            if (c === 34) inQuotes = !inQuotes;
+            else if (c === 10 && !inQuotes) { push(text.slice(start, i)); start = i + 1; }
+        }
+        push(text.slice(start));
+    }
+    if (rec.length && rec[rec.length - 1] === '') rec.pop();   // saut de ligne final
+    return rec;
+}
+
+/** Calcule les tranches [début, fin[ selon le mode (lignes, nombre de fichiers, taille). */
+function groupRanges(n, mode, value, sizeOf, base) {
+    const ranges = [];
+    if (mode === 'bytes') {
+        const max = value * 1024;
+        let start = 0, size = base;
+        for (let i = 0; i < n; i++) {
+            const s = sizeOf(i);
+            if (i > start && size + s > max) { ranges.push([start, i]); start = i; size = base; }
+            size += s;
+        }
+        if (n > start) ranges.push([start, n]);
+        return ranges;
+    }
+    const per = mode === 'files' ? Math.max(1, Math.ceil(n / value)) : value;
+    for (let i = 0; i < n; i += per) ranges.push([i, Math.min(i + per, n)]);
+    return ranges;
+}
+
+/** CSV / TSV / texte brut : renvoie [{ count, content }]. */
+function splitRows(text, { quoteAware, keepHeader, mode, value }) {
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    const records = toRecords(text, quoteAware);
+    const header = keepHeader && records.length ? records[0] : null;
+    const body = header !== null ? records.slice(1) : records;
+    const head = header !== null ? header + eol : '';
+    const sizeOf = (i) => enc.encode(body[i] + eol).length;
+    return groupRanges(body.length, mode, value, sizeOf, enc.encode(head).length)
+        .map(([a, b]) => ({ count: b - a, content: head + body.slice(a, b).join(eol) + eol }));
+}
+
+/** JSON : tableau → découpé par éléments ; objet → découpé par clés. Chaque morceau reste un JSON valide. */
+function splitJson(text, { mode, value }) {
+    let data;
+    try { data = JSON.parse(text); }
+    catch (e) { throw new Error('JSON invalide : ' + e.message); }
+
+    // Garde l'indentation d'origine (sinon sortie compacte)
+    const m = text.match(/^\s*[\[{]\s*\r?\n([ \t]+)/);
+    const indent = m ? m[1].slice(0, 10) : 0;
+    const str = (v) => JSON.stringify(v, null, indent) + '\n';
+
+    let n, sizeOf, build;
+    if (Array.isArray(data)) {
+        n = data.length;
+        sizeOf = (i) => enc.encode(JSON.stringify(data[i])).length + 2;
+        build = (a, b) => str(data.slice(a, b));
+    } else if (data && typeof data === 'object') {
+        const keys = Object.keys(data);
+        n = keys.length;
+        sizeOf = (i) => enc.encode(JSON.stringify(keys[i]) + JSON.stringify(data[keys[i]])).length + 4;
+        build = (a, b) => str(Object.fromEntries(keys.slice(a, b).map((k) => [k, data[k]])));
+    } else {
+        throw new Error('Le JSON doit être un tableau [ … ] ou un objet { … } à la racine.');
+    }
+    return groupRanges(n, mode, value, sizeOf, 4).map(([a, b]) => ({ count: b - a, content: build(a, b) }));
+}
+
+// </logic>
+
+/* ============================================================
+   INTERFACE
+   ============================================================ */
+const drop = $('drop'), fileInput = $('fileInput');
+const progress = YGO.progress($('progress'));
 let currentFile = null, currentText = null;
+
+const HELP = {
+    csv: "Chaque morceau est un CSV valide : les cellules entre guillemets qui contiennent des retours à la ligne ne sont jamais coupées. L'en-tête peut être répété.",
+    json: "Le JSON est lu en entier puis découpé par élément (tableau) ou par clé (objet) : chaque morceau est un fichier JSON valide, avec l'indentation d'origine.",
+    text: "Découpe ligne par ligne sans interpréter le contenu (TXT, JSONL, logs…).",
+};
+
+const effectiveFormat = () => {
+    const f = $('format').value;
+    return f === 'auto' ? (currentFile ? detectFormat(currentFile.name) : 'text') : f;
+};
+
+function refreshUI(resetHeader) {
+    const fmt = effectiveFormat();
+    $('formatHelp').textContent = HELP[fmt];
+    $('detected').textContent = $('format').value === 'auto' && currentFile ? 'détecté : ' + { csv: 'CSV', json: 'JSON', text: 'texte' }[fmt] : '';
+    $('keepHeader').disabled = fmt === 'json';
+    if (resetHeader) $('keepHeader').checked = fmt === 'csv';
+    if (fmt === 'json') $('keepHeader').checked = false;
+    $('unit').textContent = ({ lines: fmt === 'json' ? 'éléments' : 'lignes', files: 'fichiers', bytes: 'Ko' })[$('mode').value];
+}
 
 /* ---------- Chargement ---------- */
 drop.addEventListener('click', () => fileInput.click());
@@ -107,15 +242,21 @@ drop.addEventListener('drop', (e) => {
     e.preventDefault(); drop.classList.remove('over');
     if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
 });
-fileInput.addEventListener('change', (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) loadFile(e.target.files[0]);
+    fileInput.value = '';                         // permet de recharger le même fichier
+});
 
 async function loadFile(file) {
+    try {
+        currentText = await file.text();
+    } catch (err) {
+        return YGO.toast('Fichier trop gros ou illisible : ' + err.message, 'err');
+    }
     currentFile = file;
-    currentText = await file.text();
-    const ext = (file.name.split('.').pop() || 'txt').toLowerCase();
-    $('ext').value = ext;
+    $('format').value = 'auto';
+    $('ext').value = (file.name.split('.').pop() || 'txt').toLowerCase();
     $('baseName').value = file.name.replace(/\.[^.]+$/, '');
-    $('quoteAware').checked = ext === 'csv';
     const lines = currentText.split('\n').length;
     $('fileInfo').replaceChildren(
         YGO.el('span', { className: 'chip ok', text: `📄 ${file.name}` }),
@@ -125,101 +266,75 @@ async function loadFile(file) {
     $('splitBtn').disabled = false;
     $('resultStats').textContent = '';
     $('resultList').replaceChildren();
+    progress.hide();
+    refreshUI(true);
 }
 
+$('format').addEventListener('change', () => refreshUI(true));
 $('mode').addEventListener('change', () => {
-    const presets = { lines: ['lignes', 1000], files: ['fichiers', 5], bytes: ['Ko', 100] };
-    const [unit, v] = presets[$('mode').value];
-    $('unit').textContent = unit;
-    $('value').value = v;
+    const presets = { lines: 1000, files: 5, bytes: 100 };
+    $('value').value = presets[$('mode').value];
+    refreshUI(false);
 });
 
-/* ---------- Logique de découpe ---------- */
-function toRecords(text, quoteAware) {
-    if (!quoteAware) return text.split('\n');
-    const rec = [];
-    let start = 0, inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-        const c = text.charCodeAt(i);
-        if (c === 34) inQuotes = !inQuotes;
-        else if (c === 10 && !inQuotes) { rec.push(text.slice(start, i)); start = i + 1; }
-    }
-    rec.push(text.slice(start));
-    return rec;
-}
-
-function chunkByCount(body, per) {
-    const chunks = [];
-    for (let i = 0; i < body.length; i += per) chunks.push(body.slice(i, i + per));
-    return chunks;
-}
-
-function chunkByBytes(body, max, headerSize) {
-    const chunks = [];
-    let cur = [], size = headerSize;
-    for (const line of body) {
-        const ls = enc.encode(line).length + 1;
-        if (cur.length && size + ls > max) { chunks.push(cur); cur = []; size = headerSize; }
-        cur.push(line);
-        size += ls;
-    }
-    if (cur.length) chunks.push(cur);
-    return chunks;
-}
-
-function splitRecords(records, mode, value, keepHeader) {
-    if (records.length && records[records.length - 1] === '') records.pop();   // saut de ligne final
-    const header = keepHeader && records.length ? records[0] : null;
-    const body = header !== null ? records.slice(1) : records;
-    if (mode === 'files') return { header, chunks: chunkByCount(body, Math.max(1, Math.ceil(body.length / value))) };
-    if (mode === 'bytes') return { header, chunks: chunkByBytes(body, value * 1024, header !== null ? enc.encode(header).length + 1 : 0) };
-    return { header, chunks: chunkByCount(body, value) };
-}
-
 /* ---------- Action ---------- */
+const MAX_LISTED = 300;
+
 $('splitBtn').addEventListener('click', async () => {
     if (!currentText) return;
+    const fmt = effectiveFormat();
     const mode = $('mode').value;
     const value = parseInt($('value').value, 10);
     if (!value || value < 1) return YGO.toast('Valeur invalide.', 'err');
     if (typeof JSZip === 'undefined') return YGO.toast('JSZip non chargé (connexion ?).', 'err');
 
-    const ext = $('ext').value.trim().replace(/^\./, '') || 'txt';
-    const base = $('baseName').value.trim() || 'morceau';
+    const ext = $('ext').value.trim().replace(/^\./, '') || (fmt === 'json' ? 'json' : 'txt');
+    const base = ($('baseName').value.trim() || 'morceau').replace(/[\\/:*?"<>|]/g, '_');
 
     $('splitBtn').disabled = true;
-    $('resultStats').textContent = 'Découpage en cours…';
+    $('resultStats').textContent = '';
+    $('resultList').replaceChildren();
+    progress.show();
+    progress.set(0, 'Découpage…');
     await YGO.sleep(30);
 
     try {
-        const records = toRecords(currentText, $('quoteAware').checked);
-        const total = records.length;
-        const { header, chunks } = splitRecords(records, mode, value, $('keepHeader').checked);
-        if (!chunks.length) throw new Error('Rien à découper.');
+        const parts = fmt === 'json'
+            ? splitJson(currentText, { mode, value })
+            : splitRows(currentText, { quoteAware: fmt === 'csv', keepHeader: $('keepHeader').checked, mode, value });
+        if (!parts.length) throw new Error('Rien à découper.');
 
-        const pad = Math.max(2, String(chunks.length).length);
+        const pad = Math.max(2, String(parts.length).length);
         const zip = new JSZip();
+        const unit = fmt === 'json' ? 'éléments' : 'lignes';
         const list = $('resultList');
-        list.replaceChildren();
+        let total = 0;
 
-        chunks.forEach((chunk, i) => {
+        parts.forEach((p, i) => {
             const name = `${base}_part${String(i + 1).padStart(pad, '0')}.${ext}`;
-            const content = (header !== null ? header + '\n' : '') + chunk.join('\n') + '\n';
-            zip.file(name, content);
-            list.append(YGO.el('li', {},
-                YGO.el('span', { text: name }),
-                YGO.el('span', { className: 'dim', text: `${chunk.length.toLocaleString('fr-FR')} lignes · ${YGO.fmtBytes(enc.encode(content).length)}` })));
+            zip.file(name, p.content);
+            total += p.count;
+            if (i < MAX_LISTED) {
+                list.append(YGO.el('li', {},
+                    YGO.el('span', { text: name }),
+                    YGO.el('span', { className: 'dim', text: `${p.count.toLocaleString('fr-FR')} ${unit} · ${YGO.fmtBytes(enc.encode(p.content).length)}` })));
+            }
         });
+        if (parts.length > MAX_LISTED) {
+            list.append(YGO.el('li', {}, YGO.el('span', { className: 'dim', text: `… et ${parts.length - MAX_LISTED} autres fichiers` })));
+        }
 
-        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' },
+            (m) => progress.set(m.percent, 'Compression du ZIP…'));
         YGO.download(blob, base + '.zip');
+        progress.set(100, 'Terminé !');
         $('resultStats').replaceChildren(
-            YGO.el('span', { className: 'chip ok', text: `✅ ${chunks.length} fichiers créés` }),
-            YGO.el('span', { className: 'chip', text: `${total.toLocaleString('fr-FR')} lignes au total` }),
+            YGO.el('span', { className: 'chip ok', text: `✅ ${parts.length} fichiers créés` }),
+            YGO.el('span', { className: 'chip', text: `${total.toLocaleString('fr-FR')} ${unit} au total` }),
             YGO.el('span', { className: 'chip', text: `ZIP : ${YGO.fmtBytes(blob.size)}` }));
-        YGO.toast(`${chunks.length} fichiers créés !`);
+        YGO.toast(`${parts.length} fichiers créés !`);
     } catch (err) {
-        $('resultStats').textContent = '';
+        progress.hide();
         YGO.toast(err.message, 'err');
     } finally {
         $('splitBtn').disabled = false;
