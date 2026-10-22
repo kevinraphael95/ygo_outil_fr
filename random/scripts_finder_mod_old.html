@@ -10,6 +10,12 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="assets/ygo.css">
 <script src="assets/ygo.js"></script>
+<style>
+    .opts { display: grid; gap: 10px; margin: 6px 0 16px; }
+    .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+    .opt input { margin-top: 4px; }
+    .opt small { display: block; opacity: .7; }
+</style>
 </head>
 <body>
 
@@ -34,7 +40,7 @@
         <div class="hero-icon"><i class="fa-solid fa-file-pen"></i></div>
         <div>
             <h1>Scripts Finder Modifiés</h1>
-            <p>Isole les cartes taguées et copie leur script officiel avec un en-tête de travail prêt à modifier.</p>
+            <p>Pour chaque carte custom taguée (effet modifié) : trouve la carte officielle du même nom dans les CDB officiels, copie son script en remplaçant l'ID et ajoute un en-tête d'origine prêt à modifier.</p>
         </div>
     </section>
 
@@ -43,19 +49,55 @@
 
         <div class="field">
             <label for="customTag">Tag des cartes modifiées à isoler</label>
-            <input type="text" id="customTag" value="[CUSTOM]" autocomplete="off">
+            <input type="text" id="customTag" value="" autocomplete="off">
+            <span class="hint">Cherché dans la description EN et FR. Insensible à la casse.</span>
         </div>
 
         <div class="grid-2">
             <div class="field">
-                <label for="cdbFile">Fichier CDB custom (anglais)</label>
-                <input type="file" id="cdbFile" accept=".cdb">
+                <label for="cdbEn">CDB custom (anglais) *</label>
+                <input type="file" id="cdbEn" accept=".cdb">
             </div>
             <div class="field">
-                <label for="luaFolder">Dossier des scripts officiels (.lua)</label>
-                <input type="file" id="luaFolder" webkitdirectory directory multiple>
-                <span class="hint" id="luaHint"></span>
+                <label for="cdbFr">CDB custom (français) <small>(optionnel)</small></label>
+                <input type="file" id="cdbFr" accept=".cdb">
             </div>
+        </div>
+
+        <div class="field">
+            <label for="cdbOfficial">CDB officiels (plusieurs fichiers) *</label>
+            <input type="file" id="cdbOfficial" accept=".cdb" multiple>
+            <span class="hint" id="cdbOfficialHint"></span>
+        </div>
+
+        <div class="field">
+            <label for="luaFolder">Dossier des scripts officiels (.lua) *</label>
+            <input type="file" id="luaFolder" webkitdirectory directory multiple>
+            <span class="hint" id="luaHint">Un script d'un sous-dossier « official » est prioritaire sur les variantes (goat, rush…).</span>
+        </div>
+
+        <div class="grid-2">
+            <div class="field">
+                <label for="existingFolder">Dossier « script » existant <small>(optionnel)</small></label>
+                <input type="file" id="existingFolder" webkitdirectory directory multiple>
+                <span class="hint" id="existingHint">Utilisé seulement avec « Ignorer les cartes qui ont déjà un script ».</span>
+            </div>
+            <div class="field">
+                <label for="outFolder">Dossier « testscripts/modified » existant <small>(optionnel)</small></label>
+                <input type="file" id="outFolder" webkitdirectory directory multiple>
+                <span class="hint" id="outHint">Les cartes déjà générées sont ignorées (sauf si écrasement forcé).</span>
+            </div>
+        </div>
+
+        <div class="opts">
+            <label class="opt"><input type="checkbox" id="optHeader" checked>
+                <span>Ajouter le commentaire d'origine en 1re ligne<small>Décoché : copie du script officiel tel quel.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optSkipExisting">
+                <span>Ignorer les cartes qui ont déjà un script<small>Nécessite le dossier « script » existant.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optForce">
+                <span>Forcer l'écrasement<small>Régénère aussi les scripts déjà présents dans « modified » et « script ».</small></span></label>
+            <label class="opt"><input type="checkbox" id="optDry">
+                <span>Simulation (dry run)<small>Affiche seulement ce qui serait fait, ne génère aucun ZIP.</small></span></label>
         </div>
 
         <div class="actions">
@@ -77,104 +119,230 @@
 const { $ } = YGO;
 const out = YGO.console($('console'));
 const btn = $('startBtn');
-YGO.bindFileCount($('luaFolder'), $('luaHint'), /^c\d+\.lua$/i);
+const LUA_RE = /^c(\d+)\.lua$/i;
+YGO.bindFileCount($('luaFolder'), $('luaHint'), LUA_RE);
+YGO.bindFileCount($('existingFolder'), $('existingHint'), LUA_RE);
+YGO.bindFileCount($('outFolder'), $('outHint'), LUA_RE);
 
 let SQL = null;
 YGO.initSql()
     .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
     .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
 
-const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+$('cdbOfficial').addEventListener('change', (e) => {
+    const n = e.target.files.length;
+    $('cdbOfficialHint').textContent = n ? `${n} fichier(s) CDB sélectionné(s)` : '';
+});
 
-function readCdb(buffer) {
-    const db = new SQL.Database(new Uint8Array(buffer));
+// ============================================================
+// OUTILS
+// ============================================================
+const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+/** Lit un CDB -> [{id, name, desc}] */
+async function readCdb(file) {
+    const db = new SQL.Database(new Uint8Array(await file.arrayBuffer()));
     try {
         const res = db.exec('SELECT id, name, "desc" FROM texts');
-        return res.length ? res[0].values.map(([id, name, desc]) => ({ id, name: name || '', desc: desc || '' })) : [];
+        return res.length
+            ? res[0].values.map(([id, name, desc]) => ({ id, name: name || '', desc: desc || '' }))
+            : [];
     } finally { db.close(); }
 }
 
-async function readLua(files) {
-    const list = [...files].filter((f) => /^c\d+\.lua$/i.test(f.name));
+// ============================================================
+// 1) CARTES MODIFIÉES (nom EN + descriptions EN et FR)
+// ============================================================
+async function loadCustom(fileEn, fileFr) {
+    const custom = new Map();   // id -> nom
+    const descs = new Map();    // id -> [desc EN, desc FR]
+    for (const c of await readCdb(fileEn)) {
+        custom.set(c.id, c.name);
+        descs.set(c.id, [c.desc]);
+    }
+    if (fileFr) {
+        for (const c of await readCdb(fileFr)) {
+            if (descs.has(c.id)) descs.get(c.id).push(c.desc);
+        }
+    } else {
+        out.log('ATTENTION : pas de CDB français (tag cherché dans la desc EN seulement).', 'warn');
+    }
+    return { custom, descs };
+}
+
+// ============================================================
+// 2) CARTES ET SCRIPTS OFFICIELS
+// ============================================================
+async function loadOfficialNames(files, custom) {
+    const official = new Map(); // nom normalisé -> Set(ids officiels)
+    for (const f of files) {
+        try {
+            const cards = await readCdb(f);
+            for (const c of cards) {
+                if (custom.has(c.id)) continue;
+                const k = norm(c.name);
+                if (!official.has(k)) official.set(k, new Set());
+                official.get(k).add(c.id);
+            }
+            out.log(`   ${f.name} : ${cards.length} cartes`);
+        } catch (e) {
+            out.log(`ignoré ${f.name} : ${e.message}`, 'warn');
+        }
+        await tick();
+    }
+    return official;
+}
+
+/** id -> File. Un script d'un dossier "official" est prioritaire. */
+function indexLua(files) {
     const map = new Map();
-    for (let i = 0; i < list.length; i += 64) {          // lecture par paquets en parallèle
-        const slice = list.slice(i, i + 64);
-        const texts = await Promise.all(slice.map((f) => f.text()));
-        slice.forEach((f, k) => map.set(parseInt(f.name.match(/\d+/)[0], 10), texts[k]));
+    const prio = new Set();
+    for (const f of files) {
+        const m = f.name.match(LUA_RE);
+        if (!m) continue;
+        const id = parseInt(m[1], 10);
+        const parts = (f.webkitRelativePath || '').split('/').slice(0, -1);
+        const isOfficial = parts.some((p) => p.toLowerCase() === 'official');
+        if (!map.has(id) || (isOfficial && !prio.has(id))) {
+            map.set(id, f);
+            if (isOfficial) prio.add(id);
+        }
     }
     return map;
 }
 
-/** Cherche le script source : même ID, sinon un script qui cite le nom de la carte. */
-function makeFinder(luaMap) {
-    let lower = null;
-    return (cid, name) => {
-        if (luaMap.has(cid)) return cid;
-        const n = norm(name);
-        if (!n) return null;
-        if (!lower) lower = [...luaMap].map(([oid, code]) => [oid, code.toLowerCase()]);
-        for (const [oid, code] of lower) if (code.includes(n)) return oid;
-        return null;
-    };
+function indexIds(files) {
+    const s = new Set();
+    for (const f of files) {
+        const m = f.name.match(LUA_RE);
+        if (m) s.add(parseInt(m[1], 10));
+    }
+    return s;
 }
 
-/** Remplace l'ancien ID par le nouveau (cOLD -> cNEW puis OLD -> NEW). */
+// ============================================================
+// 3) GÉNÉRATION DU SCRIPT
+// ============================================================
+/** Remplace l'ID officiel par l'ID custom (cOLD -> cNEW puis OLD -> NEW). */
 function retarget(code, oid, cid) {
     return code
         .replace(new RegExp('\\bc' + oid + '\\b', 'g'), 'c' + cid)
         .replace(new RegExp('\\b' + oid + '\\b', 'g'), String(cid));
 }
 
-async function zipAndDownload(zip, filename) {
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-    return YGO.download(blob, filename);
+function build(src, cid, oid, name, header, label) {
+    let code = retarget(src, oid, cid);
+    if (header) code = `--[${label}] base copiée de c${oid}.lua (${name}) - à modifier\n` + code;
+    return code;
 }
 
-out.log('Prêt à traiter les cartes modifiées…');
-
+// ============================================================
+// 4) PROGRAMME PRINCIPAL
+// ============================================================
 btn.addEventListener('click', async () => {
     if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
-    const cdb = $('cdbFile').files[0];
-    const luaFiles = $('luaFolder').files;
+
+    const fileEn = $('cdbEn').files[0];
+    const fileFr = $('cdbFr').files[0] || null;
+    const officialCdbs = [...$('cdbOfficial').files];
+    const luaFiles = [...$('luaFolder').files];
     const tag = $('customTag').value.trim().toLowerCase();
-    if (!cdb) return YGO.toast('Sélectionne un fichier CDB.', 'err');
-    if (!luaFiles.length) return YGO.toast('Sélectionne le dossier des scripts Lua.', 'err');
+    const header = $('optHeader').checked;
+    const skipExisting = $('optSkipExisting').checked;
+    const force = $('optForce').checked;
+    const dry = $('optDry').checked;
+
+    if (!fileEn) return YGO.toast('Sélectionne le CDB custom (anglais).', 'err');
+    if (!officialCdbs.length) return YGO.toast('Sélectionne les CDB officiels.', 'err');
+    if (!luaFiles.length) return YGO.toast('Sélectionne le dossier des scripts officiels.', 'err');
     if (!tag) return YGO.toast('Indique le tag des cartes modifiées.', 'err');
+
+    const label = tag.replace(/^\[|\]$/g, '').toUpperCase();
 
     btn.disabled = true;
     out.clear();
     try {
-        out.log('📂 Lecture du CDB des cartes modifiées…');
-        const cards = readCdb(await cdb.arrayBuffer());
-        out.log(`→ ${cards.length} cartes lues.`);
+        out.log('📂 Lecture des CDB custom…');
+        const { custom, descs } = await loadCustom(fileEn, fileFr);
+        out.log(`→ ${custom.size} cartes custom.`);
 
-        out.log('📂 Lecture des scripts Lua…');
-        const luaMap = await readLua(luaFiles);
-        out.log(`→ ${luaMap.size} scripts valides.`);
-        const find = makeFinder(luaMap);
+        out.log('📂 Lecture des CDB officiels…');
+        const official = await loadOfficialNames(officialCdbs, custom);
+        out.log(`→ ${official.size} noms de cartes officielles.`);
 
-        out.log('🔄 Isolation des cartes taguées…');
+        out.log('📂 Indexation des scripts…');
+        const lua = indexLua(luaFiles);
+        const hasScript = indexIds([...$('existingFolder').files]);
+        const hasOut = indexIds([...$('outFolder').files]);
+        out.log(`→ ${lua.size} scripts officiels, ${hasScript.size} dans « script », ${hasOut.size} dans « modified ».`);
+
+        out.log(dry ? '🔄 Simulation…' : '🔄 Génération des scripts modifiés…');
         const zip = new JSZip();
-        let generated = 0, ignored = 0, noMatch = 0;
+        const rapport = [];
+        let ok = 0, deja = 0;
+        const ids = [...custom.keys()].sort((a, b) => a - b);
 
-        for (const { id: cid, name, desc } of cards) {
-            if (!desc.toLowerCase().includes(tag)) { ignored++; continue; }
-            const oid = find(cid, name);
-            if (oid == null) { noMatch++; out.log(`! Aucun script source pour ${name} (${cid})`, 'warn'); continue; }
+        let n = 0;
+        for (const cid of ids) {
+            if (++n % 200 === 0) await tick();
+            const name = custom.get(cid);
 
-            const code = retarget(luaMap.get(oid), oid, cid);
-            zip.file(`c${cid}.lua`, `--[MODIFIED] base copiée de c${oid}.lua (${name}) - à modifier\n` + code);
-            generated++;
+            // Uniquement les cartes taguées
+            if (!descs.get(cid).some((d) => d.toLowerCase().includes(tag))) continue;
+
+            // Script déjà présent dans "script"
+            if (skipExisting && hasScript.has(cid) && !force) { deja++; continue; }
+
+            // Fichier déjà généré dans "modified"
+            if (hasOut.has(cid) && !force) {
+                out.log(`${cid} ${name} : déjà dans modified (ignoré)`);
+                deja++;
+                continue;
+            }
+
+            // Aucun équivalent officiel
+            const cands = [...(official.get(norm(name)) || [])].filter((o) => lua.has(o)).sort((a, b) => a - b);
+            if (!cands.length) {
+                rapport.push(`${cid} | ${name} | aucun script officiel trouvé`);
+                continue;
+            }
+
+            const oid = cands[0];
+            out.log(`${cid} ${name}  <-  c${oid}.lua`);
+            if (!dry) {
+                const src = await lua.get(oid).text();
+                zip.file(`c${cid}.lua`, build(src, cid, oid, name, header, label));
+            }
+            ok++;
         }
 
-        if (!generated) {
+        if (!dry) zip.file('rapport_scripts_mod.txt', rapport.join('\n'));
+
+        out.log('');
+        out.log(`${ok} scripts ${dry ? 'à copier' : 'générés'}`);
+        out.log(`${deja} cartes [${label}] ignorées (script déjà présent ou existant)`);
+        out.log(`${rapport.length} sans équivalent officiel`);
+
+        if (rapport.length) {
+            out.log('--- sans équivalent officiel ---');
+            rapport.forEach((l) => out.log(l, 'warn'));
+        }
+
+        if (dry) {
+            out.log('✅ Simulation terminée, rien n\'a été généré.', 'ok');
+            return YGO.toast('Simulation terminée.');
+        }
+        if (!ok) {
             out.log('⚠️ Aucune carte taguée n\'a produit de script.', 'warn');
             return YGO.toast('Aucun script généré.', 'err');
         }
-        out.log(`📦 Compression de ${generated} scripts…`);
-        const size = await zipAndDownload(zip, 'scripts_modifies_overwrite.zip');
-        out.log(`✅ ${generated} scripts exportés (${YGO.fmtBytes(size)}) · ${ignored} cartes non taguées ignorées · ${noMatch} sans script.`, 'ok');
-        YGO.toast(`${generated} scripts modifiés exportés !`);
+
+        out.log(`📦 Compression de ${ok} scripts…`);
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+        const size = await YGO.download(blob, 'scripts_modifies_overwrite.zip');
+        out.log(`✅ ${ok} scripts exportés (${YGO.fmtBytes(size)}) · rapport_scripts_mod.txt inclus.`, 'ok');
+        YGO.toast(`${ok} scripts modifiés exportés !`);
     } catch (err) {
         out.log('❌ Erreur critique : ' + err.message, 'err');
         YGO.toast('Une erreur est survenue.', 'err');
@@ -182,6 +350,8 @@ btn.addEventListener('click', async () => {
         btn.disabled = false;
     }
 });
+
+out.log('Renseigne les CDB et le dossier de scripts, puis lance le traitement.');
 </script>
 </body>
 </html>
