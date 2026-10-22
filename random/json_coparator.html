@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparateur JSON · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-code-compare"></i></div>
+        <div>
+            <h1>Comparateur de <span class="grad">JSON</span></h1>
+            <p>Comparez deux fichiers JSON ou objets pour identifier instantanément les clés ajoutées, supprimées ou modifiées.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-file-arrow-up"></i> Importer les fichiers JSON</h2>
+        <p class="card-sub">Sélectionnez ou glissez-déposez vos deux fichiers JSON à comparer.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <div>
+                <label style="display:block; margin-bottom:8px; font-weight:500;">JSON 1 (Référence)</label>
+                <input type="file" id="file1" accept=".json" style="width:100%;">
+            </div>
+            <div>
+                <label style="display:block; margin-bottom:8px; font-weight:500;">JSON 2 (Comparaison)</label>
+                <input type="file" id="file2" accept=".json" style="width:100%;">
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="compare-btn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Lancer la comparaison</button>
+        </div>
+
+        <div id="progress" class="progress hidden">
+            <div class="progress-meta"><span class="progress-text">Analyse…</span><span class="progress-percent">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution & Résultats</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+
+<script>
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const progress = YGO.progress($('progress'));
+const btn = $('compare-btn');
+
+out.log('Prêt à comparer des fichiers JSON…');
+
+btn.addEventListener('click', async () => {
+    const f1Input = $('file1');
+    const f2Input = $('file2');
+
+    if (!f1Input.files.length || !f2Input.files.length) {
+        YGO.toast("Veuillez sélectionner les deux fichiers JSON", "err");
+        out.log("❌ Erreur : Veuillez sélectionner deux fichiers JSON.", "err");
+        return;
+    }
+
+    btn.disabled = true;
+    progress.show();
+    progress.set(20, 'Lecture des fichiers…');
+    out.log('📥 Lecture des fichiers JSON en cours...');
+
+    try {
+        const text1 = await f1Input.files[0].text();
+        const text2 = await f2Input.files[0].text();
+
+        progress.set(50, 'Validation et parsing…');
+        const data1 = JSON.parse(text1);
+        const data2 = JSON.parse(text2);
+
+        progress.set(80, 'Comparaison des structures…');
+        
+        const keys1 = new Set(Object.keys(data1));
+        const keys2 = new Set(Object.keys(data2));
+
+        const onlyIn1 = [...keys1].filter(k => !keys2.has(k));
+        const onlyIn2 = [...keys2].filter(k => !keys1.has(k));
+        const commonKeys = [...keys1].filter(k => keys2.has(k));
+
+        const modified = commonKeys.filter(k => JSON.stringify(data1[k]) !== JSON.stringify(data2[k]));
+
+        progress.set(100, 'Terminé !');
+        out.log('=== RAPPORT DE COMPARAISON JSON ===', 'ok');
+        out.log(`- Clés uniquement dans le JSON 1 : ${onlyIn1.length ? onlyIn1.join(', ') : 'Aucune'}`);
+        out.log(`- Clés uniquement dans le JSON 2 : ${onlyIn2.length ? onlyIn2.join(', ') : 'Aucune'}`);
+        out.log(`- Clés modifiées (valeurs différentes) : ${modified.length ? modified.join(', ') : 'Aucune'}`);
+        
+        YGO.toast("Comparaison terminée avec succès !");
+    } catch (err) {
+        out.log('❌ Erreur de parsing JSON : ' + err.message, 'err');
+        YGO.toast("Erreur : Fichier JSON invalide", 'err');
+    } finally {
+        btn.disabled = false;
+    }
+});
+</script>
+</body>
+</html>
