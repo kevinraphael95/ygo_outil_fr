@@ -51,6 +51,8 @@
                 <button class="btn btn-sm" id="tplLoad" type="button"><i class="fa-solid fa-cloud-arrow-down"></i> Charger tous les templates de Yugipedia</button>
             </div>
 
+            <div id="tplChips" class="actions" style="margin:0 0 8px;"></div>
+
             <div id="tplList" style="display:flex; flex-wrap:wrap; gap:8px 22px; max-height:240px; overflow:auto; padding:10px 12px; border:1px solid var(--border); border-radius:8px;"></div>
             <div class="stats" id="tplInfo" style="margin:8px 0;"></div>
 
@@ -104,6 +106,22 @@ out.log('Prêt à lancer l\'extraction Yugipedia…');
 /* ---------- Choix des templates ---------- */
 const tplBox = $('tplList');
 const fold = (x) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/* Raccourcis par média (d'après les catégories de cartes de la page d'accueil de Yugipedia).
+   Ce sont de simples filtres sur le nom : ils n'affichent que ce qui existe réellement dans la liste. */
+const CHIPS = [
+    { label: 'Fiches (… card)', test: /(\bcard|CardTable\d*)$/i },
+    { label: 'OCG',            test: /ocg/i },
+    { label: 'TCG',            test: /tcg/i },
+    { label: 'Rush Duel',      test: /rush/i },
+    { label: 'Anime',          test: /anime/i },
+    { label: 'Manga',          test: /manga/i },
+    { label: 'Roman',          test: /novel/i },
+    { label: 'Jeux vidéo',     test: /video ?game|\bDM\d|duel links|master duel|tag force|world championship|legacy of the duelist/i },
+    { label: 'Bandai / autres', test: /bandai|sealdass|capsule|dice/i },
+];
+let activeChip = null;
+
 const allTplInputs = () => [...tplBox.querySelectorAll('input')];
 const visibleTplInputs = () => allTplInputs().filter((i) => i.parentElement.style.display !== 'none');
 const selectedTemplates = () => allTplInputs().filter((i) => i.checked).map((i) => i.value);
@@ -124,10 +142,22 @@ function addTemplate(name, checked = true) {
 function applyFilter() {
     const q = fold($('tplFilter').value.trim());
     const only = $('tplOnlyChecked').checked;
+    const chip = CHIPS.find((c) => c.label === activeChip);
     for (const label of tplBox.children) {
         const i = label.firstChild;
-        label.style.display = ((!q || fold(i.value).includes(q)) && (!only || i.checked)) ? '' : 'none';
+        const ok = (!q || fold(i.value).includes(q)) && (!only || i.checked) && (!chip || chip.test.test(i.value));
+        label.style.display = ok ? '' : 'none';
     }
+}
+function setChip(label) {
+    activeChip = label;
+    for (const b of $('tplChips').children) b.classList.toggle('btn-primary', b.dataset.label === label);
+    applyFilter();
+}
+for (const c of CHIPS) {
+    const b = YGO.el('button', { className: 'btn btn-sm', type: 'button', text: c.label, dataset: { label: c.label } });
+    b.addEventListener('click', () => setChip(activeChip === c.label ? null : c.label));
+    $('tplChips').append(b);
 }
 function setTplLocked(locked) {
     allTplInputs().forEach((i) => { i.disabled = locked; });
@@ -181,7 +211,7 @@ $('tplLoad').addEventListener('click', async () => {
     } finally {
         $('tplLoad').disabled = false;
         updateCount();
-        applyFilter();
+        setChip(added ? CHIPS[0].label : activeChip);
     }
 });
 
