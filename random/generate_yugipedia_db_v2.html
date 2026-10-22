@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Générateur yugipedia-db.json · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-scroll"></i></div>
+        <div>
+            <h1>Génération de <span class="grad">yugipedia-db.json</span></h1>
+            <p>Extraction des templates de cartes de ton choix, nettoyage des balises wiki et fusion, directement depuis ton navigateur.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Lancer l'extraction Yugipedia</h2>
+        <p class="card-sub">Parcourt les templates cochés ci-dessous et génère <code>yugipedia-db.json</code>. Compte plusieurs minutes (limite de débit de l'API). <strong>Garde cet onglet visible</strong> pendant l'extraction.</p>
+
+        <div class="field">
+            <label>Templates à extraire</label>
+
+            <div class="inline-field" style="margin:8px 0;">
+                <input type="text" id="tplFilter" placeholder="Filtrer la liste…" style="width:240px;" autocomplete="off">
+                <label class="check"><input type="checkbox" id="tplOnlyChecked"> Cochés seulement</label>
+                <button class="btn btn-sm" id="tplLoad" type="button"><i class="fa-solid fa-cloud-arrow-down"></i> Charger tous les templates de Yugipedia</button>
+            </div>
+
+            <div id="tplList" style="display:flex; flex-wrap:wrap; gap:8px 22px; max-height:240px; overflow:auto; padding:10px 12px; border:1px solid var(--border); border-radius:8px;"></div>
+            <div class="stats" id="tplInfo" style="margin:8px 0;"></div>
+
+            <div class="actions" style="margin:0 0 12px;">
+                <button class="btn btn-sm" id="tplAll" type="button" title="Coche les templates affichés"><i class="fa-solid fa-check-double"></i> Tout cocher (affichés)</button>
+                <button class="btn btn-sm" id="tplNone" type="button" title="Décoche les templates affichés"><i class="fa-regular fa-square"></i> Tout décocher (affichés)</button>
+            </div>
+            <div class="inline-field" style="margin-bottom:4px;">
+                <input type="text" id="tplCustom" placeholder="Autre template (ex : Rush Duel card)" style="width:300px;" autocomplete="off">
+                <button class="btn btn-sm" id="tplAdd" type="button"><i class="fa-solid fa-plus"></i> Ajouter</button>
+            </div>
+            <span class="hint">Coche seulement les templates utilisés par des fiches de cartes : un template très répandu (infobox, navigation…) te ferait télécharger des milliers de pages inutiles. Les champs lus sont ceux des 6 templates par défaut (<code>fr_name</code>, <code>passcode</code>, <code>atk</code>…) ; un template qui les nomme autrement donnera des fiches presque vides.</span>
+        </div>
+
+        <label class="check" style="margin-bottom:16px;">
+            <input type="checkbox" id="minify">
+            Minifier le JSON <span class="hint">(désactivé = indenté, comme le script Node)</span>
+        </label>
+
+        <div class="actions">
+            <button id="start-btn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> <span id="startLabel">Démarrer l'extraction</span></button>
+        </div>
+
+        <div id="progress" class="progress hidden">
+            <div class="progress-meta"><span class="progress-text">Préparation…</span><span class="progress-percent">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+
+<script>
+const { $ } = YGO;
+const API = 'https://yugipedia.com/api.php';
+const DELAY = 1200;  // pause entre requêtes (comme le script Node)
+const BATCH = 50;
+const DEFAULT_TEMPLATES = ['CardTable2', 'Anime card', 'Manga card', 'Video game card', 'OCG card', 'TCG card'];
+
+const out = YGO.console($('console'));
+const progress = YGO.progress($('progress'));
+const btn = $('start-btn');
+out.log('Prêt à lancer l\'extraction Yugipedia…');
+
+/* ---------- Choix des templates ---------- */
+const tplBox = $('tplList');
+const fold = (x) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const allTplInputs = () => [...tplBox.querySelectorAll('input')];
+const visibleTplInputs = () => allTplInputs().filter((i) => i.parentElement.style.display !== 'none');
+const selectedTemplates = () => allTplInputs().filter((i) => i.checked).map((i) => i.value);
+
+function updateCount() {
+    const n = selectedTemplates().length;
+    $('startLabel').textContent = n ? `Démarrer l'extraction (${n} template${n > 1 ? 's' : ''})` : 'Coche au moins un template';
+    $('tplInfo').textContent = `${allTplInputs().length.toLocaleString('fr-FR')} templates listés · ${n} coché${n > 1 ? 's' : ''}`;
+}
+function makeTplLabel(name, checked) {
+    return YGO.el('label', { className: 'check' },
+        YGO.el('input', { type: 'checkbox', value: name, checked }), ' ' + name);
+}
+function addTemplate(name, checked = true) {
+    tplBox.append(makeTplLabel(name, checked));
+    updateCount();
+}
+function applyFilter() {
+    const q = fold($('tplFilter').value.trim());
+    const only = $('tplOnlyChecked').checked;
+    for (const label of tplBox.children) {
+        const i = label.firstChild;
+        label.style.display = ((!q || fold(i.value).includes(q)) && (!only || i.checked)) ? '' : 'none';
+    }
+}
+function setTplLocked(locked) {
+    allTplInputs().forEach((i) => { i.disabled = locked; });
+    ['tplAll', 'tplNone', 'tplAdd', 'tplCustom', 'tplLoad'].forEach((id) => { $(id).disabled = locked; });
+}
+DEFAULT_TEMPLATES.forEach((n) => addTemplate(n));
+
+tplBox.addEventListener('change', updateCount);
+$('tplFilter').addEventListener('input', applyFilter);
+$('tplOnlyChecked').addEventListener('change', applyFilter);
+$('tplAll').addEventListener('click', () => { visibleTplInputs().forEach((i) => { i.checked = true; }); updateCount(); });
+$('tplNone').addEventListener('click', () => { visibleTplInputs().forEach((i) => { i.checked = false; }); updateCount(); });
+
+function addCustom() {
+    const name = $('tplCustom').value.trim().replace(/^Template:/i, '').trim();
+    if (!name) return;
+    if (allTplInputs().some((i) => i.value.toLowerCase() === name.toLowerCase())) return YGO.toast('Ce template est déjà dans la liste.', 'err');
+    addTemplate(name);
+    $('tplCustom').value = '';
+}
+$('tplAdd').addEventListener('click', addCustom);
+$('tplCustom').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } });
+
+/** Liste tous les templates de Yugipedia (espace de noms 10, hors redirections et sous-pages « / »). */
+$('tplLoad').addEventListener('click', async () => {
+    $('tplLoad').disabled = true;
+    const known = new Set(allTplInputs().map((i) => i.value.toLowerCase()));
+    let cont = null, added = 0;
+    try {
+        do {
+            const params = { action: 'query', list: 'allpages', apnamespace: '10', aplimit: '500', apfilterredir: 'nonredirects' };
+            if (cont) params.apcontinue = cont;
+            const data = await fetchJson(params);
+            const frag = document.createDocumentFragment();
+            for (const pg of data?.query?.allpages || []) {
+                const name = pg.title.replace(/^Template:/i, '');
+                if (name.includes('/') || known.has(name.toLowerCase())) continue;
+                known.add(name.toLowerCase());
+                frag.append(makeTplLabel(name, false));
+                added++;
+            }
+            tplBox.append(frag);
+            $('tplInfo').textContent = `Chargement de la liste… ${known.size.toLocaleString('fr-FR')} templates`;
+            cont = data?.continue?.apcontinue;
+            if (cont) await YGO.sleep(600);
+        } while (cont);
+        if (!added) YGO.toast('Aucun nouveau template reçu de Yugipedia.', 'err');
+        else YGO.toast(`${added.toLocaleString('fr-FR')} templates ajoutés à la liste.`);
+    } catch (e) {
+        YGO.toast('Impossible de charger la liste : ' + e.message, 'err');
+    } finally {
+        $('tplLoad').disabled = false;
+        updateCount();
+        applyFilter();
+    }
+});
+
+/** Une seule tentative, comme le script Node : toute erreur est gérée par l'appelant. */
+async function fetchJson(params) {
+    const url = new URL(API);
+    const q = { format: 'json', formatversion: '2', origin: '*', ...params };
+    for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
+    const res = await fetch(url);
+    return await res.json();
+}
+
+function clean(s) {
+    if (!s) return null;
+    return String(s)
+        .replace(/\{\{Ruby\|([^|]+)\|[^}]+\}\}/gi, '$1')   // balises Ruby
+        .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')      // [[cible|texte]]
+        .replace(/\[\[([^\]]+)\]\]/g, '$1')                 // [[texte]]
+        .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/'{2,3}/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .trim() || null;
+}
+
+function extractTemplateParams(wikitext, name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = new RegExp('\\{\\{\\s*' + escaped + '\\s*(?=[|}\\n])', 'i').exec(wikitext);
+    if (!m) return null;
+    let i = m.index, depth = 0, end = null;
+    while (i < wikitext.length - 1) {
+        const two = wikitext.substr(i, 2);
+        if (two === '{{') { depth++; i += 2; continue; }
+        if (two === '}}') { depth--; if (depth === 0) { end = i; break; } i += 2; continue; }
+        i++;
+    }
+    return end === null ? null : wikitext.slice(m.index + m[0].length, end);
+}
+
+function parseParams(body) {
+    const params = {};
+    let i = body[0] === '|' ? 1 : 0;
+    while (i < body.length) {
+        const eq = body.indexOf('=', i);
+        if (eq === -1) break;
+        const key = body.slice(i, eq).trim().replace(/^[|\s]*/, '').trim();
+        if (!/^[a-zA-Z_0-9]+$/.test(key)) {
+            const np = body.indexOf('|', i);
+            if (np === -1) break;
+            i = np + 1;
+            continue;
+        }
+        let j = eq + 1, depth = 0;
+        while (j < body.length) {
+            const two = body.substr(j, 2);
+            if (two === '{{' || two === '[[') { depth++; j += 2; continue; }
+            if (two === '}}' || two === ']]') { depth--; j += 2; continue; }
+            if (depth === 0 && body[j] === '|') break;
+            j++;
+        }
+        params[key.toLowerCase()] = body.slice(eq + 1, j).trim();
+        i = j + 1;
+    }
+    return params;
+}
+
+const int = (v) => (v ? parseInt(v, 10) || null : null);
+const redirect = (f) => 'https://yugipedia.com/wiki/Special:Redirect/file/' + encodeURIComponent(f);
+
+function parseCard(wikitext, title, tpls) {
+    for (const tpl of tpls) {
+        const body = extractTemplateParams(wikitext, tpl);
+        if (!body) continue;
+        const p = parseParams(body);
+
+        const fr = clean(p.fr_name);
+        let en = clean(p.en_name || p.translated_name);
+        if (!en && title) en = clean(title);
+        if (!fr && !en) continue;
+
+        const id = p.passcode ? String(p.passcode).trim() : null;
+        const cropped = id ? `https://images.ygoprodeck.com/images/card_cropped/${id}.jpg` : null;
+        const rawImg = p.image_ca || p.artwork || p.image_cropped || p.image || p.en_image || p.ja_image || '';
+
+        let imgName = null;
+        if (rawImg) {
+            const line = rawImg.split(/[\r\n]+/)[0].trim();
+            for (const part of line.split(';')) {
+                const t = part.trim();
+                if (t && !t.includes('=')) { imgName = t.replace(/^.*?:/, '').trim(); break; }
+            }
+            if (!imgName) imgName = line.replace(/^.*?:/, '').split(';')[0].trim();
+        }
+
+        const types = p.types || p.type || '';
+        return {
+            title: title || null, fr, en, tpl, id,
+            database_id: p.database_id ? String(p.database_id).trim() : null,
+            img: cropped || (imgName ? redirect(imgName) : null),
+            img_en: p.en_image ? redirect(p.en_image.replace(/^.*?:/, '')) : null,
+            de: clean(p.de_name), it: clean(p.it_name), pt: clean(p.pt_name), es: clean(p.es_name),
+            ja: clean(p.ja_name), ko: clean(p.ko_name), tc: clean(p.tc_name), sc: clean(p.sc_name),
+            romaji: clean(p.romaji_name),
+            card_type: clean(p.card_type), property: clean(p.property),
+            type: clean(types), race: clean(types.split('/')[0]) || null,
+            attribute: clean(p.attribute),
+            atk: int(p.atk), def: int(p.def), level: int(p.level), rank: int(p.rank),
+            link: int(p.link), link_arrows: p.link_arrows ? clean(p.link_arrows) : null, scale: int(p.scale),
+            lore: clean(p.lore || p.text), fr_lore: clean(p.fr_lore || p.fr_text),
+            effect_types: clean(p.effect_types),
+            archetype: clean(p.archetype), archseries: clean(p.archseries),
+            supports: clean(p.supports), anti_supports: clean(p.anti_supports),
+            supports_archetypes: clean(p.supports_archetypes),
+            ocg_status: clean(p.ocg_status), tcg_status: clean(p.tcg_status),
+        };
+    }
+    return null;
+}
+
+const normalize = (s) => String(s || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+btn.addEventListener('click', async () => {
+    const tpls = selectedTemplates();
+    if (!tpls.length) return YGO.toast('Coche au moins un template.', 'err');
+    btn.disabled = true;
+    setTplLocked(true);
+    progress.show();
+    out.clear();
+    try {
+        /* Étape 1 : titres (en cas d'erreur : on passe au template suivant, comme le script) */
+        out.log(`📥 Récupération des pages de cartes (${tpls.length} template${tpls.length > 1 ? 's' : ''})...`);
+        const titles = new Set();
+        for (let t = 0; t < tpls.length; t++) {
+            const tpl = 'Template:' + tpls[t];
+            progress.set(2 + (t / tpls.length) * 8, 'Titres : ' + tpls[t]);
+            out.log('📥 ' + tpl);
+            let cont = null;
+            let tplCount = 0;
+            while (true) {
+                const params = { action: 'query', list: 'embeddedin', eititle: tpl, einamespace: '0', eilimit: '500' };
+                if (cont) params.eicontinue = cont;
+                try {
+                    const data = await fetchJson(params);
+                    const members = data?.query?.embeddedin || [];
+                    for (const m of members) titles.add(m.title);
+                    tplCount += members.length;
+                    out.log(`  → ${titles.size} titres cumulés (${tplCount} pour ce template)`);
+                    cont = data?.continue?.eicontinue;
+                    if (!cont) break;
+                } catch (e) {
+                    out.log('  ⚠️ Erreur: ' + e.message, 'warn');
+                    break;
+                }
+                await YGO.sleep(DELAY);
+            }
+        }
+        if (!titles.size) throw new Error('Aucun titre trouvé.');
+        out.log(`✅ ${titles.size} titres collectés au total`, 'ok');
+
+        /* Étape 2 : wikitexts (en cas d'erreur : on saute le lot, comme le script) */
+        const arr = [...titles];
+        out.log(`📥 Récupération du contenu de ${arr.length} pages...`);
+        const wikitexts = new Map();
+        let i = 0;
+        for (let j = 0; j < arr.length; j += BATCH) {
+            try {
+                const data = await fetchJson({
+                    action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main',
+                    titles: arr.slice(j, j + BATCH).join('|'), redirects: '1',
+                });
+                for (const p of data?.query?.pages || []) {
+                    if (!p || p.missing) continue;
+                    const wt = p.revisions?.[0]?.slots?.main?.content
+                        || p.revisions?.[0]?.content
+                        || p.revisions?.[0]?.["*"];
+                    if (wt) wikitexts.set(p.title, wt);
+                }
+                i += BATCH > arr.length - j ? arr.length - j : BATCH;
+                if (i % 500 === 0 || i >= arr.length) {
+                    out.log(`  → ${i} / ${arr.length} pages (${wikitexts.size} avec contenu)`);
+                }
+            } catch (e) {
+                out.log(`  ⚠️ Erreur batch ${j}: ${e.message}`, 'warn');
+            }
+            progress.set(10 + (Math.min(j + BATCH, arr.length) / arr.length) * 70, `Wikitexts : ${Math.min(j + BATCH, arr.length)} / ${arr.length}`);
+            await YGO.sleep(DELAY);
+        }
+        out.log(`✅ ${wikitexts.size} wikitexts récupérés`, 'ok');
+
+        /* Étape 3 : parsing */
+        out.log('🔄 Parsing...');
+        progress.set(84, 'Parsing des cartes…');
+        const db = {};
+        let count = 0;
+        for (const [title, wt] of wikitexts) {
+            const card = parseCard(wt, title, tpls);
+            if (!card) continue;
+            const key = normalize(card.fr || card.en || title);
+            if (!key) continue;
+            if (!db[key]) { db[key] = card; count++; }
+            const tk = normalize(title);
+            if (tk && tk !== key && !db[tk]) db[tk] = card;
+        }
+        out.log(`✅ ${count} cartes uniques parsées`, 'ok');
+        out.log(`✅ ${Object.keys(db).length} entrées totales`, 'ok');
+
+        /* Export */
+        progress.set(95, 'Génération du fichier…');
+        const json = $('minify').checked ? JSON.stringify(db) : JSON.stringify(db, null, 2);
+        YGO.download(json, 'yugipedia-db.json', 'application/json;charset=utf-8');
+        const size = json.length; // comme le script : nombre de caractères
+        progress.set(100, 'Terminé !');
+        const mo = (size / 1024 / 1024).toFixed(2) + ' Mo';
+        out.log(`💾 yugipedia-db.json généré : ${mo}`, 'ok');
+        YGO.toast(`yugipedia-db.json généré (${mo}) !`);
+    } catch (err) {
+        out.log('❌ Erreur : ' + err.message, 'err');
+        YGO.toast("Erreur pendant l'extraction", 'err');
+    } finally {
+        btn.disabled = false;
+        setTplLocked(false);
+    }
+});
+</script>
+</body>
+</html>
