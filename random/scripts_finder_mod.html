@@ -49,7 +49,7 @@
 
         <div class="field">
             <label for="customTag">Tag des cartes modifiées à isoler</label>
-            <input type="text" id="customTag" value="vaact" autocomplete="off">
+            <input type="text" id="customTag" value="" autocomplete="off">
             <span class="hint">Cherché dans la description EN et FR. Insensible à la casse.</span>
         </div>
 
@@ -152,7 +152,7 @@ async function readCdb(file) {
 }
 
 // ============================================================
-// 1) CARTES VAACT (nom EN + descriptions EN et FR)
+// 1) CARTES MODIFIÉES (nom EN + descriptions EN et FR)
 // ============================================================
 async function loadCustom(fileEn, fileFr) {
     const custom = new Map();   // id -> nom
@@ -317,7 +317,7 @@ btn.addEventListener('click', async () => {
             ok++;
         }
 
-        if (!dry) zip.file('rapport_scripts_vaact.txt', rapport.join('\n'));
+        if (!dry) zip.file('rapport_scripts_mod.txt', rapport.join('\n'));
 
         out.log('');
         out.log(`${ok} scripts ${dry ? 'à copier' : 'générés'}`);
@@ -341,7 +341,7 @@ btn.addEventListener('click', async () => {
         out.log(`📦 Compression de ${ok} scripts…`);
         const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
         const size = await YGO.download(blob, 'scripts_modifies_overwrite.zip');
-        out.log(`✅ ${ok} scripts exportés (${YGO.fmtBytes(size)}) · rapport_scripts_vaact.txt inclus.`, 'ok');
+        out.log(`✅ ${ok} scripts exportés (${YGO.fmtBytes(size)}) · rapport_scripts_mod.txt inclus.`, 'ok');
         YGO.toast(`${ok} scripts modifiés exportés !`);
     } catch (err) {
         out.log('❌ Erreur critique : ' + err.message, 'err');
