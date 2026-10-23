@@ -57,9 +57,26 @@
         <div class="grid-2" style="align-items:start;gap:22px">
 
             <div>
+                <!-- BASES DE DONNÉES -->
+                <section class="card">
+                    <h2 class="card-title"><i class="fa-solid fa-database"></i> Bases de données <span class="hint" style="margin-left:auto">dossier data/ du dépôt</span></h2>
+                    <p class="card-sub" style="margin-top:6px">Archétypes depuis <code>cardinfo</code> (chargés au démarrage) ; cartes depuis <code>cards-db.json</code> + <code>yugipedia-db.json</code> (chargées à la première recherche).</p>
+                    <div class="stats" id="db-status" style="margin:0 0 12px"></div>
+                    <div class="row">
+                        <button class="btn btn-sm" type="button" onclick="reloadBases()"><i class="fa-solid fa-rotate"></i> Recharger</button>
+                        <input type="file" id="db-files" multiple accept=".txt,.json" style="flex:1;min-width:200px" onchange="loadFiles(this.files)">
+                    </div>
+                    <span class="hint">Si le chargement automatique échoue (page ouverte en local), choisis les 4 fichiers à la main.</span>
+                </section>
+
                 <!-- ÉTAPE 1 -->
                 <section class="card">
                     <h2 class="card-title"><span class="num">1</span> Identité de la carte <span class="hint" style="margin-left:auto">c&lt;passcode&gt;.lua</span></h2>
+                    <div class="field" style="margin-top:14px">
+                        <label for="card-search">Remplir depuis une carte (nom FR/EN ou passcode)</label>
+                        <input type="text" id="card-search" placeholder="ex : Blue-Eyes, Dragon Blanc, 89631139…" autocomplete="off" onfocus="ensureBases()" oninput="onCardSearch()">
+                        <ul class="result-list" id="card-results" style="display:none"></ul>
+                    </div>
                     <div class="grid-2">
                         <div class="field">
                             <label for="card-id">Passcode *</label>
@@ -372,7 +389,9 @@ document.addEventListener('DOMContentLoaded', function(){
   populateSelect('m-race', RACES.map(r=>[r, RACE_LABELS_FR[r]]), 'DRAGON');
   buildMonsterFlagPills();
   buildLinkMarkerPills();
-  buildArchetypeDatalist();
+  rebuildArchetypes();
+  renderStatus();
+  loadCardinfo();
   renderEffects();
   render();
 });
@@ -382,18 +401,72 @@ function populateSelect(id, pairs, selected){
   el.innerHTML = pairs.map(([v,l])=>`<option value="${v}" ${v===selected?'selected':''}>${l}</option>`).join('');
 }
 
-function buildArchetypeDatalist(){
-  const dl = document.getElementById('archetype-list');
-  dl.innerHTML = ARCHETYPES.map(a=>`<option value="${a.n}">`).join('');
+/* ================= BASES DE DONNÉES (cardinfo, cards-db, yugipedia-db) ================= */
+const $ = YGO.$;
+const DATA_DIR = '../data/';   /* dossier data/ du dépôt, vu depuis random/ */
+const SRC = {
+  fr:    {label:'cardinfo FR',  file:'cardinfo_fr.txt',      json:false},
+  en:    {label:'cardinfo EN',  file:'cardinfo_english.txt', json:false},
+  cards: {label:'cards-db',     file:'cards-db.json',        json:true},
+  yugi:  {label:'yugipedia-db', file:'yugipedia-db.json',    json:true}
+};
+const DB = {setnames:{}, cards:null, yugi:null, records:[], jsonRequested:false};
+const ST = {fr:{cls:'',t:'en attente'}, en:{cls:'',t:'en attente'}, cards:{cls:'',t:'à la demande'}, yugi:{cls:'',t:'à la demande'}};
+const fold = s => String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const attr = s => esc(s).replace(/"/g,'&quot;');
+let ARCH = [];
+let ARCH_IDX = new Map();
+
+function renderStatus(){
+  $('db-status').innerHTML = Object.keys(SRC).map(k=>`<span class="chip ${ST[k].cls}">${SRC[k].label} · ${ST[k].t}</span>`).join('');
+}
+function setStatus(k, cls, t){ ST[k] = {cls, t}; renderStatus(); }
+
+/* ---- cardinfo : section ##setname ---- */
+function parseSetnames(text){
+  const out = new Map(); let sec = null;
+  for(const line of text.split(/\r?\n/)){
+    if(line.startsWith('#end')) break;
+    if(line.startsWith('##')){ sec = line.slice(2).trim().toLowerCase(); continue; }
+    if(sec !== 'setname') continue;
+    const m = line.match(/^(0x[0-9a-fA-F]+)\t(.+)$/);
+    if(m && !out.has(m[1].toLowerCase())) out.set(m[1].toLowerCase(), m[2].trim());
+  }
+  return out;
+}
+
+/* Liste d'archétypes = liste intégrée + cardinfo EN/FR (le fichier prime) */
+function rebuildArchetypes(){
+  const m = new Map();
+  ARCHETYPES.forEach(a=>m.set(a.h, {h:a.h, en:a.n, fr:''}));
+  for(const [lang, map] of Object.entries(DB.setnames)){
+    for(const [h, n] of map){
+      const o = m.get(h) || {h, en:'', fr:''};
+      o[lang] = n; m.set(h, o);
+    }
+  }
+  ARCH = [...m.values()];
+  const names = [], count = new Map();
+  ARCH.forEach(a=>{
+    [a.en, a.fr].filter((n,i,arr)=>n && arr.indexOf(n)===i).forEach(n=>{
+      names.push([n, a]); const k = fold(n); count.set(k, (count.get(k)||0)+1);
+    });
+  });
+  ARCH_IDX = new Map(); const opts = [];
+  names.forEach(([n, a])=>{
+    const v = count.get(fold(n))>1 ? `${n} [${a.h}]` : n;   // homonymes : on ajoute le setcode
+    ARCH_IDX.set(fold(v), a);
+    const other = n===a.en ? a.fr : a.en;
+    opts.push(`<option value="${attr(v)}" label="${a.h}${other && other!==n ? ' · '+attr(other) : ''}">`);
+  });
+  $('archetype-list').innerHTML = opts.join('');
 }
 
 function onArchetypeSearch(input){
-  const match = ARCHETYPES.find(a=>a.n.toLowerCase()===input.value.toLowerCase());
-  if(match){
-    if(!setcodes.find(s=>s.h===match.h)){
-      setcodes.push({n:match.n, h:match.h});
-    }
-    input.value='';
+  const a = ARCH_IDX.get(fold(input.value.trim()));
+  if(a){
+    if(!setcodes.find(s=>s.h===a.h)) setcodes.push({n:a.en||a.fr, h:a.h});
+    input.value = '';
     render();
   }
 }
@@ -401,6 +474,210 @@ function onArchetypeSearch(input){
 function removeSetcode(h){
   setcodes = setcodes.filter(s=>s.h!==h);
   render();
+}
+
+/* ---- chargement ---- */
+async function fetchSource(k){
+  setStatus(k, 'warn', 'chargement…');
+  try{
+    const r = await fetch(DATA_DIR + SRC[k].file);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    ingest(k, SRC[k].json ? await r.json() : await r.text());
+  }catch(err){
+    console.warn(SRC[k].label, err);
+    setStatus(k, 'err', SRC[k].json ? 'introuvable' : 'introuvable (liste intégrée)');
+  }
+}
+function ingest(k, data){
+  if(k==='fr' || k==='en'){
+    DB.setnames[k] = parseSetnames(data);
+    setStatus(k, 'ok', DB.setnames[k].size.toLocaleString('fr-FR')+' archétypes');
+  } else {
+    DB[k] = data;
+    setStatus(k, 'ok', Object.keys(data).length.toLocaleString('fr-FR')+' entrées');
+  }
+}
+async function loadCardinfo(){
+  await Promise.all(['fr','en'].map(fetchSource));
+  rebuildArchetypes();
+}
+async function ensureBases(){
+  if(DB.jsonRequested) return;
+  DB.jsonRequested = true;
+  await Promise.all(['cards','yugi'].map(fetchSource));
+  rebuildRecords();
+  runCardSearch();
+  if(!DB.records.length) YGO.toast('Bases introuvables : choisis les fichiers à la main', 'err');
+}
+async function reloadBases(){
+  DB.jsonRequested = false;
+  await loadCardinfo();
+  await ensureBases();
+}
+async function loadFiles(files){
+  for(const f of files){
+    const n = f.name.toLowerCase(); let k = null;
+    if(n.includes('cardinfo')) k = n.includes('_fr') ? 'fr' : 'en';
+    else if(n.includes('cards-db')) k = 'cards';
+    else if(n.includes('yugipedia')) k = 'yugi';
+    if(!k){ YGO.toast('Fichier non reconnu : '+f.name, 'err'); continue; }
+    setStatus(k, 'warn', 'lecture…');
+    try{ const t = await f.text(); ingest(k, SRC[k].json ? JSON.parse(t) : t); }
+    catch(e){ setStatus(k, 'err', 'invalide'); }
+  }
+  DB.jsonRequested = true;
+  rebuildArchetypes(); rebuildRecords(); runCardSearch();
+}
+
+/* ---- index de cartes : cards-db (clé = passcode) + yugipedia-db (fusion par passcode) ---- */
+function rebuildRecords(){
+  const recs = [], byId = new Map();
+  if(DB.cards){
+    for(const [id, c] of Object.entries(DB.cards)){
+      const r = {id, fr:c.fr||'', en:c.en||'', c, y:null};
+      recs.push(r); byId.set(id, r);
+    }
+  }
+  if(DB.yugi){
+    const seen = new Set();
+    for(const y of Object.values(DB.yugi)){
+      const key = y.title || y.en || y.fr;
+      if(!key || seen.has(key)) continue;
+      seen.add(key);
+      const id = y.id ? String(y.id) : '';
+      const ex = id && byId.get(id);
+      if(ex){ ex.y = y; if(!ex.fr && y.fr) ex.fr = y.fr; if(!ex.en && y.en) ex.en = y.en; continue; }
+      recs.push({id, fr:y.fr||'', en:y.en||y.title||'', c:null, y});
+    }
+  }
+  for(const r of recs){ r.fe = fold(r.en); r.ff = fold(r.fr); r.s = r.id+' '+r.fe+' '+r.ff; }
+  DB.records = recs;
+}
+
+let searchTimer;
+function onCardSearch(){ clearTimeout(searchTimer); searchTimer = setTimeout(runCardSearch, 150); }
+function runCardSearch(){
+  const box = $('card-results');
+  const q = fold($('card-search').value.trim());
+  if(!q){ box.style.display = 'none'; return; }
+  box.style.display = 'grid';
+  if(!DB.records.length){
+    box.innerHTML = `<li><span class="muted">${DB.jsonRequested ? 'Chargement des bases…' : 'Bases non chargées.'}</span></li>`;
+    return;
+  }
+  const toks = q.split(/\s+/), hits = [];
+  for(let i=0; i<DB.records.length; i++){
+    const r = DB.records[i];
+    if(!toks.every(t=>r.s.includes(t))) continue;
+    const score = (r.id===q || r.fe===q || r.ff===q) ? 0 : (r.fe.startsWith(q) || r.ff.startsWith(q)) ? 1 : 2;
+    hits.push([score, i]);
+  }
+  hits.sort((a,b)=>a[0]-b[0]);
+  if(!hits.length){ box.innerHTML = '<li><span class="muted">Aucune carte trouvée.</span></li>'; return; }
+  box.innerHTML = hits.slice(0,8).map(([, i])=>{
+    const r = DB.records[i];
+    const name = r.fr && r.fr!==r.en ? `${r.en} / ${r.fr}` : (r.en||r.fr);
+    const src = [r.c?'cards-db':'', r.y?'yugipedia':''].filter(Boolean).join(' + ');
+    return `<li>
+      <span>${esc(name)} <span class="muted">${r.id||'sans passcode'}</span> <span class="chip">${src}</span></span>
+      <span class="row" style="gap:6px;flex-wrap:nowrap">
+        <button class="btn btn-sm" type="button" onclick="pickCard(${i})">Remplir</button>
+        <button class="btn btn-sm" type="button" onclick="addListed(${i})" title="Ajouter le passcode à listed_names">+ listed</button>
+      </span></li>`;
+  }).join('');
+}
+
+/* ---- conversion carte -> champs du formulaire ---- */
+const lc = s => String(s==null?'':s).toLowerCase();
+function raceKey(s){
+  if(!s) return null;
+  const k = String(s).toUpperCase().replace(/[^A-Z]/g,'');
+  const r = ({DIVINEBEAST:'DIVINE'})[k] || k;
+  return RACES.includes(r) ? r : null;
+}
+function attrKey(s){ const k = String(s||'').toUpperCase().trim(); return ATTRIBUTES.includes(k) ? k : null; }
+function spellSub(s){ s = lc(s); return s.includes('cont')?'CONTINUOUS' : s.includes('equip')?'EQUIP' : s.includes('quick')?'QUICKPLAY' : s.includes('field')?'FIELD' : s.includes('ritual')?'RITUAL' : 'NORMAL'; }
+function trapSub(s){ s = lc(s); return s.includes('cont')?'CONTINUOUS' : s.includes('counter')?'COUNTER' : 'NORMAL'; }
+function parseMarkers(v){
+  const s = Array.isArray(v) ? v.join(',') : String(v||'');
+  const re = /(top|bottom)[-_ ]?(left|right)|top|bottom|left|right/gi, out = []; let m;
+  while((m = re.exec(s))) out.push(m[0].toUpperCase().replace(/[-\s]/g,'_'));
+  return out;
+}
+function monsterFromTokens(tokens){
+  const has = t => tokens.some(x=>x.includes(t));
+  const main = has('link')?'LINK' : has('xyz')?'XYZ' : has('synchro')?'SYNCHRO' : has('fusion')?'FUSION' : has('ritual')?'RITUAL' : (has('normal') && !has('effect')) ? 'NORMAL' : 'EFFECT';
+  const flags = ['pendulum','tuner','union','spirit','gemini','toon'].filter(f=>has(f));
+  return {main, flags};
+}
+function normCard(rec){
+  const c = rec.c, y = rec.y, d = {kind:null};
+  if(c){
+    const type = lc(c.type), frame = lc(c.frameType).replace(/_/g,' ');
+    if(type.includes('spell') || frame==='spell'){ d.kind='SPELL'; d.sub=spellSub(c.race); }
+    else if(type.includes('trap') || frame==='trap'){ d.kind='TRAP'; d.sub=trapSub(c.race); }
+    else {
+      d.kind='MONSTER'; Object.assign(d, monsterFromTokens([type, frame]));
+      d.race=raceKey(c.race); d.attr=attrKey(c.attribute); d.atk=c.atk; d.def=c.def; d.scale=c.scale;
+      if(d.main==='XYZ') d.rank=c.level; else if(d.main==='LINK'){ d.link=c.linkval; d.markers=parseMarkers(c.linkmarkers); } else d.level=c.level;
+    }
+  } else if(y){
+    const ct = lc(y.card_type);
+    if(ct.includes('spell')){ d.kind='SPELL'; d.sub=spellSub(y.property); }
+    else if(ct.includes('trap')){ d.kind='TRAP'; d.sub=trapSub(y.property); }
+    else if(ct.includes('monster') || y.atk!=null || y.type){
+      const parts = String(y.type||'').split('/').map(x=>x.trim());
+      d.kind='MONSTER'; Object.assign(d, monsterFromTokens(parts.slice(1).map(lc)));
+      if(y.rank!=null) d.main='XYZ'; else if(y.link!=null) d.main='LINK';
+      if(y.scale!=null && !d.flags.includes('pendulum')) d.flags.push('pendulum');
+      d.race=raceKey(y.race || parts[0]); d.attr=attrKey(y.attribute); d.atk=y.atk; d.def=y.def;
+      d.level=y.level; d.rank=y.rank; d.link=y.link; d.markers=parseMarkers(y.link_arrows); d.scale=y.scale;
+    }
+  }
+  d.archs = [];
+  if(y){
+    String([y.archetype, y.archseries].filter(Boolean).join(';')).split(/[;,\n]|<br\s*\/?>/i).forEach(p=>{
+      const a = ARCH_IDX.get(fold(p.trim()));
+      if(a && !d.archs.includes(a)) d.archs.push(a);
+    });
+  }
+  return d;
+}
+function pickCard(i){
+  const rec = DB.records[i], d = normCard(rec);
+  $('card-id').value = rec.id || '';
+  $('card-name').value = rec.en || rec.fr || '';
+  if(d.kind){
+    if(d.kind !== cardType) setCardType(d.kind);
+    if(d.kind==='MONSTER'){
+      $('m-main').value = d.main;
+      if(d.race) $('m-race').value = d.race;
+      if(d.attr) $('m-attribute').value = d.attr;
+      $('m-atk').value = d.atk ?? ''; $('m-def').value = d.def ?? '';
+      if(d.level!=null) $('m-level').value = d.level;
+      if(d.rank!=null) $('m-rank').value = d.rank;
+      if(d.link!=null) $('m-linkrating').value = d.link;
+      if(d.scale!=null) $('m-scale').value = d.scale;
+      MONSTER_FLAGS.forEach(([f])=>{ $('flag-'+f).checked = d.flags.includes(f); });
+      LINK_MARKERS.forEach(([m])=>{ $('lm-'+m).checked = (d.markers||[]).includes(m); });
+    } else if(d.kind==='SPELL') $('s-sub').value = d.sub;
+    else $('t-sub').value = d.sub;
+  }
+  d.archs.forEach(a=>{ if(!setcodes.find(s=>s.h===a.h)) setcodes.push({n:a.en||a.fr, h:a.h}); });
+  $('card-results').style.display = 'none';
+  $('card-search').value = '';
+  render();
+  YGO.toast('Fiche remplie : '+(rec.en||rec.fr)+(d.archs.length ? ` (+${d.archs.length} archétype${d.archs.length>1?'s':''})` : ''));
+}
+function addListed(i){
+  const rec = DB.records[i];
+  if(!rec.id){ YGO.toast('Cette carte n\'a pas de passcode', 'err'); return; }
+  const inp = $('card-listed-id');
+  const ids = inp.value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!ids.includes(rec.id)) ids.push(rec.id);
+  inp.value = ids.join(', ');
+  render();
+  YGO.toast('listed_names : +'+rec.id+' ('+(rec.en||rec.fr)+')');
 }
 
 function buildMonsterFlagPills(){
