@@ -92,6 +92,8 @@
         <div class="opts">
             <label class="opt"><input type="checkbox" id="optHeader" checked>
                 <span>Ajouter le commentaire d'origine en 1re ligne<small>Décoché : copie du script officiel tel quel.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optAddCode">
+                <span>Injecter <code>EFFECT_ADD_CODE</code><small>La carte modifiée est aussi considérée comme la carte officielle (soutiens, conditions sur le nom). Décoché : copie du script tel quel.</small></span></label>
             <label class="opt"><input type="checkbox" id="optSkipExisting">
                 <span>Ignorer les cartes qui ont déjà un script<small>Nécessite le dossier « script » existant.</small></span></label>
             <label class="opt"><input type="checkbox" id="optForce">
@@ -231,10 +233,28 @@ function retarget(code, oid, cid) {
         .replace(new RegExp('\\b' + oid + '\\b', 'g'), String(cid));
 }
 
-function build(src, cid, oid, name, header, label) {
+const INITIAL_EFFECT = /(function\s+(?:s|c\d+)\.initial_effect\s*\(\s*c\s*\))/;
+
+const ADD_CODE = (oid) => `
+	-- === AJOUT AUTO : considérée comme la carte officielle (ID ${oid}) ===
+	local e_add_code = Effect.CreateEffect(c)
+	e_add_code:SetType(EFFECT_TYPE_SINGLE)
+	e_add_code:SetCode(EFFECT_ADD_CODE)
+	e_add_code:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e_add_code:SetValue(${oid})
+	c:RegisterEffect(e_add_code)
+	-- =====================================================================`;
+
+/** Retourne { code, injected } */
+function build(src, cid, oid, name, header, label, addCode) {
     let code = retarget(src, oid, cid);
+    let injected = true;
+    if (addCode) {
+        injected = INITIAL_EFFECT.test(code);
+        if (injected) code = code.replace(INITIAL_EFFECT, (m) => m + ADD_CODE(oid));
+    }
     if (header) code = `--[${label}] base copiée de c${oid}.lua (${name}) - à modifier\n` + code;
-    return code;
+    return { code, injected };
 }
 
 // ============================================================
@@ -249,6 +269,7 @@ btn.addEventListener('click', async () => {
     const luaFiles = [...$('luaFolder').files];
     const tag = $('customTag').value.trim().toLowerCase();
     const header = $('optHeader').checked;
+    const addCode = $('optAddCode').checked;
     const skipExisting = $('optSkipExisting').checked;
     const force = $('optForce').checked;
     const dry = $('optDry').checked;
@@ -280,7 +301,7 @@ btn.addEventListener('click', async () => {
         out.log(dry ? '🔄 Simulation…' : '🔄 Génération des scripts modifiés…');
         const zip = new JSZip();
         const rapport = [];
-        let ok = 0, deja = 0;
+        let ok = 0, deja = 0, noInject = 0;
         const ids = [...custom.keys()].sort((a, b) => a - b);
 
         let n = 0;
@@ -312,7 +333,12 @@ btn.addEventListener('click', async () => {
             out.log(`${cid} ${name}  <-  c${oid}.lua`);
             if (!dry) {
                 const src = await lua.get(oid).text();
-                zip.file(`c${cid}.lua`, build(src, cid, oid, name, header, label));
+                const { code, injected } = build(src, cid, oid, name, header, label, addCode);
+                if (addCode && !injected) {
+                    noInject++;
+                    out.log('  ATTENTION : initial_effect introuvable, EFFECT_ADD_CODE non injecté', 'warn');
+                }
+                zip.file(`c${cid}.lua`, code);
             }
             ok++;
         }
@@ -323,6 +349,7 @@ btn.addEventListener('click', async () => {
         out.log(`${ok} scripts ${dry ? 'à copier' : 'générés'}`);
         out.log(`${deja} cartes [${label}] ignorées (script déjà présent ou existant)`);
         out.log(`${rapport.length} sans équivalent officiel`);
+        if (addCode && !dry) out.log(`${noInject} script(s) sans injection EFFECT_ADD_CODE`);
 
         if (rapport.length) {
             out.log('--- sans équivalent officiel ---');
