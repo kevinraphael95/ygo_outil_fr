@@ -88,7 +88,7 @@
                         </div>
                         <div class="field">
                             <label for="card-setcode-search">Archétypes (setcode)</label>
-                            <input type="text" id="card-setcode-search" list="archetype-list" placeholder="Chercher un archétype…" autocomplete="off" oninput="onArchetypeSearch(this)">
+                            <input type="text" id="card-setcode-search" list="archetype-list" placeholder="Chercher un archétype…" autocomplete="off" oninput="onArchetypeInput(event)" onchange="onArchetypeSearch(this)">
                             <datalist id="archetype-list"></datalist>
                             <span class="hint" id="setcode-hint">Aucun</span>
                         </div>
@@ -457,11 +457,17 @@ function rebuildArchetypes(){
     const v = count.get(fold(n))>1 ? `${n} [${a.h}]` : n;   // homonymes : on ajoute le setcode
     ARCH_IDX.set(fold(v), a);
     const other = n===a.en ? a.fr : a.en;
-    opts.push(`<option value="${attr(v)}" label="${a.h}${other && other!==n ? ' · '+attr(other) : ''}">`);
+    const label = (v===n ? `${v} · ${a.h}` : v) + (other && other!==n ? ' · '+other : '');
+    opts.push(`<option value="${attr(v)}" label="${attr(label)}">`);
   });
   $('archetype-list').innerHTML = opts.join('');
 }
 
+/* N'ajoute que sur un choix explicite (liste, Entrée, perte de focus), pas à chaque lettre :
+   sinon "Y" (0x56d), "Rose", "Sun"… s'ajoutent avant la fin de la saisie. */
+function onArchetypeInput(ev){
+  if(!ev.inputType || ev.inputType==='insertReplacementText') onArchetypeSearch(ev.target);
+}
 function onArchetypeSearch(input){
   const a = ARCH_IDX.get(fold(input.value.trim()));
   if(a){
