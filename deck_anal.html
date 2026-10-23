@@ -1,84 +1,139 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<title>VAACT - Explorateur d'Interactions (Local)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deck Explorer · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="utils/ygo.css">
+<script src="utils/ygo.js"></script>
 <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 <style>
-:root{--bg:#09090b;--panel:#18181b;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--accent:#3b82f6;--accent-h:#2563eb}
-*{box-sizing:border-box}
-body{font-family:'Inter','Segoe UI',Tahoma,sans-serif;margin:0;background:var(--bg);color:var(--text);overflow:hidden;display:flex;height:100vh}
-#sidebar{width:340px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px;z-index:10;box-shadow:2px 0 10px rgba(0,0,0,.5);overflow-y:auto}
-.logo-area{font-size:1.2em;font-weight:700;margin-bottom:20px;display:flex;gap:10px}
-.logo-area span{color:var(--accent)}
-.section-title{font-size:.75em;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:6px 0 12px;border-bottom:1px solid var(--border);padding-bottom:5px}
-.btn{padding:10px;border-radius:6px;cursor:pointer;font-weight:600;text-align:center;border:none;width:100%;transition:.2s;display:block;font-size:.9em;margin-bottom:8px;font-family:inherit}
-.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-h)}
-.btn-secondary{background:#27272a;color:var(--text);border:1px solid #3f3f46}
-.btn-secondary:hover:not(:disabled){background:#3f3f46;border-color:var(--accent)}
-.btn:disabled{opacity:.4;cursor:default}
-.row{display:flex;gap:8px}.row .btn{margin-bottom:8px}
-.status{flex-shrink:0;font-size:.75em;color:var(--muted);margin:-2px 0 12px;line-height:1.35;overflow-wrap:anywhere}
-input[type=file]{display:none}
-#search{width:100%;padding:10px;border-radius:6px;border:1px solid #3f3f46;background:#0f0f12;color:var(--text);font-family:inherit;margin-bottom:10px}
-#search:focus{outline:none;border-color:var(--accent)}
-#card-details{margin-top:10px;display:none;flex-direction:column;animation:fadeIn .3s ease;background:rgba(0,0,0,.2);padding:14px;border-radius:8px;border:1px solid var(--border)}
-#focus-name{margin-bottom:8px;font-size:1.1em;font-weight:600;text-align:center;width:100%;color:var(--text)}
-#focus-effect{font-size:.85em;color:var(--muted);line-height:1.4;width:100%;max-height:220px;overflow-y:auto;background:rgba(0,0,0,.2);padding:8px 10px;border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;margin-bottom:8px}
-#focus-links-count{color:var(--muted);font-size:.85em;margin-top:6px;text-align:center}
-#links-list{width:100%;margin-top:12px;display:flex;flex-direction:column;gap:4px}
-.link-item{font-size:.8em;padding:6px 8px;border-radius:5px;background:#202024;cursor:pointer;border:1px solid transparent;line-height:1.35}
-.link-item:hover{border-color:var(--accent)}
-.link-item .lbl{color:var(--muted);display:block;font-size:.95em}
-.dir{color:var(--accent);font-weight:700}
-#main-area{flex-grow:1;position:relative}
-#mynetwork{width:100%;height:100%;background:radial-gradient(circle at center,#18181b 0%,#09090b 100%)}
-.welcome-message{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);pointer-events:none}
-.welcome-message h2{color:var(--text);margin-bottom:10px}
-@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-.hint{position:absolute;bottom:20px;right:20px;background:rgba(24,24,27,.8);padding:8px 15px;border-radius:20px;font-size:.8em;color:var(--muted);border:1px solid var(--border);backdrop-filter:blur(5px);pointer-events:none}
+    .explorer { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: stretch; }
+    .side { margin-bottom: 0; max-height: max(560px, calc(100vh - 230px)); overflow-y: auto; }
+    .graph-card { position: relative; margin-bottom: 0; padding: 0; overflow: hidden; height: max(560px, calc(100vh - 230px)); }
+    #mynetwork { width: 100%; height: 100%; background: radial-gradient(circle at center, var(--surface-2) 0%, var(--bg) 100%); }
+    .welcome { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; padding: 20px; }
+    .welcome h2 { font-family: var(--font-display); color: var(--gold); margin: 0 0 6px; font-size: 1.15rem; }
+    .welcome p { margin: 0; color: var(--text-muted); max-width: 42ch; }
+    .welcome i { display: block; font-size: 2.2rem; color: var(--text-dim); margin-bottom: 12px; }
+    .legend { position: absolute; bottom: 14px; right: 14px; max-width: calc(100% - 28px); padding: 7px 14px; border-radius: 999px; font-size: 12px; color: var(--text-muted); background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--border); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); pointer-events: none; }
+    .legend .c-out { color: var(--info); } .legend .c-in { color: var(--gold); }
+    .side-title { margin: 4px 0 10px; font: 700 .72rem var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+    .stack { display: grid; gap: 8px; margin-bottom: 8px; }
+    .stack .btn { width: 100%; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    #card-details { display: none; flex-direction: column; margin-top: 14px; padding: 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+    #focus-name { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--gold); text-align: center; margin-bottom: 10px; }
+    #focus-effect { font-size: 13px; color: var(--text-muted); line-height: 1.5; max-height: 220px; overflow-y: auto; white-space: pre-wrap; padding: 9px 11px; border-radius: 8px; background: var(--code-bg); border: 1px solid var(--border); }
+    #focus-links-count { margin-top: 10px; text-align: center; font-size: 12.5px; color: var(--text-muted); }
+    #links-list { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; }
+    .link-item { padding: 7px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.4; cursor: pointer; background: var(--surface); border: 1px solid var(--border); transition: border-color .15s, background .15s; }
+    .link-item:hover { border-color: var(--gold); background: var(--gold-soft); }
+    .link-item .lbl { display: block; color: var(--text-muted); font-size: .95em; }
+    .dir { color: var(--gold); font-weight: 700; }
+    @media (max-width: 900px) {
+        .explorer { grid-template-columns: 1fr; }
+        .side { max-height: none; }
+        .graph-card { height: 70vh; min-height: 420px; }
+    }
 </style>
 </head>
 <body>
-<div id="sidebar">
-  <div class="logo-area"><span>◆</span> Deck Explorer</div>
 
-  <div class="section-title">Outils</div>
-  <label for="jsonFileInput" class="btn btn-primary">📂 Charger un JSON</label>
-  <input type="file" id="jsonFileInput" accept=".json">
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
 
-  <label for="csvFileInput" class="btn btn-secondary">📄 Charger le CSV (Effets)</label>
-  <input type="file" id="csvFileInput" accept=".csv">
+<main class="container wide">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-diagram-project"></i></div>
+        <div>
+            <h1>Deck <span class="grad">Explorer</span></h1>
+            <p>Explore les interactions d'un deck : charge le JSON, le CSV d'effets et le dossier d'images, puis navigue de carte en carte.</p>
+        </div>
+    </section>
 
-  <label for="imgFolderInput" class="btn btn-secondary" title="Tu peux le relancer pour ajouter d'autres dossiers (ex. pics puis expansions/VAACT/pics)">🖼️ Choisir le dossier des images</label>
-  <input type="file" id="imgFolderInput" webkitdirectory directory multiple>
-  <div class="status" id="imgStatus">Aucun dossier choisi (chemins par défaut C:/ProjectIgnis).</div>
+    <div class="explorer">
+        <aside class="card side">
+            <div class="side-title">Fichiers</div>
+            <div class="stack">
+                <label for="jsonFileInput" class="btn btn-primary"><i class="fa-solid fa-folder-open"></i> Charger un JSON</label>
+                <input type="file" id="jsonFileInput" accept=".json" class="hidden">
 
-  <input id="search" list="card-names" placeholder="🔍 Rechercher une carte…" autocomplete="off">
-  <datalist id="card-names"></datalist>
-  <div class="row">
-    <button class="btn btn-secondary" id="btnBack" disabled>◀ Retour</button>
-    <button class="btn btn-secondary" id="btnFit">🎯 Recentrer</button>
-  </div>
+                <label for="csvFileInput" class="btn"><i class="fa-solid fa-file-csv"></i> Charger le CSV (effets)</label>
+                <input type="file" id="csvFileInput" accept=".csv" class="hidden">
 
-  <div id="card-details">
-    <div id="focus-name"></div>
-    <div id="focus-effect"></div>
-    <div id="focus-links-count"></div>
-    <div id="links-list"></div>
-  </div>
-</div>
+                <label for="imgFolderInput" class="btn" title="Tu peux le relancer pour ajouter d'autres dossiers (ex. pics puis expansions/VAACT/pics)"><i class="fa-solid fa-images"></i> Dossier des images</label>
+                <input type="file" id="imgFolderInput" webkitdirectory directory multiple class="hidden">
+            </div>
+            <div class="hint" id="imgStatus" style="margin-bottom:16px;">Aucun dossier choisi (chemins par défaut C:/ProjectIgnis).</div>
 
-<div id="main-area">
-  <div class="welcome-message" id="welcome-msg"><h2>Aucune donnée chargée</h2><p>Importez un fichier JSON via le panneau de gauche, puis choisissez le dossier de vos images.</p></div>
-  <div id="mynetwork"></div>
-  <div class="hint"><span style='color:#60a5fa'>■</span> part de la carte centrale &nbsp; <span style='color:#fbbf24'>■</span> pointe vers elle &nbsp;|&nbsp; Clic : détails &nbsp;|&nbsp; Double-clic : focus &nbsp;|&nbsp; Survol : lire le lien</div>
-</div>
+            <div class="side-title">Navigation</div>
+            <div class="field" style="margin-bottom:10px;">
+                <input type="text" id="search" list="card-names" placeholder="Rechercher une carte…" autocomplete="off">
+                <datalist id="card-names"></datalist>
+            </div>
+            <div class="btn-row">
+                <button class="btn" id="btnBack" type="button" disabled><i class="fa-solid fa-arrow-left"></i> Retour</button>
+                <button class="btn" id="btnFit" type="button"><i class="fa-solid fa-crosshairs"></i> Recentrer</button>
+            </div>
+
+            <div id="card-details">
+                <div id="focus-name"></div>
+                <div id="focus-effect"></div>
+                <div id="focus-links-count"></div>
+                <div id="links-list"></div>
+            </div>
+        </aside>
+
+        <section class="card graph-card">
+            <div id="mynetwork"></div>
+            <div class="welcome" id="welcome-msg">
+                <div>
+                    <i class="fa-solid fa-diagram-project"></i>
+                    <h2>Aucune donnée chargée</h2>
+                    <p>Importe un fichier JSON via le panneau de gauche, puis choisis le dossier de tes images.</p>
+                </div>
+            </div>
+            <div class="legend"><span class="c-out">■</span> part de la carte centrale &nbsp; <span class="c-in">■</span> pointe vers elle &nbsp;|&nbsp; Clic : détails &nbsp;|&nbsp; Double-clic : focus &nbsp;|&nbsp; Survol : lire le lien</div>
+        </section>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
 
 <script>
 var DECK_DATA = null, network = null, hoverId = null, selectedId = null, focusId = null, navHistory = [];
 var nodes = new vis.DataSet(), edges = new vis.DataSet();
 var cardEffects = {};
+
+// ===== COULEURS DU THÈME (lues dans ygo.css, mises à jour au changement de thème) =====
+var C = {};
+function cssVar(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function readTheme() {
+  C.text = cssVar('--text'); C.bg = cssVar('--bg'); C.surface = cssVar('--surface');
+  C.muted = cssVar('--text-muted'); C.dim = cssVar('--border-strong');
+  C.out = cssVar('--info');   // lien qui part de la carte centrale
+  C.inn = cssVar('--gold');   // lien qui pointe vers elle
+}
+readTheme();
 
 // ===== PARSEUR CSV ROBUSTE =====
 function parseCSVLine(text) {
@@ -107,13 +162,13 @@ document.getElementById('csvFileInput').addEventListener('change', function (ev)
     var text = e.target.result;
     var lines = text.split(/\r?\n/);
     if (lines.length < 2) return;
-    
+
     var headers = parseCSVLine(lines[0]);
     var nameIdx = headers.indexOf('Name');
     var effIdx = headers.indexOf('Effect');
-    
+
     if (nameIdx === -1 || effIdx === -1) {
-      alert("Format CSV invalide : colonnes 'Name' ou 'Effect' introuvables.");
+      YGO.toast("Format CSV invalide : colonnes 'Name' ou 'Effect' introuvables.", 'err');
       return;
     }
 
@@ -128,7 +183,7 @@ document.getElementById('csvFileInput').addEventListener('change', function (ev)
         if (cardName) cardEffects[cardName] = cardEff;
       }
     }
-    alert("CSV chargé avec succès (" + Object.keys(cardEffects).length + " effets enregistrés) !");
+    YGO.toast('CSV chargé (' + Object.keys(cardEffects).length + ' effets).', 'ok');
     if (selectedId) updateSidebar(selectedId, selectedId === focusId);
   };
   r.readAsText(f, 'utf-8');
@@ -191,20 +246,19 @@ document.getElementById('imgFolderInput').addEventListener('change', function (e
 
 // ===== STYLE DES FLÈCHES =====
 var PAR_OFF = 11, ARROW_LEN = 18, ARROW_HALF = 8, GAP = 3, LINE_W = 2.2;
-var COL_OUT = 'rgba(96,165,250,0.85)', COL_IN = 'rgba(251,191,36,0.85)', COL_OUT_HL = '#93c5fd', COL_IN_HL = '#fcd34d', COL_DIM = 'rgba(82,82,91,0.28)';
 var edgeLabels = {}, edgeCurve = {}, labelQ = [];
 
 var options = {
   nodes: {
     shape: 'image', size: 40, borderWidth: 0, shadow: { enabled: false },
-    font: { color: '#f4f4f5', strokeWidth: 5, strokeColor: '#09090b', size: 12, vadjust: -75, face: 'Inter, sans-serif', bold: true }
+    font: { color: C.text, strokeWidth: 5, strokeColor: C.bg, size: 12, vadjust: -75, face: 'Inter, sans-serif', bold: true }
   },
   edges: {
     width: 1,
     color: { color: 'rgba(0,0,0,0)', highlight: 'rgba(0,0,0,0)', hover: 'rgba(0,0,0,0)' },
     arrows: { to: { enabled: false } },
     selectionWidth: 0, hoverWidth: 0,
-    font: { align: 'middle', size: 11, color: '#e4e4e7', strokeWidth: 0, background: 'rgba(9,9,11,0.88)', face: 'Inter, sans-serif' },
+    font: { align: 'middle', size: 11, strokeWidth: 0, face: 'Inter, sans-serif' },
     chosen: false
   },
   physics: {
@@ -215,6 +269,13 @@ var options = {
 };
 network = new vis.Network(document.getElementById('mynetwork'), { nodes: nodes, edges: edges }, options);
 
+// Changement de thème (bouton de l'en-tête) : on relit les couleurs et on redessine
+new MutationObserver(function () {
+  readTheme();
+  network.setOptions({ nodes: { font: { color: C.text, strokeColor: C.bg } } });
+  network.redraw();
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
 // ---------- géométrie ----------
 function getRect(id) {
   var n = network.body.nodes[id]; if (!n) return null;
@@ -223,22 +284,22 @@ function getRect(id) {
   return { x: n.x, y: n.y, hw: w / 2, hh: h / 2 };
 }
 function inside(p, r, pad) { return Math.abs(p.x - r.x) <= r.hw + pad && Math.abs(p.y - r.y) <= r.hh + pad; }
-function bez(A, C, B, t) {
+function bez(A, C2, B, t) {
   var u = 1 - t;
-  return { x: u*u*A.x + 2*u*t*C.x + t*t*B.x, y: u*u*A.y + 2*u*t*C.y + t*t*B.y };
+  return { x: u*u*A.x + 2*u*t*C2.x + t*t*B.x, y: u*u*A.y + 2*u*t*C2.y + t*t*B.y };
 }
-function bezTan(A, C, B, t) {
+function bezTan(A, C2, B, t) {
   var u = 1 - t;
-  return { x: 2*u*(C.x - A.x) + 2*t*(B.x - C.x), y: 2*u*(C.y - A.y) + 2*t*(B.y - C.y) };
+  return { x: 2*u*(C2.x - A.x) + 2*t*(B.x - C2.x), y: 2*u*(C2.y - A.y) + 2*t*(B.y - C2.y) };
 }
-function findExit(A, C, B, rect, fromStart) {
-  var lo = fromStart ? 0 : 0, hi = 1;
+function findExit(A, C2, B, rect, fromStart) {
+  var lo = 0, hi = 1;
   if (fromStart) {
-    for (var i = 0; i < 14; i++) { var m = (lo + hi) / 2; if (inside(bez(A, C, B, m), rect, GAP)) lo = m; else hi = m; }
+    for (var i = 0; i < 14; i++) { var m = (lo + hi) / 2; if (inside(bez(A, C2, B, m), rect, GAP)) lo = m; else hi = m; }
     return hi;
   } else {
     lo = 0; hi = 1;
-    for (var j = 0; j < 14; j++) { var m2 = (lo + hi) / 2; if (inside(bez(A, C, B, m2), rect, GAP)) hi = m2; else lo = m2; }
+    for (var j = 0; j < 14; j++) { var m2 = (lo + hi) / 2; if (inside(bez(A, C2, B, m2), rect, GAP)) hi = m2; else lo = m2; }
     return lo;
   }
 }
@@ -252,30 +313,31 @@ function drawEdges(ctx) {
     var e = network.body.edges[eid];
     if (!e.fromId || !e.toId || e.fromId === e.toId) return;
     var rf = getRect(e.fromId), rt = getRect(e.toId); if (!rf || !rt) return;
-    var A = { x: rf.x, y: rf.y }, B = { x: rt.x, y: rt.y }, C = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+    var A = { x: rf.x, y: rf.y }, B = { x: rt.x, y: rt.y }, Cc = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
     var cv = edgeCurve[eid], nrm = null, dirv = null;
     if (cv) {
       var ddx = B.x - A.x, ddy = B.y - A.y, dd = Math.hypot(ddx, ddy) || 1;
       nrm = { x: ddy / dd, y: -ddx / dd }; dirv = { x: ddx / dd, y: ddy / dd };
       A = { x: A.x + nrm.x * PAR_OFF, y: A.y + nrm.y * PAR_OFF };
       B = { x: B.x + nrm.x * PAR_OFF, y: B.y + nrm.y * PAR_OFF };
-      C = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+      Cc = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
     }
     if (inside(A, rt, 0) || inside(B, rf, 0)) return;
 
-    var t0 = findExit(A, C, B, rf, true), t1 = findExit(A, C, B, rt, false);
+    var t0 = findExit(A, Cc, B, rf, true), t1 = findExit(A, Cc, B, rt, false);
     if (t1 <= t0) return;
-    var tip = bez(A, C, B, t1), tg = bezTan(A, C, B, t1), L = Math.hypot(tg.x, tg.y) || 1;
+    var tip = bez(A, Cc, B, t1), tg = bezTan(A, Cc, B, t1), L = Math.hypot(tg.x, tg.y) || 1;
     var dx = tg.x / L, dy = tg.y / L;
     var base = { x: tip.x - dx * ARROW_LEN, y: tip.y - dy * ARROW_LEN };
 
     var hl = active && (e.fromId === active || e.toId === active);
     var isOut = e.fromId === focusId;
-    var col = active ? (hl ? (isOut ? COL_OUT_HL : COL_IN_HL) : COL_DIM) : (isOut ? COL_OUT : COL_IN);
+    var col = active ? (hl ? (isOut ? C.out : C.inn) : C.dim) : (isOut ? C.out : C.inn);
+    ctx.globalAlpha = active ? (hl ? 1 : 0.3) : 0.85;
 
     var pts = [], N = 16;
     for (var i = 0; i <= N; i++) {
-      var p = bez(A, C, B, t0 + (t1 - t0) * i / N);
+      var p = bez(A, Cc, B, t0 + (t1 - t0) * i / N);
       if (Math.hypot(tip.x - p.x, tip.y - p.y) > ARROW_LEN * 0.9) pts.push(p);
     }
     ctx.strokeStyle = col; ctx.lineWidth = hl ? LINE_W + 1 : LINE_W;
@@ -290,8 +352,9 @@ function drawEdges(ctx) {
     ctx.lineTo(base.x - dy * ARROW_HALF, base.y + dx * ARROW_HALF);
     ctx.lineTo(base.x + dy * ARROW_HALF, base.y - dx * ARROW_HALF);
     ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
     var lb = edgeLabels[eid];
-    if (lb) { var mp = bez(A, C, B, 0.5); labelQ.push({ x: mp.x, y: mp.y, nx: dirv ? dirv.x : 0, ny: dirv ? dirv.y : 0, t: lb, hl: !!hl, act: !!active, out: isOut }); }
+    if (lb) { var mp = bez(A, Cc, B, 0.5); labelQ.push({ x: mp.x, y: mp.y, nx: dirv ? dirv.x : 0, ny: dirv ? dirv.y : 0, t: lb, hl: !!hl, act: !!active, out: isOut }); }
   });
   ctx.restore();
 }
@@ -326,9 +389,9 @@ function drawLabels(ctx) {
     var sh = (l.nx || l.ny) ? Math.abs(l.nx) * pw / 2 + Math.abs(l.ny) * ph / 2 + 4 : 0;
     var lx = l.x + l.nx * sh, ly = l.y + l.ny * sh, x = lx - pw / 2, y = ly - ph / 2;
     pill(ctx, x, y, pw, ph, 8);
-    ctx.fillStyle = full ? 'rgba(9,9,11,0.96)' : 'rgba(9,9,11,0.82)'; ctx.fill();
-    ctx.lineWidth = full ? 1.6 : 1; ctx.strokeStyle = l.out ? 'rgba(96,165,250,' + (full ? 1 : .5) + ')' : 'rgba(251,191,36,' + (full ? 1 : .5) + ')'; ctx.stroke();
-    ctx.fillStyle = full ? '#fafafa' : '#d4d4d8';
+    ctx.globalAlpha = full ? 0.97 : 0.85; ctx.fillStyle = C.surface; ctx.fill();
+    ctx.globalAlpha = full ? 1 : 0.6; ctx.lineWidth = full ? 1.6 : 1; ctx.strokeStyle = l.out ? C.out : C.inn; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.fillStyle = full ? C.text : C.muted;
     lines.forEach(function (ln, i) { ctx.fillText(ln, lx, y + 4 + lh * (i + 0.5)); });
   });
   ctx.restore();
@@ -377,7 +440,8 @@ document.getElementById('jsonFileInput').addEventListener('change', function (ev
       var dl = document.getElementById('card-names'); dl.innerHTML = '';
       Object.keys(d.cartes).sort().forEach(function (k) { var o = document.createElement('option'); o.value = k; dl.appendChild(o); });
       focusId = null; goTo(d.carteDeDepart, true);
-    } catch (err) { alert('Erreur JSON :\n' + err.message); }
+      YGO.toast('JSON chargé (' + Object.keys(d.cartes).length + ' cartes).', 'ok');
+    } catch (err) { YGO.toast('Erreur JSON : ' + err.message, 'err'); }
   };
   r.readAsText(f);
 });
@@ -391,7 +455,7 @@ function goTo(id, noHistory) {
 function updateSidebar(cardId, isFocus) {
   var db = DECK_DATA.cartes; if (!db[cardId]) return;
   document.getElementById('card-details').style.display = 'flex';
-  
+
   // Nom de la carte
   document.getElementById('focus-name').textContent = cardId + (db[cardId].zone ? '  ·  ' + db[cardId].zone : '');
 
@@ -447,7 +511,7 @@ function updateFocus(centerId) {
       font: { size: fs, vadjust: -Math.round(sz * 1.85) } });
   });
 
-  var pairs = {}, seen = {};
+  var pairs = {};
   links.forEach(function (l) { var k = [l.from, l.to].sort().join('||'); pairs[k] = (pairs[k] || 0) + 1; });
   links.forEach(function (l, i) {
     var k = [l.from, l.to].sort().join('||'), c = pairs[k], id = 'edge-' + i;
