@@ -3,13 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Comparateur JSON · YGO Tools</title>
+<title>Comparateur de fichiers · YGO Tools</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="assets/ygo.css">
 <script src="assets/ygo.js"></script>
+<style>
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .grid2 label { display: block; margin-bottom: 8px; font-weight: 500; }
+    .grid2 input[type=file] { width: 100%; }
+    .opts { display: grid; gap: 10px; margin: 6px 0 16px; }
+    .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+    .opt input { margin-top: 4px; }
+    .opt small { display: block; opacity: .7; }
+    @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
 </head>
 <body>
 
@@ -33,28 +43,41 @@
     <section class="hero">
         <div class="hero-icon"><i class="fa-solid fa-code-compare"></i></div>
         <div>
-            <h1>Comparateur de <span class="grad">JSON</span></h1>
-            <p>Comparez deux fichiers JSON ou objets pour identifier instantanément les clés ajoutées, supprimées ou modifiées.</p>
+            <h1>Comparateur de <span class="grad">fichiers</span></h1>
+            <p>Compare deux fichiers <strong>JSON</strong>, <strong>CSV</strong> ou <strong>.cdb</strong> (même format des deux côtés) : entrées ajoutées, supprimées, et champs modifiés.</p>
         </div>
     </section>
 
     <div class="card">
-        <h2 class="card-title"><i class="fa-solid fa-file-arrow-up"></i> Importer les fichiers JSON</h2>
-        <p class="card-sub">Sélectionnez ou glissez-déposez vos deux fichiers JSON à comparer.</p>
+        <h2 class="card-title"><i class="fa-solid fa-file-arrow-up"></i> Importer les fichiers</h2>
+        <p class="card-sub">Formats acceptés : .json, .csv, .cdb. Les deux fichiers doivent être du même type.</p>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+        <div class="grid2">
             <div>
-                <label style="display:block; margin-bottom:8px; font-weight:500;">JSON 1 (Référence)</label>
-                <input type="file" id="file1" accept=".json" style="width:100%;">
+                <label for="file1">Fichier 1 (référence)</label>
+                <input type="file" id="file1" accept=".json,.csv,.cdb">
             </div>
             <div>
-                <label style="display:block; margin-bottom:8px; font-weight:500;">JSON 2 (Comparaison)</label>
-                <input type="file" id="file2" accept=".json" style="width:100%;">
+                <label for="file2">Fichier 2 (comparaison)</label>
+                <input type="file" id="file2" accept=".json,.csv,.cdb">
             </div>
+        </div>
+
+        <div class="field">
+            <label for="keyField">Clé de ligne <small>(optionnel)</small></label>
+            <input type="text" id="keyField" autocomplete="off" placeholder="ex : id, Password, Name">
+            <span class="hint">Colonne / champ qui identifie chaque ligne (CSV et JSON en liste). Vide = détection auto (id, passcode, password, set id, code, name, sinon n° de ligne). Ignoré pour les .cdb (clé = id).</span>
+        </div>
+
+        <div class="opts">
+            <label class="opt"><input type="checkbox" id="optWs" checked>
+                <span>Ignorer les espaces et retours à la ligne<small>« a  b » et « a b » sont considérés identiques.</small></span></label>
         </div>
 
         <div class="actions">
             <button id="compare-btn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Lancer la comparaison</button>
+            <button id="copyBtn" class="btn hidden" type="button"><i class="fa-solid fa-copy"></i> Copier le rapport</button>
+            <button id="dlBtn" class="btn hidden" type="button"><i class="fa-solid fa-download"></i> Rapport (.txt)</button>
         </div>
 
         <div id="progress" class="progress hidden">
@@ -71,63 +94,298 @@
 
 <footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
 <script>
 const { $ } = YGO;
 const out = YGO.console($('console'));
 const progress = YGO.progress($('progress'));
 const btn = $('compare-btn');
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const MAX_LINES = 250;      // lignes affichées par section dans la console
+const MAX_CHANGES = 12;     // champs modifiés affichés par entrée dans la console
+let SQL = null;
+let report = '';
 
-out.log('Prêt à comparer des fichiers JSON…');
+out.log('Prêt à comparer des fichiers JSON, CSV ou .cdb…');
 
+// ============================================================
+// UTILITAIRES
+// ============================================================
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const extOf = (f) => (f.name.split('.').pop() || '').toLowerCase();
+
+function short(v) {
+    let s = v === undefined ? '∅' : (typeof v === 'string' ? v : JSON.stringify(v));
+    if (s === undefined) s = '∅';
+    s = s.replace(/\r?\n/g, '↵');
+    return s.length > 80 ? s.slice(0, 77) + '…' : (s === '' ? '(vide)' : s);
+}
+
+function labelOf(row) {
+    if (!isObj(row)) return '';
+    const n = row.name ?? row.Name ?? row.nom ?? row.Nom;
+    return typeof n === 'string' && n ? ` (${short(n)})` : '';
+}
+
+// ============================================================
+// LECTURE : chaque format -> Map<clé, enregistrement>
+// ============================================================
+function pickKey(rows, wanted) {
+    const headers = new Set();
+    rows.forEach((r) => { if (isObj(r)) Object.keys(r).forEach((k) => headers.add(k)); });
+    const list = [...headers];
+    const findHeader = (name) => list.find((h) => h.toLowerCase() === name.toLowerCase());
+    const valid = (h) => {
+        const seen = new Set();
+        for (const r of rows) {
+            const v = isObj(r) ? r[h] : undefined;
+            if (v === undefined || v === null || v === '') return false;
+            const s = String(v);
+            if (seen.has(s)) return false;
+            seen.add(s);
+        }
+        return true;
+    };
+    if (wanted) {
+        const h = findHeader(wanted);
+        if (h && valid(h)) return h;
+        out.log(`⚠️ Clé « ${wanted} » introuvable ou non unique : détection auto.`, 'warn');
+    }
+    for (const c of ['id', 'passcode', 'password', 'set id', 'code', 'name']) {
+        const h = findHeader(c);
+        if (h && valid(h)) return h;
+    }
+    return null;
+}
+
+function mapFromRows(rows, wanted, what) {
+    const key = pickKey(rows, wanted);
+    out.log(key ? `🔑 ${what} : clé « ${key} »` : `🔑 ${what} : pas de clé unique, comparaison par n° de ligne.`, key ? '' : 'warn');
+    const m = new Map();
+    rows.forEach((r, i) => m.set(key && isObj(r) ? String(r[key]) : `#${i + 1}`, r));
+    return { map: m, key };
+}
+
+function readJson(text, wanted, what) {
+    const data = JSON.parse(text.replace(/^\uFEFF/, ''));
+    if (Array.isArray(data)) return mapFromRows(data, wanted, what);
+    if (isObj(data)) return { map: new Map(Object.entries(data)), key: null };
+    return { map: new Map([['(valeur)', data]]), key: null };
+}
+
+function parseCsv(text) {
+    text = text.replace(/^\uFEFF/, '');
+    const first = text.split(/\r?\n/, 1)[0] || '';
+    const count = (c) => first.split(c).length - 1;
+    const delim = [',', ';', '\t'].reduce((best, c) => (count(c) > count(best) ? c : best), ',');
+    const rows = [];
+    let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) {
+            if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+            else cell += c;
+        } else if (c === '"') q = true;
+        else if (c === delim) { row.push(cell); cell = ''; }
+        else if (c === '\n' || c === '\r') {
+            if (c === '\r' && text[i + 1] === '\n') i++;
+            row.push(cell); cell = '';
+            rows.push(row); row = [];
+        } else cell += c;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => !(r.length === 1 && r[0] === ''));
+}
+
+function readCsv(text, wanted, what) {
+    const raw = parseCsv(text);
+    if (!raw.length) throw new Error('CSV vide.');
+    const head = raw[0].map((h) => h.trim());
+    const rows = raw.slice(1).map((r) => {
+        const o = {};
+        head.forEach((h, i) => { o[h || `col${i + 1}`] = r[i] ?? ''; });
+        return o;
+    });
+    return mapFromRows(rows, wanted, what);
+}
+
+async function readCdb(buffer, what) {
+    if (!SQL) SQL = await YGO.initSql();
+    const db = new SQL.Database(new Uint8Array(buffer));
+    try {
+        const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
+        const names = tables.length ? tables[0].values.flat() : [];
+        if (!names.includes('texts')) throw new Error('Pas un .cdb valide (table texts manquante).');
+        const m = new Map();
+        for (const t of ['texts', 'datas']) {
+            if (!names.includes(t)) continue;
+            const res = db.exec(`SELECT * FROM ${t}`);
+            if (!res.length) continue;
+            const cols = res[0].columns;
+            const idIdx = cols.indexOf('id');
+            for (const vals of res[0].values) {
+                const id = String(vals[idIdx]);
+                const rec = m.get(id) || {};
+                cols.forEach((c, i) => {
+                    if (c === 'id') return;
+                    const v = vals[i];
+                    if (v === '' || v === null) return;        // ignore les champs vides (str1..str16…)
+                    rec[t === 'datas' ? `datas.${c}` : c] = v;
+                });
+                m.set(id, rec);
+            }
+        }
+        out.log(`🔑 ${what} : .cdb, clé « id » (tables texts + datas)`);
+        return { map: m, key: 'id' };
+    } finally { db.close(); }
+}
+
+async function readFile(file, wanted, what) {
+    const ext = extOf(file);
+    if (ext === 'json') return readJson(await file.text(), wanted, what);
+    if (ext === 'csv') return readCsv(await file.text(), wanted, what);
+    if (ext === 'cdb') return readCdb(await file.arrayBuffer(), what);
+    throw new Error(`Format non géré : .${ext}`);
+}
+
+// ============================================================
+// COMPARAISON
+// ============================================================
+function makeNorm(ignoreWs) {
+    return (v) => {
+        let s = typeof v === 'string' ? v : JSON.stringify(v);
+        if (s === undefined) s = '∅';
+        return ignoreWs ? s.replace(/\s+/g, ' ').trim() : s;
+    };
+}
+
+function diffVal(a, b, path, acc, norm) {
+    if (isObj(a) && isObj(b)) {
+        const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+        for (const k of keys) {
+            const p = path ? `${path}.${k}` : k;
+            if (!(k in a)) acc.push(`+ ${p} : ${short(b[k])}`);
+            else if (!(k in b)) acc.push(`- ${p} : ${short(a[k])}`);
+            else diffVal(a[k], b[k], p, acc, norm);
+        }
+    } else if (Array.isArray(a) && Array.isArray(b)) {
+        const n = Math.max(a.length, b.length);
+        for (let i = 0; i < n; i++) {
+            const p = `${path}[${i}]`;
+            if (i >= a.length) acc.push(`+ ${p} : ${short(b[i])}`);
+            else if (i >= b.length) acc.push(`- ${p} : ${short(a[i])}`);
+            else diffVal(a[i], b[i], p, acc, norm);
+        }
+    } else if (norm(a) !== norm(b)) {
+        acc.push(`~ ${path || '(valeur)'} : ${short(a)} → ${short(b)}`);
+    }
+}
+
+function compareMaps(m1, m2, norm) {
+    const removed = [], added = [], modified = [];
+    for (const [k, v1] of m1) {
+        if (!m2.has(k)) { removed.push({ key: k, label: labelOf(v1) }); continue; }
+        const v2 = m2.get(k);
+        const changes = [];
+        diffVal(v1, v2, '', changes, norm);
+        if (changes.length) modified.push({ key: k, label: labelOf(v2), changes });
+    }
+    for (const [k, v2] of m2) if (!m1.has(k)) added.push({ key: k, label: labelOf(v2) });
+    return { removed, added, modified };
+}
+
+// ============================================================
+// RAPPORT
+// ============================================================
+function buildReport(f1, f2, n1, n2, r) {
+    const L = [];
+    L.push('=== RAPPORT DE COMPARAISON ===');
+    L.push(`Fichier 1 : ${f1.name} (${n1} entrées)`);
+    L.push(`Fichier 2 : ${f2.name} (${n2} entrées)`);
+    L.push('');
+    L.push(`Uniquement dans le fichier 1 : ${r.removed.length}`);
+    r.removed.forEach((x) => L.push(`  - ${x.key}${x.label}`));
+    L.push('');
+    L.push(`Uniquement dans le fichier 2 : ${r.added.length}`);
+    r.added.forEach((x) => L.push(`  + ${x.key}${x.label}`));
+    L.push('');
+    L.push(`Modifiées : ${r.modified.length}`);
+    r.modified.forEach((x) => {
+        L.push(`  ~ ${x.key}${x.label}`);
+        x.changes.forEach((c) => L.push(`      ${c}`));
+    });
+    return L.join('\n');
+}
+
+function logSection(title, items, kind, render) {
+    out.log(`${title} : ${items.length}`, items.length ? kind : 'ok');
+    items.slice(0, MAX_LINES).forEach((x) => out.log(render(x), ''));
+    if (items.length > MAX_LINES) out.log(`… et ${items.length - MAX_LINES} autres (voir le rapport .txt).`, 'warn');
+}
+
+// ============================================================
+// LANCEMENT
+// ============================================================
 btn.addEventListener('click', async () => {
-    const f1Input = $('file1');
-    const f2Input = $('file2');
-
-    if (!f1Input.files.length || !f2Input.files.length) {
-        YGO.toast("Veuillez sélectionner les deux fichiers JSON", "err");
-        out.log("❌ Erreur : Veuillez sélectionner deux fichiers JSON.", "err");
+    const f1 = $('file1').files[0], f2 = $('file2').files[0];
+    if (!f1 || !f2) {
+        YGO.toast('Sélectionne les deux fichiers.', 'err');
+        out.log('❌ Sélectionne deux fichiers.', 'err');
+        return;
+    }
+    const e1 = extOf(f1), e2 = extOf(f2);
+    if (e1 !== e2) {
+        YGO.toast('Les deux fichiers doivent avoir le même format.', 'err');
+        out.log(`❌ Formats différents : .${e1} et .${e2}.`, 'err');
+        return;
+    }
+    if (!['json', 'csv', 'cdb'].includes(e1)) {
+        YGO.toast('Format non géré.', 'err');
+        out.log(`❌ Format non géré : .${e1} (json, csv ou cdb).`, 'err');
         return;
     }
 
-    btn.disabled = true;
+    btn.disabled = true; report = '';
+    $('copyBtn').classList.add('hidden'); $('dlBtn').classList.add('hidden');
     progress.show();
-    progress.set(20, 'Lecture des fichiers…');
-    out.log('📥 Lecture des fichiers JSON en cours...');
-
     try {
-        const text1 = await f1Input.files[0].text();
-        const text2 = await f2Input.files[0].text();
+        const wanted = $('keyField').value.trim();
+        const norm = makeNorm($('optWs').checked);
 
-        progress.set(50, 'Validation et parsing…');
-        const data1 = JSON.parse(text1);
-        const data2 = JSON.parse(text2);
+        progress.set(15, 'Lecture du fichier 1…'); await tick();
+        out.log(`📥 ${f1.name}`);
+        const a = await readFile(f1, wanted, 'Fichier 1');
 
-        progress.set(80, 'Comparaison des structures…');
-        
-        const keys1 = new Set(Object.keys(data1));
-        const keys2 = new Set(Object.keys(data2));
+        progress.set(40, 'Lecture du fichier 2…'); await tick();
+        out.log(`📥 ${f2.name}`);
+        const b = await readFile(f2, wanted, 'Fichier 2');
 
-        const onlyIn1 = [...keys1].filter(k => !keys2.has(k));
-        const onlyIn2 = [...keys2].filter(k => !keys1.has(k));
-        const commonKeys = [...keys1].filter(k => keys2.has(k));
-
-        const modified = commonKeys.filter(k => JSON.stringify(data1[k]) !== JSON.stringify(data2[k]));
+        progress.set(70, 'Comparaison…'); await tick();
+        const r = compareMaps(a.map, b.map, norm);
+        const same = a.map.size - r.removed.length - r.modified.length;
 
         progress.set(100, 'Terminé !');
-        out.log('=== RAPPORT DE COMPARAISON JSON ===', 'ok');
-        out.log(`- Clés uniquement dans le JSON 1 : ${onlyIn1.length ? onlyIn1.join(', ') : 'Aucune'}`);
-        out.log(`- Clés uniquement dans le JSON 2 : ${onlyIn2.length ? onlyIn2.join(', ') : 'Aucune'}`);
-        out.log(`- Clés modifiées (valeurs différentes) : ${modified.length ? modified.join(', ') : 'Aucune'}`);
-        
-        YGO.toast("Comparaison terminée avec succès !");
+        out.log(`=== RAPPORT DE COMPARAISON .${e1.toUpperCase()} ===`, 'ok');
+        out.log(`Fichier 1 : ${a.map.size} entrées · Fichier 2 : ${b.map.size} entrées · identiques : ${same}`);
+        logSection('Uniquement dans le fichier 1', r.removed, 'warn', (x) => `  - ${x.key}${x.label}`);
+        logSection('Uniquement dans le fichier 2', r.added, 'warn', (x) => `  + ${x.key}${x.label}`);
+        logSection('Modifiées', r.modified, 'warn', (x) => {
+            const lines = x.changes.slice(0, MAX_CHANGES).map((c) => `      ${c}`);
+            if (x.changes.length > MAX_CHANGES) lines.push(`      … +${x.changes.length - MAX_CHANGES} autres champs`);
+            return `  ~ ${x.key}${x.label}\n${lines.join('\n')}`;
+        });
+
+        report = buildReport(f1, f2, a.map.size, b.map.size, r);
+        $('copyBtn').classList.remove('hidden'); $('dlBtn').classList.remove('hidden');
+        YGO.toast('Comparaison terminée !');
     } catch (err) {
-        out.log('❌ Erreur de parsing JSON : ' + err.message, 'err');
-        YGO.toast("Erreur : Fichier JSON invalide", 'err');
-    } finally {
-        btn.disabled = false;
-    }
+        out.log('❌ Erreur : ' + err.message, 'err');
+        YGO.toast('Erreur : ' + err.message, 'err');
+    } finally { btn.disabled = false; }
 });
+
+$('copyBtn').addEventListener('click', () => report && YGO.copy(report));
+$('dlBtn').addEventListener('click', () => report && YGO.download(report, 'comparaison.txt', 'text/plain;charset=utf-8'));
 </script>
 </body>
 </html>
