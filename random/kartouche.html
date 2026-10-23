@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kartouche · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
+<style>
+/* Seule addition : couleurs de la coloration Lua (le reste vient de ygo.css) */
+.tok-cm{color:var(--text-dim);font-style:italic}
+.tok-kw{color:var(--info);font-weight:600}
+.tok-fn{color:var(--gold-light)}
+[data-theme="light"] .tok-fn{color:var(--gold-dark)}
+.tok-const{color:var(--success)}
+.tok-num{color:var(--warning)}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container wide">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+        <div>
+            <h1><span class="grad">Kartouche</span> · scripts Lua</h1>
+            <p>Générateur de scripts Lua pour EDOPro / Project Ignis : identité, type, effets, et le code se met à jour en direct.</p>
+        </div>
+    </section>
+
+    <nav class="tabs" style="margin-bottom:22px">
+        <button class="tab active" id="btn-tab-generator" type="button" onclick="switchTab('generator')"><i class="fa-solid fa-hammer"></i> Atelier</button>
+        <button class="tab" id="btn-tab-reference" type="button" onclick="switchTab('reference')"><i class="fa-solid fa-book"></i> Référence API</button>
+    </nav>
+
+    <!-- ============ ATELIER ============ -->
+    <div id="view-generator">
+        <div class="grid-2" style="align-items:start;gap:22px">
+
+            <div>
+                <!-- ÉTAPE 1 -->
+                <section class="card">
+                    <h2 class="card-title"><span class="num">1</span> Identité de la carte <span class="hint" style="margin-left:auto">c&lt;passcode&gt;.lua</span></h2>
+                    <div class="grid-2">
+                        <div class="field">
+                            <label for="card-id">Passcode *</label>
+                            <input type="number" id="card-id" placeholder="10000001" oninput="render()">
+                        </div>
+                        <div class="field">
+                            <label for="card-name">Nom (commentaire seulement)</label>
+                            <input type="text" id="card-name" placeholder="Nom de la carte" value="Blue-Eyes White Dragon" oninput="render()">
+                        </div>
+                        <div class="field">
+                            <label for="card-setcode-search">Archétypes (setcode)</label>
+                            <input type="text" id="card-setcode-search" list="archetype-list" placeholder="Chercher un archétype…" autocomplete="off" oninput="onArchetypeSearch(this)">
+                            <datalist id="archetype-list"></datalist>
+                            <span class="hint" id="setcode-hint">Aucun</span>
+                        </div>
+                        <div class="field">
+                            <label>Setcodes ajoutés</label>
+                            <div class="row" style="gap:8px" id="setcode-pills"><span class="hint">—</span></div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="card-listed-id">Noms listés (listed_names, IDs séparés par virgule)</label>
+                        <input type="text" id="card-listed-id" placeholder="ex: 46986414, 38033121" oninput="render()">
+                    </div>
+                </section>
+
+                <!-- ÉTAPE 2 -->
+                <section class="card">
+                    <h2 class="card-title"><span class="num">2</span> Type de carte &amp; statistiques <span class="hint mono" style="margin-left:auto" id="type-bitmask-sub"></span></h2>
+
+                    <div class="tabs" id="type-tabs" style="margin:14px 0 18px">
+                        <button type="button" class="tab active" data-value="MONSTER" onclick="setCardType('MONSTER')">Monstre</button>
+                        <button type="button" class="tab" data-value="SPELL" onclick="setCardType('SPELL')">Magie</button>
+                        <button type="button" class="tab" data-value="TRAP" onclick="setCardType('TRAP')">Piège</button>
+                    </div>
+
+                    <div id="monster-fields">
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="m-main">Catégorie principale</label>
+                                <select id="m-main" onchange="render()">
+                                    <option value="NORMAL" selected>Normal</option>
+                                    <option value="EFFECT">À Effet</option>
+                                    <option value="RITUAL">Rituel</option>
+                                    <option value="FUSION">Fusion</option>
+                                    <option value="SYNCHRO">Synchro</option>
+                                    <option value="XYZ">Xyz</option>
+                                    <option value="LINK">Lien</option>
+                                </select>
+                            </div>
+                            <div class="field"><label for="m-attribute">Attribut</label><select id="m-attribute" onchange="render()"></select></div>
+                            <div class="field"><label for="m-race">Type (Race)</label><select id="m-race" onchange="render()"></select></div>
+                            <div class="field"><label for="m-atk">ATK</label><input type="number" id="m-atk" value="3000" oninput="render()"></div>
+                            <div class="field" id="m-def-field"><label for="m-def">DEF</label><input type="number" id="m-def" value="2500" oninput="render()"></div>
+                            <div class="field" id="m-level-field"><label for="m-level">Niveau</label><input type="number" id="m-level" value="8" min="1" max="12" oninput="render()"></div>
+                            <div class="field" id="m-rank-field" style="display:none"><label for="m-rank">Rang</label><input type="number" id="m-rank" value="4" min="1" max="13" oninput="render()"></div>
+                            <div class="field" id="m-link-field" style="display:none"><label for="m-linkrating">Cote de Lien</label><input type="number" id="m-linkrating" value="2" min="1" max="6" oninput="render()"></div>
+                            <div class="field" id="m-scale-field" style="display:none"><label for="m-scale">Échelle Pendule</label><input type="number" id="m-scale" value="1" min="0" max="13" oninput="render()"></div>
+                        </div>
+
+                        <div class="field" id="m-linkmarkers-field" style="display:none">
+                            <label>Marqueurs de Lien</label>
+                            <div class="row" style="gap:14px" id="link-marker-pills"></div>
+                        </div>
+
+                        <div class="field">
+                            <label>Sous-types additionnels</label>
+                            <div class="row" style="gap:14px" id="monster-flags"></div>
+                        </div>
+                    </div>
+
+                    <div id="spell-fields" style="display:none">
+                        <div class="field" style="max-width:320px">
+                            <label for="s-sub">Sous-type de Magie</label>
+                            <select id="s-sub" onchange="render()">
+                                <option value="NORMAL">Normale</option>
+                                <option value="CONTINUOUS">Continue</option>
+                                <option value="EQUIP">Équipement</option>
+                                <option value="QUICKPLAY">Jeu Rapide</option>
+                                <option value="FIELD">Terrain</option>
+                                <option value="RITUAL">Rituelle</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="trap-fields" style="display:none">
+                        <div class="field" style="max-width:320px">
+                            <label for="t-sub">Sous-type de Piège</label>
+                            <select id="t-sub" onchange="render()">
+                                <option value="NORMAL">Normal</option>
+                                <option value="CONTINUOUS">Continu</option>
+                                <option value="COUNTER">Contre-piège</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ÉTAPE 3 -->
+                <section class="card">
+                    <h2 class="card-title"><span class="num">3</span> Effets (initial_effect) <span class="hint" style="margin-left:auto" id="eff-count-sub">0 effet</span></h2>
+                    <div id="effects-container" style="margin-top:14px"></div>
+                    <div id="effects-empty" class="empty">Aucun effet pour l'instant — ajoutes-en un ci-dessous, ou laisse vide pour un Normal Monster / Terrain vierge.</div>
+                    <div class="actions"><button class="btn" type="button" onclick="addEffect()"><i class="fa-solid fa-plus"></i> Ajouter un effet</button></div>
+                </section>
+            </div>
+
+            <!-- CODE -->
+            <div style="position:sticky;top:84px">
+                <div class="toolbar">
+                    <span class="mono" id="code-file-label" style="color:var(--gold)">c.lua</span>
+                    <div class="row" style="gap:8px">
+                        <button class="btn btn-sm" type="button" onclick="copyCode()"><i class="fa-solid fa-copy"></i> Copier</button>
+                        <button class="btn btn-sm btn-primary" type="button" onclick="exportLuaFile()"><i class="fa-solid fa-download"></i> .lua</button>
+                    </div>
+                </div>
+                <div class="code-block" style="margin:0">
+                    <pre id="lua-output" style="max-height:68vh"><code>-- en attente…</code></pre>
+                </div>
+                <p class="hint" style="margin:10px 0 0">Type CDB estimé : <b class="mono" id="type-bitmask" style="color:var(--gold)">TYPE_MONSTER</b> · UTF-8, sans BOM</p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============ RÉFÉRENCE ============ -->
+    <div id="view-reference" class="hidden">
+        <div class="alert info">
+            <i class="fa-solid fa-circle-info"></i>
+            <p>Rappel de signature commune à toutes les fonctions d'effet : <code>function s.xx(e,tp,eg,ep,ev,re,r,rp,chk)</code> — <code>e</code> l'effet, <code>tp</code> le joueur déclencheur, <code>eg</code> le groupe d'event, <code>ep</code> le joueur d'event, <code>ev</code> la valeur d'event, <code>re</code> l'effet responsable (Reason Effect), <code>chk</code> vaut <code>0</code> pendant la vérification de légalité et <code>nil</code>/absent pendant la résolution.</p>
+        </div>
+        <div class="field">
+            <label for="ref-search-input">Filtrer les constantes</label>
+            <input type="text" id="ref-search-input" placeholder="ex : destroy, event_summon, race_dragon…" autocomplete="off" oninput="filterRef(this.value)">
+        </div>
+        <div class="grid-2" id="ref-grid"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ===== DONNÉES (constantes EDOPro, archétypes, listes UI) ===== */
+const ARCHETYPES = [["Ally of Justice","0x1"],["Genex","0x2"],["R-Genex","0x1002"],["Genex Ally","0x2002"],["Horus","0x3"],["Horus the Black Flame Dragon","0x1003"],["Amazoness","0x4"],["Arcana Force","0x5"],["Dark World","0x6"],["Ancient Gear","0x7"],["HERO","0x8"],["Elemental HERO","0x3008"],["Vision HERO","0x5008"],["Evil HERO","0x6008"],["Masked HERO","0xa008"],["Destiny HERO","0xc008"],["Neos","0x9"],["lswarm","0xa"],["Steelswarm","0x100a"],["Infernity","0xb"],["Alien","0xc"],["Saber","0xd"],["X-Saber","0x100d"],["XX-Saber","0x300d"],["Elementsaber","0x400d"],["Watt","0xe"],["Ojama","0xf"],["Gusto","0x10"],["Karakuri","0x11"],["Frog","0x12"],["Meklord","0x13"],["Meklord Emperor","0x3013"],["Meklord Army","0x6013"],["Meklord Astro","0x9013"],["Allure Queen","0x14"],["B.E.S.","0x15"],["roid","0x16"],["Vehicroid","0x1016"],["Speedroid","0x2016"],["Synchro","0x17"],["Synchron","0x1017"],["Synchro Dragon","0x2017"],["Cloudian","0x18"],["Gladiator","0x19"],["Gladiator Beast","0x1019"],["Dark Scorpion","0x1a"],["Phantom Beast","0x1b"],["Mecha Phantom Beast","0x101b"],["Spirit Message","0x1c"],["Koa'ki Meiru","0x1d"],["Chrysalis","0x1e"],["Neo-Spacian","0x1f"],["Shien","0x20"],["Earthbound","0x21"],["Earthbound Immortal","0x1021"],["Earthbound Servant","0x2021"],["Jurrac","0x22"],["Malefic","0x23"],["Scrap","0x24"],["Iron Chain","0x25"],["Morphtronic","0x26"],["T.G.","0x27"],["Batteryman","0x28"],["Dragunity","0x29"],["Naturia","0x2a"],["Ninja","0x2b"],["Armor Ninja","0x102b"],["Flamvell","0x2c"],["Nitro","0x2d"],["Gravekeeper's","0x2e"],["Ice Barrier","0x2f"],["Vylon","0x30"],["Fortune Lady","0x31"],["Volcanic","0x32"],["Blackwing","0x33"],["Assault Blackwing","0x1033"],["Crystal","0x34"],["Crystal Beast","0x1034"],["Ultimate Crystal","0x2034"],["Fabled","0x35"],["Machina","0x36"],["Mist Valley","0x37"],["Lightsworn","0x38"],["Laval","0x39"],["Gishki","0x3a"],["Red-Eyes","0x3b"],["Reptilianne","0x3c"],["Six Samurai","0x3d"],["Secret Six Samurai","0x103d"],["Worm","0x3e"],["Majestic","0x3f"],["Forbidden One","0x40"],["LV","0x41"],["Nordic","0x42"],["Nordic Ascendant","0x3042"],["Nordic Beast","0x6042"],["Nordic Alfar","0xa042"],["Nordic Relic","0x5042"],["Junk","0x43"],["The Agent","0x44"],["Archfiend","0x45"],["Red Dragon Archfiend","0x1045"],["Polymerization|Fusion","0x46"],["Fusion Dragon","0x1046"],["Gem-","0x47"],["Gem-Knight","0x1047"],["Number","0x48"],["Number C","0x1048"],["Number C39","0x5048"],["Skyblaster","0x49"],["Timelord","0x4a"],["Aesir","0x4b"],["Trap Hole","0x4c"],["Beast's Battle","0x4d"],["Evol","0x4e"],["Evoltile","0x304e"],["Evolsaur","0x604e"],["Evolzar","0x504e"],["Dark Lucius","0x4f"],["/Assault Mode","0x104f"],["Venom","0x50"],["Starving Venom","0x1050"],["Gadget","0x51"],["Guardian","0x52"],["Gate Guardian","0x1052"],["Skull Guardian","0x2052"],["Constellar","0x53"],["Gagaga","0x54"],["Photon","0x55"],["Inzektor","0x56"],["Resonator","0x57"],["Wind-Up","0x58"],["Gogogo","0x59"],["Penguin","0x5a"],["Inmato","0x5b"],["Sphinx","0x5c"],["Ultimate Insect","0x5d"],["Dark Mimic","0x5e"],["Mystic Swordsman","0x5f"],["Bamboo Sword","0x60"],["Ninjitsu Art","0x61"],["Toon","0x62"],["Reactor","0x63"],["Harpie","0x64"],["Infestation","0x65"],["Warrior","0x66"],["Symphonic Warrior","0x1066"],["Magnet Warrior","0x2066"],["Koala","0x67"],["Kangaroo","0x68"],["Hieratic","0x69"],["Butterspy","0x6a"],["Bounzer","0x6b"],["Helios","0x6c"],["Djinn","0x6d"],["Djinn of Rituals","0x106d"],["Prophecy","0x6e"],["Spellbook","0x106e"],["Heroic","0x6f"],["Heroic Challenger","0x106f"],["Heroic Champion","0x206f"],["Chronomaly","0x70"],["Madolche","0x71"],["Geargia","0x72"],["Geargiano","0x1072"],["Xyz","0x73"],["CXyz","0x1073"],["Xyz Dragon","0x2073"],["Armored Xyz","0x4073"],["Mermail","0x74"],["Abyss-","0x75"],["Heraldic Beast","0x76"],["Atlantean","0x77"],["Nimble","0x78"],["Fire Fist","0x79"],["Noble","0x7a"],["Noble Knight","0x107a"],["Noble Arms","0x207a"],["Infernoble","0x407a"],["Infernoble Knight","0x507a"],["Infernoble Arms","0x607a"],["Galaxy","0x7b"],["Galaxy-Eyes","0x107b"],["Galaxy-Eyes Tachyon Dragon","0x307b"],["Fire Formation","0x7c"],["Hazy","0x7d"],["Hazy Flame","0x107d"],["Zexal","0x7e"],["ZW -","0x107e"],["ZS -","0x207e"],["Utopic","0x7f"],["Utopia","0x107f"],["Utopic Future","0x207f"],["Duston","0x80"],["Fire King","0x81"],["Fire King Avatar","0x1081"],["Dododo","0x82"],["Puppet","0x83"],["Gimmick Puppet","0x1083"],["Battlin' Boxer","0x84"],["Super Defense Robot","0x85"],["Star Seraph","0x86"],["Umbral Horror","0x87"],["Bujin","0x88"],["Hole","0x89"],["Envy","0x8a"],["Traptrix","0x108a"],["Malicevorous","0x8b"],["Druid","0x8c"],["Ghostrick","0x8d"],["Vampire","0x8e"],["Zubaba","0x8f"],["Sylvan","0x90"],["Necrovalley","0x91"],["Heraldry","0x92"],["Cyber","0x93"],["Cyber Dragon","0x1093"],["Cyber Angel","0x2093"],["Cyberdark","0x4093"],["Cybernetic","0x94"],["Rank-Up-Magic","0x95"],["Fishborg","0x96"],["Artifact","0x97"],["Magician","0x98"],["Odd-Eyes","0x99"],["Superheavy Samurai","0x9a"],["Superheavy Samurai Soul","0x109a"],["Melodious","0x9b"],["Melodious Maestra","0x109b"],["tellarknight","0x9c"],["Stellarknight","0x109c"],["Shaddoll","0x9d"],["Yang Zing","0x9e"],["Performapal","0x9f"],["Legendary Knight","0xa0"],["Legendary Dragon","0xa1"],["Magician","0xa2"],["Dark Magician","0x10a2"],["Magician Girl","0x20a2"],["Dark Magician Girl","0x30a2"],["Stardust","0xa3"],["Kuriboh","0xa4"],["Winged Kuriboh","0x10a4"],["Change","0xa5"],["sprout","0xa6"],["Artorigus","0xa7"],["Laundsallyn","0xa8"],["Fluffal","0xa9"],["Qli","0xaa"],["Apoqliphort","0x10aa"],["Deskbot","0xab"],["Goblin","0xac"],["Goblin Biker","0x10ac"],["Frightfur","0xad"],["Dark Contract","0xae"],["D/D","0xaf"],["D/D/D","0x10af"],["Gottoms","0xb0"],["Burning Abyss","0xb1"],["U.A.","0xb2"],["Yosenju","0xb3"],["Nekroz","0xb4"],["Ritual Beast","0xb5"],["Ritual Beast Tamer","0x10b5"],["Spiritual Beast","0x20b5"],["Spiritual Beast Tamer","0x30b5"],["Ritual Beast Ulti-","0x40b5"],["Entity","0xb7"],["Outer Entity","0x10b7"],["Elder Entity","0x20b7"],["Old Entity","0x40b7"],["Blaze Accelerator","0xb9"],["Raidraptor","0xba"],["Infernoid","0xbb"],["Jinzo","0xbc"],["Gaia The Fierce Knight","0xbd"],["Monarch","0xbe"],["Charmer","0xbf"],["Possessed","0xc0"],["Familiar-Possessed","0x10c0"],["PSY-Frame","0xc1"],["PSY-Framegear","0x10c1"],["Power Tool","0xc2"],["Edge Imp","0xc3"],["Zefra","0xc4"],["Void","0xc5"],["Performage","0xc6"],["Dracoslayer","0xc7"],["Igknight","0xc8"],["Aroma","0xc9"],["Empowered Warrior","0xca"],["Aether","0xcb"],["Prediction Princess","0xcc"],["Aqua","0xcd"],["Aquaactress","0x10cd"],["Aquarium","0x20cd"],["Chaos","0xcf"],["Black Luster Soldier","0x10cf"],["Majespecter","0xd0"],["Graydle","0xd1"],["Kozmo","0xd2"],["Kaiju","0xd3"],["Paleozoic","0xd4"],["Dante","0xd5"],["Destruction Sword","0xd6"],["Buster Blader","0xd7"],["Dinomist","0xd8"],["Shiranui","0xd9"],["Shiranui Spectralsword","0x10d9"],["Dracoverlord","0xda"],["Phantom Knights","0xdb"],["The Phantom Knights","0x10db"],["Super Quant","0xdc"],["Super Quantum","0x10dc"],["Super Quantal Mech Beast","0x20dc"],["Blue-Eyes","0xdd"],["Exodia","0xde"],["Lunalight","0xdf"],["Amorphage","0xe0"],["Metalfoes","0xe1"],["Triamid","0xe2"],["Cubic","0xe3"],["Celtic Guard","0xe4"],["Cipher","0xe5"],["Cipher Dragon","0x10e5"],["Flower Cardian","0xe6"],["Silent Swordsman","0xe7"],["Silent Magician","0xe8"],["Magna Warrior","0xe9"],["Crystron","0xea"],["Chemicritter","0xeb"],["Abyss","0xec"],["Abyss Actor","0x10ec"],["Abyss Script","0x20ec"],["Subterror","0xed"],["Subterror Behemoth","0x10ed"],["SPYRAL","0xee"],["SPYRAL GEAR","0x10ee"],["SPYRAL MISSION","0x20ee"],["Darklord","0xef"],["Windwitch","0xf0"],["Zoodiac","0xf1"],["Pendulum","0xf2"],["Pendulum Dragon","0x10f2"],["Pendulumgraph","0x20f2"],["Predap","0xf3"],["Predaplant","0x10f3"],["Invoked","0xf4"],["Gandora","0xf5"],["Skyscraper","0xf6"],["Lyrilusc","0xf7"],["Supreme King","0xf8"],["Supreme King Gate","0x10f8"],["Supreme King Dragon","0x20f8"],["True Draco|True King","0xf9"],["Phantasm Spiral","0xfa"],["Gouki","0xfc"],["Trickstar","0xfb"],["World Chalice","0xfd"],["World Legacy","0xfe"],["Clear Wing","0xff"],["Bonding -","0x100"],["Code Talker","0x101"],["Rokket","0x102"],["Altergeist","0x103"],["Krawler","0x104"],["Metaphys","0x105"],["Vendread","0x106"],["F.A.","0x107"],["Magical Musket","0x108"],["The Weather","0x109"],["Parshath","0x10a"],["Tindangle","0x10b"],["Mekk-Knight","0x10c"],["Mythical Beast","0x10d"],["Evolution Pill","0x10e"],["Borrel","0x10f"],["Relinquished","0x110"],["Eyes Restrict","0x1110"],["Armed Dragon","0x111"],["Knightmare","0x112"],["Elemental Lord","0x113"],["Fur Hire","0x114"],["Sky Striker","0x115"],["Sky Striker Ace","0x1115"],["Crusadia","0x116"],["Impcantation","0x117"],["Cynet","0x118"],["Salamangreat","0x119"],["Dinowrestler","0x11a"],["Orcust","0x11b"],["Thunder Dragon","0x11c"],["Forbidden","0x11d"],["Danger!","0x11e"],["Nephthys","0x11f"],["Prank-Kids","0x120"],["Mayakashi","0x121"],["Valkyrie","0x122"],["Rose","0x123"],["Rose Dragon","0x1123"],["Machine Angel","0x124"],["Smile","0x125"],["Time Thief","0x126"],["Infinitrack","0x127"],["Witchcrafter","0x128"],["Evil Eye","0x129"],["Endymion","0x12a"],["Marincess","0x12b"],["Tenyi","0x12c"],["Simorgh","0x12d"],["Fortune Fairy","0x12e"],["Battlewasp","0x12f"],["Unchained","0x130"],["Unchained Soul","0x1130"],["Dream Mirror","0x131"],["Mathmech","0x132"],["Dragonmaid","0x133"],["Generaider","0x134"],["@Ignister","0x135"],["A.I.","0x136"],["Ancient Warriors","0x137"],["Megalith","0x138"],["Onomat","0x139"],["Palladium","0x13a"],["Rebellion","0x13b"],["Codebreaker","0x13c"],["Nemeses","0x13d"],["Barbaros","0x13e"],["Plunder Patroll","0x13f"],["Adamancipator","0x140"],["Rikka","0x141"],["Eldlich","0x142"],["Eldlixir","0x143"],["Golden Land","0x144"],["Phantasm","0x145"],["Dogmatika","0x146"],["Melffy","0x147"],["Potan","0x148"],["Roland","0x149"],["Appliancer","0x14a"],["Numeron","0x14b"],["Numeron Gate","0x114b"],["Fossil","0x14c"],["Spiritual Art","0x14d"],["Spiritual Earth Art","0x314d"],["Spiritual Fire Art","0x514d"],["Spiritual Water Art","0x614d"],["Spiritual Wind Art","0xa14d"],["Dual Avatar","0x14e"],["Tri-Brigade","0x14f"],["Virtual World","0x150"],["Virtual World Gate","0x1150"],["Drytron","0x151"],["Magistus","0x152"],["Ki-sikil","0x153"],["Lil-la","0x154"],["Evil Twin","0x155"],["Live Twin","0x156"],["Sun","0x157"],["Sunavalon","0x1157"],["Sunvine","0x2157"],["Sunseed","0x4157"],["Springans","0x158"],["Myutant","0x159"],["S-Force","0x15a"],["Starry Knight","0x15b"],["Doll Monster","0x15c"],["Rank-Down-Magic","0x15d"],["Amazement","0x15e"],["Attraction","0x15f"],["Branded","0x160"],["War Rock","0x161"],["Materiactor","0x162"],["Ogdoadic","0x163"],["Solfachord","0x164"],["GranSolfachord","0x1164"],["Ursarctic","0x165"],["Despia","0x166"],["Magikey","0x167"],["Gunkan","0x168"],["of the Forest","0x169"],["Mystical Beast of the Forest","0x1169"],["Mystical Spirit of the Forest","0x2169"],["Stealth Kragen","0x16a"],["Numerounius","0x16b"],["Number","0x16c"],["Swordsoul","0x16d"],["Icejade","0x16e"],["Floowandereeze","0x16f"],["Topologic","0x170"],["Hyperion","0x171"],["Beetrooper","0x172"],["P.U.N.K.","0x173"],["Exosister","0x174"],["Dinomorphia","0x175"],["Lady of Lament","0x176"],["Seventh","0x177"],["Barian","0x178"],["Barian's","0x1178"],["Battleguard","0x2178"],["Kairyu-Shin","0x179"],["Sea Stealth","0x17a"],["Therion","0x17b"],["Scareclaw","0x17c"],["Libromancer","0x17d"],["Vaylantz","0x17e"],["Labrynth","0x17f"],["Welcome Labrynth","0x117f"],["Runick","0x180"],["Spright","0x181"],["Tearlaments","0x182"],["Vernusylph","0x183"],["Mokey Mokey","0x184"],["Wingman","0x185"],["Doodle","0x186"],["Doodle Beast","0x1186"],["Doodlebook","0x2186"],["G Golem","0x187"],["Rainbow Bridge","0x188"],["Bystial","0x189"],["Kashtira","0x18a"],["Ghoti","0x18b"],["Rescue-ACE","0x18c"],["Purrely","0x18d"],["Mikanko","0x18e"],["Aquamirror","0x18f"],["Firewall","0x190"],["Mannadium","0x191"],["Nemleria","0x192"],["Gold Pride","0x193"],["Labyrinth Wall","0x194"],["Favorite","0x195"],["Vanquish Soul","0x196"],["Nouvelles","0x197"],["Recipe","0x198"],["Visas","0x199"],["Memento","0x19a"],["Centur-Ion","0x19b"],["Vaalmonica","0x19c"],["Yubel","0x19d"],["Voiceless Voice","0x19e"],["White","0x19f"],["White Aura","0x119f"],["Counter","0x200"],["Battlin' Boxing","0x201"],["Veda","0x202"],["Diabell","0x203"],["Diabellstar","0x1203"],["Sinful Spoils","0x204"],["Snake-Eye","0x205"],["Patissciel","0x206"],["Heart","0x207"],["Tistina","0x208"],["Toy","0x1a0"],["Tenpai Dragon","0x1a1"],["Sangen","0x1a2"],["Ragnaraika","0x1a3"],["Salamandra","0x1a4"],["Ashened","0x1a5"],["Millennium","0x1a6"],["Exodd","0x1a7"],["Fiendsmith","0x1a8"],["Blue Tears","0x1a9"],["White Forest","0x1aa"],["Tachyon","0x1ab"],["Mulcharmy","0x1ac"],["Emblema","0x1ad"],["Shark","0x1ae"],["Shark Drake","0x11ae"],["Wedju","0x1af"],["Primite","0x1b0"],["Six Strike","0x1b1"],["Metalmorph","0x1b2"],["Morganite","0x1b3"],["Azamina","0x1b4"],["Mimighoul","0x1b5"],["Ryzeal","0x1b6"],["Schoolwork","0x1b7"],["Ryu-Ge","0x1b8"],["Maliss","0x1b9"],["Argostars","0x1ba"],["Aqua Jet","0x1bb"],["Dragon Ruler","0x1bc"],["Mitsurugi","0x1bd"],["Regenesis","0x1be"],["Dominus","0x1bf"],["Dragontail","0x1c0"],["Yummy","0x1c1"],["Apophis","0x1c2"],["Serket","0x1c3"],["K9","0x1c4"],["Mort-vivant","0x710"]].map(([n,h])=>({n,h}));
+
+const RACES = ["WARRIOR","SPELLCASTER","FAIRY","FIEND","ZOMBIE","MACHINE","AQUA","PYRO","ROCK","WINGEDBEAST","PLANT","INSECT","THUNDER","DRAGON","BEAST","BEASTWARRIOR","DINOSAUR","FISH","SEASERPENT","REPTILE","PSYCHIC","DIVINE","CREATORGOD","WYRM","CYBERSE","ILLUSION","CYBORG","MAGICALKNIGHT","HIGHDRAGON","OMEGAPSYCHIC","CELESTIALWARRIOR","GALAXY","YOKAI"];
+const RACE_LABELS_FR = {WARRIOR:"Guerrier",SPELLCASTER:"Magicien",FAIRY:"Fée",FIEND:"Démon",ZOMBIE:"Zombie",MACHINE:"Machine",AQUA:"Aqua",PYRO:"Pyro",ROCK:"Rocher",WINGEDBEAST:"Bête Ailée",PLANT:"Plante",INSECT:"Insecte",THUNDER:"Tonnerre",DRAGON:"Dragon",BEAST:"Bête",BEASTWARRIOR:"Bête-Guerrière",DINOSAUR:"Dinosaure",FISH:"Poisson",SEASERPENT:"Serpent de Mer",REPTILE:"Reptile",PSYCHIC:"Psychique",DIVINE:"Divin",CREATORGOD:"Dieu Créateur",WYRM:"Wyrm",CYBERSE:"Cyberse",ILLUSION:"Illusion",CYBORG:"Cyborg",MAGICALKNIGHT:"Chevalier Magique",HIGHDRAGON:"Haut-Dragon",OMEGAPSYCHIC:"Oméga Psychique",CELESTIALWARRIOR:"Guerrier Céleste",GALAXY:"Galaxie",YOKAI:"Yokai"};
+
+const ATTRIBUTES = ["EARTH","WATER","FIRE","WIND","LIGHT","DARK","DIVINE"];
+const ATTR_LABELS_FR = {EARTH:"Terre",WATER:"Eau",FIRE:"Feu",WIND:"Vent",LIGHT:"Lumière",DARK:"Ténèbres",DIVINE:"Divin"};
+
+const CATEGORIES = [
+ ["DESTROY","Détruire"],["RELEASE","Sacrifier"],["REMOVE","Bannir"],["TOHAND","Ajouter à la main"],
+ ["TODECK","Renvoyer au Deck"],["TOGRAVE","Envoyer au Cimetière"],["DECKDES","Milling"],["HANDES","Défausse"],
+ ["SUMMON","Invocation Normale"],["SPECIAL_SUMMON","Invocation Spéciale"],["TOKEN","Créer un Jeton"],
+ ["FLIP","Retourner"],["POSITION","Changer position"],["CONTROL","Prendre le contrôle"],["DISABLE","Neutraliser"],
+ ["DISABLE_SUMMON","Empêcher invocation"],["DRAW","Piocher"],["SEARCH","Chercher"],["EQUIP","Équiper"],
+ ["DAMAGE","Dégâts"],["RECOVER","Récupérer LP"],["ATKCHANGE","Modif. ATK"],["DEFCHANGE","Modif. DEF"],
+ ["COUNTER","Compteurs"],["COIN","Pile ou face"],["DICE","Lancer de dé"],["LEAVE_GRAVE","Quitter le Cimetière"],
+ ["LVCHANGE","Modif. Niveau"],["NEGATE","Annuler"],["ANNOUNCE","Déclarer"],["FUSION_SUMMON","Invoc. Fusion"],["TOEXTRA","Renvoyer à l'Extra Deck"]
+];
+
+const EFFECT_TYPES = {
+  MONSTER:[
+    ["IGNITION","Ignition — activable librement"],
+    ["QUICK_O","Effet Rapide (optionnel)"],
+    ["QUICK_F","Effet Rapide (obligatoire)"],
+    ["TRIGGER_O","Déclencheur (optionnel)"],
+    ["TRIGGER_F","Déclencheur (obligatoire)"],
+    ["FLIP","Effet Flip"],
+    ["CONTINUOUS","Continu (passif, sans activation)"],
+    ["SINGLE","Passif simple (ex : immunité)"],
+    ["FIELD","Statut octroyé (grant — ex : ne peut être ciblé)"]
+  ],
+  ST:[
+    ["ACTIVATE","Activation normale"],
+    ["CONTINUOUS","Continu (effet persistant sur le terrain)"],
+    ["FIELD","Statut octroyé à d'autres cartes (grant)"],
+    ["EQUIP","Effet accordé au monstre équipé"],
+    ["QUICK_O","Effet Rapide"]
+  ]
+};
+
+const CONDITIONS = [
+  ["NONE","Aucune condition"],
+  ["CONTROL_MONSTER","Vous contrôlez ≥1 monstre"],
+  ["CONTROL_ARCHETYPE","Vous contrôlez un monstre du setcode listé"],
+  ["OPP_CONTROL_MONSTER","L'adversaire contrôle ≥1 monstre"],
+  ["GY_HAS_MONSTER","Votre Cimetière contient ≥1 monstre"],
+  ["CUSTOM","Lua personnalisé"]
+];
+
+const COSTS = [
+  ["NONE","Sans coût"],
+  ["LP","Payer des LP"],
+  ["DISCARD","Défausser des cartes"],
+  ["BANISH_GY","Bannir des cartes du Cimetière (coût)"],
+  ["TRIBUTE","Sacrifier un monstre"],
+  ["CUSTOM","Lua personnalisé"]
+];
+
+const OPERATIONS = [
+  ["SPECIAL_SUMMON_DECK","Invoquer Spécialement depuis le Deck"],
+  ["SPECIAL_SUMMON_GY","Invoquer Spécialement depuis le Cimetière"],
+  ["TOHAND_DECK","Chercher : Deck → Main"],
+  ["TOHAND_GY","Récupérer : Cimetière → Main"],
+  ["DESTROY_FIELD","Détruire 1+ carte(s) sur le terrain"],
+  ["BANISH_FIELD","Bannir 1+ carte(s) sur le terrain"],
+  ["BANISH_GY_OP","Bannir des cartes du Cimetière (effet)"],
+  ["BOUNCE_FIELD_HAND","Renvoyer une carte du terrain à la main"],
+  ["MILL","Envoyer des cartes du Deck au Cimetière"],
+  ["DRAW","Piocher des cartes"],
+  ["DAMAGE","Infliger des dégâts à l'adversaire"],
+  ["RECOVER","Récupérer des LP"],
+  ["ATK_UP","Augmenter l'ATK (jusqu'à la fin du tour)"],
+  ["ATK_DOWN","Diminuer l'ATK (jusqu'à la fin du tour)"],
+  ["NEGATE_ACTIVATION","Annuler une activation et détruire"],
+  ["TOKEN_SUMMON","Faire apparaître un/des Jeton(s)"],
+  ["CUSTOM","Lua personnalisé"]
+];
+
+const TRIGGER_EVENTS = [
+  ["EVENT_SUMMON_SUCCESS","Invocation Normale réussie"],
+  ["EVENT_SPSUMMON_SUCCESS","Invocation Spéciale réussie"],
+  ["EVENT_FLIP_SUMMON_SUCCESS","Invocation Retournement réussie"],
+  ["EVENT_DESTROYED","Cette carte est détruite"],
+  ["EVENT_BATTLE_DESTROYED","Détruite au combat"],
+  ["EVENT_TO_GRAVE","Envoyée au Cimetière (peu importe la raison)"],
+  ["EVENT_REMOVE","Cette carte est bannie"],
+  ["EVENT_LEAVE_FIELD","Quitte le terrain (peu importe comment)"],
+  ["EVENT_DRAW","Un joueur pioche"],
+  ["EVENT_DAMAGE","Un joueur subit des dégâts"],
+  ["EVENT_RECOVER","Un joueur récupère des LP"],
+  ["EVENT_ATTACK_ANNOUNCE","Une attaque est déclarée"],
+  ["EVENT_BATTLE_START","Début de la Battle Phase"],
+  ["EVENT_PHASE+PHASE_STANDBY","Standby Phase (chaque tour)"],
+  ["EVENT_PHASE+PHASE_END","End Phase (chaque tour)"],
+  ["EVENT_CHAINING","Un Chain Link est activé"],
+  ["EVENT_FREE_CHAIN","Libre (Quick Effect générique)"],
+  ["CUSTOM","Event personnalisé (raw)"]
+];
+const CLONE_EVENTS = [
+  ["NONE","Non — un seul déclencheur"],
+  ["EVENT_SPSUMMON_SUCCESS","+ aussi sur Invocation Spéciale"],
+  ["EVENT_SUMMON_SUCCESS","+ aussi sur Invocation Normale"],
+  ["EVENT_FLIP_SUMMON_SUCCESS","+ aussi sur Invocation Retournement"]
+];
+
+const MONSTER_FLAGS = [
+  ["pendulum","Pendule"],["tuner","Tuner"],["union","Union"],["spirit","Esprit"],["gemini","Gémeau"],["toon","Toon"]
+];
+const LINK_MARKERS = [["TOP_LEFT","↖"],["TOP","↑"],["TOP_RIGHT","↗"],["LEFT","←"],["RIGHT","→"],["BOTTOM_LEFT","↙"],["BOTTOM","↓"],["BOTTOM_RIGHT","↘"]];
+
+/* ===== Référence ===== */
+const REF_SECTIONS = [
+  {title:'Types d\'effet (EFFECT_TYPE_*)', rows:[
+    ['SINGLE','0x1'],['FIELD','0x2'],['EQUIP','0x4'],['ACTIONS','0x8'],['ACTIVATE','0x10'],['FLIP','0x20'],
+    ['IGNITION','0x40'],['TRIGGER_O','0x80'],['QUICK_O','0x100'],['TRIGGER_F','0x200'],['QUICK_F','0x400'],
+    ['CONTINUOUS','0x800'],['XMATERIAL','0x1000'],['GRANT','0x2000'],['TARGET','0x4000']
+  ].map(([k,v])=>['EFFECT_TYPE_'+k,v])},
+  {title:'Catégories (CATEGORY_*)', rows: CATEGORIES.map(([k,l])=>['CATEGORY_'+k,l])},
+  {title:'Attributs (ATTRIBUTE_*)', rows: ATTRIBUTES.map(a=>['ATTRIBUTE_'+a, ATTR_LABELS_FR[a]])},
+  {title:'Types de monstre (RACE_*)', rows: RACES.map(r=>['RACE_'+r, RACE_LABELS_FR[r]])},
+  {title:'Emplacements (LOCATION_*)', rows:[
+    ['LOCATION_DECK','0x1'],['LOCATION_HAND','0x2'],['LOCATION_MZONE','0x4'],['LOCATION_SZONE','0x8'],
+    ['LOCATION_GRAVE','0x10'],['LOCATION_REMOVED','0x20'],['LOCATION_EXTRA','0x40'],['LOCATION_OVERLAY','0x80'],
+    ['LOCATION_ONFIELD','MZONE|SZONE'],['LOCATION_FZONE','0x100'],['LOCATION_PZONE','0x200']
+  ]},
+  {title:'Raisons (REASON_*)', rows:[
+    ['REASON_DESTROY','0x1'],['REASON_RELEASE','0x2'],['REASON_SUMMON','0x10'],['REASON_BATTLE','0x20'],
+    ['REASON_EFFECT','0x40'],['REASON_COST','0x80'],['REASON_SPSUMMON','0x800'],['REASON_DISCARD','0x4000'],
+    ['REASON_FUSION','0x40000'],['REASON_SYNCHRO','0x80000'],['REASON_RITUAL','0x100000'],['REASON_XYZ','0x200000'],['REASON_LINK','0x10000000']
+  ]},
+  {title:'Positions (POS_*)', rows:[
+    ['POS_FACEUP_ATTACK','0x1'],['POS_FACEDOWN_ATTACK','0x2'],['POS_FACEUP_DEFENSE','0x4'],['POS_FACEDOWN_DEFENSE','0x8'],
+    ['POS_FACEUP','0x5'],['POS_FACEDOWN','0xa'],['POS_ATTACK','0x3'],['POS_DEFENSE','0xc']
+  ]},
+  {title:'Events courants (EVENT_*)', rows:[
+    ['EVENT_FREE_CHAIN','1002'],['EVENT_SUMMON_SUCCESS','1100'],['EVENT_FLIP_SUMMON_SUCCESS','1101'],
+    ['EVENT_SPSUMMON_SUCCESS','1102'],['EVENT_DESTROYED','1029'],['EVENT_TO_GRAVE','1014'],['EVENT_DRAW','1110'],
+    ['EVENT_DAMAGE','1111'],['EVENT_RECOVER','1112'],['EVENT_ATTACK_ANNOUNCE','1130'],['EVENT_CHAINING','1027'],['EVENT_TURN_END','1210']
+  ]},
+  {title:'Limitations (SetCountLimit)', rows:[
+    ['SetCountLimit(1)','Soft OPT — 1×/tour par exemplaire'],
+    ['SetCountLimit(1,id)','Hard OPT — "you can only use 1 of this effect"'],
+    ['SetCountLimit(1,id,EFFECT_COUNT_CODE_OATH)','Serment — désactivé si l\'activation est annulée'],
+    ['SetCountLimit(1,id,EFFECT_COUNT_CODE_DUEL)','1× par duel entier']
+  ]},
+  {title:'Codes de comptage (EFFECT_COUNT_CODE_*)', rows:[
+    ['EFFECT_COUNT_CODE_OATH','0x1'],['EFFECT_COUNT_CODE_DUEL','0x2'],['EFFECT_COUNT_CODE_SINGLE','0x4'],['EFFECT_COUNT_CODE_CHAIN','0x8']
+  ]},
+  {title:'Messages d\'aide (HINTMSG_*)', rows:[
+    ['HINTMSG_DESTROY','502'],['HINTMSG_REMOVE','503'],['HINTMSG_TOGRAVE','504'],['HINTMSG_RTOHAND','505'],
+    ['HINTMSG_ATOHAND','506'],['HINTMSG_TODECK','507'],['HINTMSG_SPSUMMON','509'],['HINTMSG_RELEASE','500'],['HINTMSG_DISCARD','501']
+  ]},
+  {title:'Archétypes (setcode) — extrait', rows: ARCHETYPES.slice(0,40).map(a=>[a.n, a.h])}
+];
+
+
+/* ===== LOGIQUE ===== */
+/* ================= STATE ================= */
+let cardType = "MONSTER";
+let setcodes = [];
+let effects = [];
+let effSeq = 0;
+
+/* ================= INIT ================= */
+document.addEventListener('DOMContentLoaded', function(){
+  populateSelect('m-attribute', ATTRIBUTES.map(a=>[a, ATTR_LABELS_FR[a]]), 'LIGHT');
+  populateSelect('m-race', RACES.map(r=>[r, RACE_LABELS_FR[r]]), 'DRAGON');
+  buildMonsterFlagPills();
+  buildLinkMarkerPills();
+  buildArchetypeDatalist();
+  renderEffects();
+  render();
+});
+
+function populateSelect(id, pairs, selected){
+  const el = document.getElementById(id);
+  el.innerHTML = pairs.map(([v,l])=>`<option value="${v}" ${v===selected?'selected':''}>${l}</option>`).join('');
+}
+
+function buildArchetypeDatalist(){
+  const dl = document.getElementById('archetype-list');
+  dl.innerHTML = ARCHETYPES.map(a=>`<option value="${a.n}">`).join('');
+}
+
+function onArchetypeSearch(input){
+  const match = ARCHETYPES.find(a=>a.n.toLowerCase()===input.value.toLowerCase());
+  if(match){
+    if(!setcodes.find(s=>s.h===match.h)){
+      setcodes.push({n:match.n, h:match.h});
+    }
+    input.value='';
+    render();
+  }
+}
+
+function removeSetcode(h){
+  setcodes = setcodes.filter(s=>s.h!==h);
+  render();
+}
+
+function buildMonsterFlagPills(){
+  const c = document.getElementById('monster-flags');
+  c.innerHTML = MONSTER_FLAGS.map(([id,label])=>`
+    <label class="check" id="pill-flag-${id}">
+      <input type="checkbox" id="flag-${id}" onchange="onFlagChange('${id}')"> ${label}
+    </label>`).join('');
+}
+function onFlagChange(id){
+  render();
+}
+
+function buildLinkMarkerPills(){
+  const c = document.getElementById('link-marker-pills');
+  c.innerHTML = LINK_MARKERS.map(([id,glyph])=>`
+    <label class="check" id="pill-lm-${id}">
+      <input type="checkbox" id="lm-${id}" onchange="onLinkMarkerChange('${id}')"> ${glyph} ${id.replace('_',' ')}
+    </label>`).join('');
+}
+function onLinkMarkerChange(id){
+  render();
+}
+
+/* ================= TABS ================= */
+function switchTab(tab){
+  document.getElementById('view-generator').classList.toggle('hidden', tab!=='generator');
+  document.getElementById('view-reference').classList.toggle('hidden', tab!=='reference');
+  document.getElementById('btn-tab-generator').classList.toggle('active', tab==='generator');
+  document.getElementById('btn-tab-reference').classList.toggle('active', tab==='reference');
+  if(tab==='reference') buildReference();
+}
+
+/* ================= CARD TYPE ================= */
+function setCardType(t){
+  cardType = t;
+  document.querySelectorAll('#type-tabs .tab').forEach(b=>b.classList.remove('active'));
+  document.querySelector('#type-tabs [data-value="'+t+'"]').classList.add('active');
+  document.getElementById('monster-fields').style.display = t==='MONSTER' ? 'block':'none';
+  document.getElementById('spell-fields').style.display = t==='SPELL' ? 'block':'none';
+  document.getElementById('trap-fields').style.display = t==='TRAP' ? 'block':'none';
+  // reset effect type selects to first valid option for new context
+  effects.forEach(e=>{ e.typeMain = (t==='MONSTER') ? 'IGNITION' : 'ACTIVATE'; });
+  renderEffects();
+  render();
+}
+
+function onMonsterMainChange(){ render(); }
+
+/* ================= EFFECTS ================= */
+function addEffect(){
+  effSeq++;
+  effects.push({
+    id: effSeq,
+    label: 'Effet '+(effects.length+1),
+    typeMain: cardType==='MONSTER' ? 'IGNITION' : 'ACTIVATE',
+    categories: [],
+    optScope: 'CARD', optN: 1, optOath: false, optDuel: false,
+    cond: 'NONE', condRaw: '',
+    cost: 'NONE', costAmount: 1000, costRaw: '',
+    op: (cardType==='MONSTER' ? 'SPECIAL_SUMMON_DECK' : 'DRAW'), opAmount: 1, opRaw: '',
+    continuousRaw: '',
+    eventCode: 'EVENT_SUMMON_SUCCESS', eventRaw: '',
+    cloneEvent: 'NONE',
+    extraFunctions: ''
+  });
+  renderEffects();
+  render();
+}
+function removeEffect(id){
+  effects = effects.filter(e=>e.id!==id);
+  renderEffects();
+  render();
+}
+function updateEff(id, field, value){
+  const e = effects.find(x=>x.id===id);
+  if(e){ e[field]=value; render(); }
+}
+function toggleEffCategory(id, cat){
+  const e = effects.find(x=>x.id===id);
+  if(!e) return;
+  if(e.categories.includes(cat)) e.categories = e.categories.filter(c=>c!==cat);
+  else e.categories.push(cat);
+  renderEffects();
+  render();
+}
+
+function renderEffects(){
+  const container = document.getElementById('effects-container');
+  document.getElementById('effects-empty').style.display = effects.length ? 'none' : 'block';
+  document.getElementById('eff-count-sub').innerText = effects.length + (effects.length>1 ? ' effets' : ' effet');
+
+  const typeOptions = EFFECT_TYPES[cardType==='MONSTER' ? 'MONSTER' : 'ST'];
+
+  container.innerHTML = effects.map((e, effIdx) => { const n = effIdx+1; return `
+    <div class="card">
+      <h3 class="card-title">
+        <span class="chip">#${n}</span>
+        <input type="text" style="flex:1" value="${e.label}" oninput="updateEff(${e.id},'label',this.value)">
+        <button class="btn btn-sm btn-danger" type="button" onclick="removeEffect(${e.id})" title="Supprimer" aria-label="Supprimer l'effet">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </h3>
+      <div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label>Type d'effet</label>
+            <select onchange="updateEff(${e.id},'typeMain',this.value)">
+              ${typeOptions.map(([v,l])=>`<option value="${v}" ${e.typeMain===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Portée OPT</label>
+            <select onchange="updateEff(${e.id},'optScope',this.value)">
+              <option value="CARD" ${e.optScope==='CARD'?'selected':''}>Par carte nommée (id)</option>
+              <option value="COPY" ${e.optScope==='COPY'?'selected':''}>Par exemplaire sur le terrain</option>
+              <option value="NONE" ${e.optScope==='NONE'?'selected':''}>Aucune limite</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Fois par tour</label>
+            <input type="number" min="1" value="${e.optN}" oninput="updateEff(${e.id},'optN',this.value)">
+          </div>
+          <div class="field">
+            <label>Options OPT</label>
+            <div class="row" style="gap:8px">
+              <label class="check"><input type="checkbox" ${e.optOath?'checked':''} onchange="updateEff(${e.id},'optOath',this.checked)"> Serment (Oath)</label>
+              <label class="check"><input type="checkbox" ${e.optDuel?'checked':''} onchange="updateEff(${e.id},'optDuel',this.checked)"> Par duel entier</label>
+            </div>
+          </div>
+        </div>
+
+        ${['TRIGGER_O','TRIGGER_F'].includes(e.typeMain) ? `
+        <div class="grid-2">
+          <div class="field">
+            <label>Event déclencheur</label>
+            <select onchange="updateEff(${e.id},'eventCode',this.value)">
+              ${TRIGGER_EVENTS.map(([v,l])=>`<option value="${v}" ${e.eventCode===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </div>
+          ${e.eventCode==='CUSTOM' ? `<div class="field"><label>Event Lua (ex: EVENT_PHASE+PHASE_MAIN)</label><input type="text" value="${e.eventRaw||''}" placeholder="EVENT_..." oninput="updateEff(${e.id},'eventRaw',this.value)"></div>` : `
+          <div class="field">
+            <label>Se déclenche aussi sur</label>
+            <select onchange="updateEff(${e.id},'cloneEvent',this.value)">
+              ${CLONE_EVENTS.map(([v,l])=>`<option value="${v}" ${e.cloneEvent===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </div>`}
+        </div>` : ''}
+
+        <div class="field">
+          <label>Catégories (SetCategory — cumulables)</label>
+          <div class="row" style="gap:8px;max-height:190px;overflow:auto">
+            ${CATEGORIES.map(([v,l])=>`
+              <label class="check">
+                <input type="checkbox" ${e.categories.includes(v)?'checked':''} onchange="toggleEffCategory(${e.id},'${v}')"> ${l}
+              </label>`).join('')}
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label>Condition préalable</label>
+            <select onchange="updateEff(${e.id},'cond',this.value)">
+              ${CONDITIONS.map(([v,l])=>`<option value="${v}" ${e.cond===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Coût d'activation</label>
+            <select onchange="updateEff(${e.id},'cost',this.value)">
+              ${COSTS.map(([v,l])=>`<option value="${v}" ${e.cost===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </div>
+          ${e.cost==='LP' ? `<div class="field"><label>Montant LP</label><input type="number" value="${e.costAmount}" oninput="updateEff(${e.id},'costAmount',this.value)"></div>` : ''}
+          ${(e.cost==='DISCARD'||e.cost==='BANISH_GY'||e.cost==='TRIBUTE') ? `<div class="field"><label>Nombre de cartes</label><input type="number" min="1" value="${e.costAmount}" oninput="updateEff(${e.id},'costAmount',this.value)"></div>` : ''}
+        </div>
+        ${e.cost==='CUSTOM' ? `<div class="field"><label>Corps de s.costN (raw)</label><textarea placeholder="if chk==0 then return ... end\\nDuel...(...)" oninput="updateEff(${e.id},'costRaw',this.value)">${e.costRaw}</textarea></div>` : ''}
+
+        ${e.cond==='CUSTOM' ? `<div class="field"><label>Corps de s.conN (raw)</label><textarea placeholder="return Duel...(...)" oninput="updateEff(${e.id},'condRaw',this.value)">${e.condRaw}</textarea></div>` : ''}
+
+        ${(e.typeMain==='CONTINUOUS'||e.typeMain==='SINGLE'||e.typeMain==='FIELD') ? `
+        <div class="field">
+          <label>Lignes ajoutées dans initial_effect (SetCode / SetValue / SetOperation…)</label>
+          <textarea placeholder="e${n}:SetCode(EFFECT_CANNOT_BE_BATTLE_TARGET)" oninput="updateEff(${e.id},'continuousRaw',this.value)">${e.continuousRaw}</textarea>
+          <span class="hint">Un effet Continu/Passif n'a pas de target/operation — c'est ici que vous branchez le vrai comportement (immunité, restriction, octroi de stats…).</span>
+        </div>` : `
+        <div class="grid-2">
+          <div class="field">
+            <label>Action de résolution (target + operation)</label>
+            <select onchange="updateEff(${e.id},'op',this.value)">
+              ${OPERATIONS.map(([v,l])=>`<option value="${v}" ${e.op===v?'selected':''}>${l}</option>`).join('')}
+            </select>
+          </div>
+          ${['SPECIAL_SUMMON_DECK','SPECIAL_SUMMON_GY','TOHAND_DECK','TOHAND_GY','DESTROY_FIELD','BANISH_FIELD','BANISH_GY_OP','MILL','DRAW','TOKEN_SUMMON'].includes(e.op) ? `<div class="field"><label>Quantité</label><input type="number" min="1" value="${e.opAmount}" oninput="updateEff(${e.id},'opAmount',this.value)"></div>` : ''}
+          ${['DAMAGE','RECOVER','ATK_UP','ATK_DOWN'].includes(e.op) ? `<div class="field"><label>Valeur</label><input type="number" min="0" step="100" value="${e.opAmount}" oninput="updateEff(${e.id},'opAmount',this.value)"></div>` : ''}
+        </div>
+        ${e.op==='CUSTOM' ? `<div class="field"><label>Corps complet de s.tgN / s.opN (raw)</label><textarea placeholder="function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)&#10;&#9;if chk==0 then return true end&#10;end&#10;function s.op${n}(e,tp,eg,ep,ev,re,r,rp)&#10;&#9;-- ...&#10;end" oninput="updateEff(${e.id},'opRaw',this.value)">${e.opRaw}</textarea></div>` : ''}
+        `}
+
+        <div class="field">
+          <label>Fonctions Lua additionnelles (optionnel — s.val${n}, s.cfilter${n}, etc.)</label>
+          <textarea placeholder="function s.cfilter${n}(c)&#10;&#9;return c:IsCode(CARD_DARK_MAGICIAN)&#10;end&#10;function s.val${n}(e,c)&#10;&#9;return Duel.GetMatchingGroupCount(s.cfilter${n},0,LOCATION_GRAVE,LOCATION_GRAVE,nil)*500&#10;end" oninput="updateEff(${e.id},'extraFunctions',this.value)">${e.extraFunctions||''}</textarea>
+          <span class="hint">Pour tout ce que les templates ne couvrent pas (valeurs qui se recalculent, filtres personnalisés…) — ajouté tel quel dans le script, à côté des autres fonctions de cet effet.</span>
+        </div>
+
+      </div>
+    </div>
+  `; }).join('');
+}
+
+/* ================= CODE GENERATION ================= */
+function esc(s){ return (s||'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function computeTypeBitmask(){
+  if(cardType==='MONSTER'){
+    const main = document.getElementById('m-main').value;
+    let parts = ['TYPE_MONSTER'];
+    const mainMap = {NORMAL:'TYPE_NORMAL',EFFECT:'TYPE_EFFECT',RITUAL:'TYPE_EFFECT+TYPE_RITUAL',FUSION:'TYPE_EFFECT+TYPE_FUSION',SYNCHRO:'TYPE_EFFECT+TYPE_SYNCHRO',XYZ:'TYPE_EFFECT+TYPE_XYZ',LINK:'TYPE_EFFECT+TYPE_LINK'};
+    parts.push(mainMap[main]);
+    if(document.getElementById('flag-pendulum').checked) parts.push('TYPE_PENDULUM');
+    if(document.getElementById('flag-tuner').checked) parts.push('TYPE_TUNER');
+    if(document.getElementById('flag-union').checked) parts.push('TYPE_UNION');
+    if(document.getElementById('flag-spirit').checked) parts.push('TYPE_SPIRIT');
+    if(document.getElementById('flag-gemini').checked) parts.push('TYPE_GEMINI');
+    if(document.getElementById('flag-toon').checked) parts.push('TYPE_TOON');
+    return parts.join('+');
+  }
+  if(cardType==='SPELL'){
+    const sub = document.getElementById('s-sub').value;
+    const map = {NORMAL:'TYPE_SPELL',CONTINUOUS:'TYPE_SPELL+TYPE_CONTINUOUS',EQUIP:'TYPE_SPELL+TYPE_EQUIP',QUICKPLAY:'TYPE_SPELL+TYPE_QUICKPLAY',FIELD:'TYPE_SPELL+TYPE_FIELD',RITUAL:'TYPE_SPELL+TYPE_RITUAL'};
+    return map[sub];
+  }
+  const sub = document.getElementById('t-sub').value;
+  const map = {NORMAL:'TYPE_TRAP',CONTINUOUS:'TYPE_TRAP+TYPE_CONTINUOUS',COUNTER:'TYPE_TRAP+TYPE_COUNTER'};
+  return map[sub] || 'TYPE_TRAP';
+}
+
+function genCondition(e, n){
+  if(e.cond==='NONE') return '';
+  let body='';
+  if(e.cond==='CONTROL_MONSTER') body = `function s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\treturn Duel.IsExistingMatchingCard(nil,tp,LOCATION_MZONE,0,1,nil)\nend\n\n`;
+  else if(e.cond==='OPP_CONTROL_MONSTER') body = `function s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\treturn Duel.IsExistingMatchingCard(nil,1-tp,LOCATION_MZONE,0,1,nil)\nend\n\n`;
+  else if(e.cond==='GY_HAS_MONSTER') body = `function s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\treturn Duel.IsExistingMatchingCard(Card.IsMonster,tp,LOCATION_GRAVE,0,1,nil)\nend\n\n`;
+  else if(e.cond==='CONTROL_ARCHETYPE'){
+    const hex = setcodes[0] ? setcodes[0].h : '0x0';
+    body = `function s.cfilter${n}(c)\n\treturn c:IsFaceup() and c:IsSetCard(${hex})\nend\nfunction s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\treturn Duel.IsExistingMatchingCard(s.cfilter${n},tp,LOCATION_MZONE,0,1,nil)\nend\n\n`;
+  } else if(e.cond==='CUSTOM'){
+    body = `function s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\t${(e.condRaw||'return true').split('\n').join('\n\t')}\nend\n\n`;
+  }
+  return body;
+}
+
+function genCost(e, n){
+  if(e.cost==='NONE') return '';
+  if(e.cost==='LP') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.CheckLPCost(tp,${e.costAmount}) end\n\tDuel.PayLPCost(tp,${e.costAmount})\nend\n\n`;
+  if(e.cost==='DISCARD') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsDiscardable,tp,LOCATION_HAND,0,${e.costAmount},e:GetHandler()) end\n\tDuel.DiscardHand(tp,Card.IsDiscardable,${e.costAmount},${e.costAmount},REASON_COST+REASON_DISCARD,e:GetHandler())\nend\n\n`;
+  if(e.cost==='BANISH_GY') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,${e.costAmount},nil) end\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,${e.costAmount},${e.costAmount},nil)\n\tDuel.Remove(g,POS_FACEUP,REASON_COST)\nend\n\n`;
+  if(e.cost==='TRIBUTE') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsReleasable,tp,LOCATION_MZONE,0,${e.costAmount},e:GetHandler()) end\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_RELEASE)\n\tlocal g=Duel.SelectReleaseGroup(tp,Card.IsReleasable,tp,LOCATION_MZONE,0,${e.costAmount},${e.costAmount},e:GetHandler())\n\tDuel.Release(g,REASON_COST)\nend\n\n`;
+  if(e.cost==='CUSTOM') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\t${(e.costRaw||'if chk==0 then return true end').split('\n').join('\n\t')}\nend\n\n`;
+  return '';
+}
+
+function genTargetOperation(e, n){
+  if(e.op==='CUSTOM'){
+    return (e.opRaw || `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return true end\nend\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\t-- votre logique ici\nend`) + '\n\n';
+  }
+  const amt = e.opAmount || 1;
+  const DEFAULT_CAT_BY_OP = {
+    SPECIAL_SUMMON_DECK:'CATEGORY_SPECIAL_SUMMON', SPECIAL_SUMMON_GY:'CATEGORY_SPECIAL_SUMMON',
+    TOHAND_DECK:'CATEGORY_TOHAND', TOHAND_GY:'CATEGORY_TOHAND',
+    DESTROY_FIELD:'CATEGORY_DESTROY', BANISH_FIELD:'CATEGORY_REMOVE', BANISH_GY_OP:'CATEGORY_REMOVE',
+    MILL:'CATEGORY_DECKDES'
+  };
+  const cat = e.categories.length ? 'CATEGORY_'+e.categories.join('+CATEGORY_') : (DEFAULT_CAT_BY_OP[e.op] || 'CATEGORY_SPECIAL_SUMMON');
+
+  if(e.op==='SPECIAL_SUMMON_DECK') return `function s.spfilter${n}(c,e,tp)\n\treturn c:IsCanBeSpecialSummoned(e,0,tp,false,false)\nend\nfunction s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0\n\t\tand Duel.IsExistingMatchingCard(s.spfilter${n},tp,LOCATION_DECK,0,1,nil,e,tp) end\n\tDuel.SetOperationInfo(0,${cat},nil,${amt},tp,LOCATION_DECK)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tif Duel.GetLocationCount(tp,LOCATION_MZONE)<=0 then return end\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)\n\tlocal g=Duel.SelectMatchingCard(tp,s.spfilter${n},tp,LOCATION_DECK,0,${amt},${amt},nil,e,tp)\n\tif #g>0 then\n\t\tDuel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP)\n\tend\nend\n\n`;
+
+  if(e.op==='SPECIAL_SUMMON_GY') return `function s.spfilter${n}(c,e,tp)\n\treturn c:IsCanBeSpecialSummoned(e,0,tp,false,false)\nend\nfunction s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(s.spfilter${n},tp,LOCATION_GRAVE,0,1,nil,e,tp) end\n\tDuel.SetOperationInfo(0,${cat},nil,${amt},tp,LOCATION_GRAVE)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)\n\tlocal g=Duel.SelectMatchingCard(tp,s.spfilter${n},tp,LOCATION_GRAVE,0,${amt},${amt},nil,e,tp)\n\tif #g>0 then\n\t\tDuel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP)\n\tend\nend\n\n`;
+
+  if(e.op==='TOHAND_DECK') return `function s.thfilter${n}(c)\n\treturn c:IsAbleToHand()\nend\nfunction s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(s.thfilter${n},tp,LOCATION_DECK,0,1,nil) end\n\tDuel.SetOperationInfo(0,${cat},nil,${amt},tp,LOCATION_DECK)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)\n\tlocal g=Duel.SelectMatchingCard(tp,s.thfilter${n},tp,LOCATION_DECK,0,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.SendtoHand(g,nil,REASON_EFFECT)\n\t\tDuel.ConfirmCards(1-tp,g)\n\tend\nend\n\n`;
+
+  if(e.op==='TOHAND_GY') return `function s.thfilter${n}(c)\n\treturn c:IsAbleToHand()\nend\nfunction s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(s.thfilter${n},tp,LOCATION_GRAVE,0,1,nil) end\n\tDuel.SetOperationInfo(0,${cat},nil,${amt},tp,LOCATION_GRAVE)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_RTOHAND)\n\tlocal g=Duel.SelectMatchingCard(tp,s.thfilter${n},tp,LOCATION_GRAVE,0,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.SendtoHand(g,nil,REASON_EFFECT)\n\tend\nend\n\n`;
+
+  if(e.op==='DESTROY_FIELD') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsDestructible,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil) end\n\tlocal g=Duel.GetMatchingGroup(Card.IsDestructible,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,nil)\n\tDuel.SetOperationInfo(0,${cat},g,${amt},0,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_DESTROY)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsDestructible,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.Destroy(g,REASON_EFFECT)\n\tend\nend\n\n`;
+
+  if(e.op==='BANISH_FIELD') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsAbleToRemove,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil) end\n\tlocal g=Duel.GetMatchingGroup(Card.IsAbleToRemove,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,nil)\n\tDuel.SetOperationInfo(0,${cat},g,${amt},0,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsAbleToRemove,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.Remove(g,POS_FACEUP,REASON_EFFECT)\n\tend\nend\n\n`;
+
+  if(e.op==='BANISH_GY_OP') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsAbleToRemove,tp,LOCATION_GRAVE,LOCATION_GRAVE,1,nil) end\n\tDuel.SetOperationInfo(0,${cat},nil,${amt},tp,LOCATION_GRAVE)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsAbleToRemove,tp,LOCATION_GRAVE,LOCATION_GRAVE,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.Remove(g,POS_FACEUP,REASON_EFFECT)\n\tend\nend\n\n`;
+
+  if(e.op==='BOUNCE_FIELD_HAND') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsAbleToHand,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil) end\n\tlocal g=Duel.GetMatchingGroup(Card.IsAbleToHand,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,nil)\n\tDuel.SetOperationInfo(0,CATEGORY_TOHAND,g,1,0,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_RTOHAND)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsAbleToHand,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,1,nil)\n\tif #g>0 then\n\t\tDuel.SendtoHand(g,nil,REASON_EFFECT)\n\t\tDuel.ConfirmCards(1-tp,g)\n\tend\nend\n\n`;
+
+  if(e.op==='MILL') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.GetLocationCount(tp,LOCATION_GRAVE)>=0 end\n\tDuel.SetOperationInfo(0,${cat},nil,${amt},tp,LOCATION_DECK)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tlocal g=Duel.GetDecktopGroup(tp,${amt})\n\tDuel.SendtoGrave(g,REASON_EFFECT)\nend\n\n`;
+
+  if(e.op==='DRAW') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsPlayerCanDraw(tp,${amt}) end\n\tDuel.SetTargetPlayer(tp)\n\tDuel.SetTargetParam(${amt})\n\tDuel.SetOperationInfo(0,CATEGORY_DRAW,nil,0,tp,${amt})\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tlocal p,d=Duel.GetChainInfo(0,CHAININFO_TARGET_PLAYER,CHAININFO_TARGET_PARAM)\n\tDuel.Draw(p,d,REASON_EFFECT)\nend\n\n`;
+
+  if(e.op==='DAMAGE') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return true end\n\tDuel.SetOperationInfo(0,CATEGORY_DAMAGE,nil,0,1-tp,${amt})\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Damage(1-tp,${amt},REASON_EFFECT)\nend\n\n`;
+
+  if(e.op==='RECOVER') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return true end\n\tDuel.SetOperationInfo(0,CATEGORY_RECOVER,nil,0,tp,${amt})\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Recover(tp,${amt},REASON_EFFECT)\nend\n\n`;
+
+  if(e.op==='ATK_UP' || e.op==='ATK_DOWN'){
+    const sign = e.op==='ATK_UP' ? '' : '-';
+    return `function s.atkfilter${n}(c)\n\treturn c:IsFaceup()\nend\nfunction s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(s.atkfilter${n},tp,LOCATION_MZONE,LOCATION_MZONE,1,nil) end\n\tDuel.SetOperationInfo(0,CATEGORY_ATKCHANGE,nil,1,0,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tlocal g=Duel.SelectMatchingCard(tp,s.atkfilter${n},tp,LOCATION_MZONE,LOCATION_MZONE,1,1,nil)\n\tlocal tc=g:GetFirst()\n\tif tc then\n\t\tlocal te=Effect.CreateEffect(e:GetHandler())\n\t\tte:SetType(EFFECT_TYPE_SINGLE)\n\t\tte:SetCode(EFFECT_UPDATE_ATTACK)\n\t\tte:SetReset(RESET_EVENT+RESETS_STANDARD_PHASE_END)\n\t\tte:SetValue(${sign}${amt})\n\t\ttc:RegisterEffect(te)\n\tend\nend\n\n`;
+  }
+
+  if(e.op==='NEGATE_ACTIVATION') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return true end\n\tDuel.SetOperationInfo(0,CATEGORY_NEGATE+CATEGORY_DESTROY,eg,1,0,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tif not Duel.NegateActivation(ev) then return end\n\tlocal tc=Duel.GetFirstTarget()\n\tif tc and tc:IsRelateToEffect(e) then\n\t\tDuel.Destroy(tc,REASON_EFFECT)\n\tend\nend\n\n`;
+
+  if(e.op==='TOKEN_SUMMON') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0 end\n\tDuel.SetOperationInfo(0,CATEGORY_TOKEN,nil,${amt},tp,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tlocal ct=Duel.GetLocationCount(tp,LOCATION_MZONE)\n\tif ct<=0 then return end\n\tfor i=1,math.min(ct,${amt}) do\n\t\tDuel.CreateToken(tp,TOKEN_KURIBOH)\n\tend\nend\n\n`;
+
+  return '';
+}
+
+function generateScript(){
+  const cardId = document.getElementById('card-id').value;
+  const cardName = document.getElementById('card-name').value;
+  const listedRaw = document.getElementById('card-listed-id').value.trim();
+
+  let code = cardName ? `-- ${cardName}\n` : `-- Script généré — Kartouche\n`;
+  code += `local s,id=GetID()\n`;
+  code += `function s.initial_effect(c)\n`;
+
+  effects.forEach((e,idx) => {
+    const n = idx+1;
+    code += `\t-- ${e.label}\n`;
+    code += `\tlocal e${n}=Effect.CreateEffect(c)\n`;
+    if(e.categories.length) code += `\te${n}:SetCategory(CATEGORY_${e.categories.join('+CATEGORY_')})\n`;
+
+    // Type + range + code
+    if(cardType==='MONSTER'){
+      if(e.typeMain==='IGNITION'){ code += `\te${n}:SetType(EFFECT_TYPE_IGNITION)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
+      else if(e.typeMain==='QUICK_O'){ code += `\te${n}:SetType(EFFECT_TYPE_QUICK_O)\n\te${n}:SetCode(EVENT_FREE_CHAIN)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
+      else if(e.typeMain==='QUICK_F'){ code += `\te${n}:SetType(EFFECT_TYPE_QUICK_F)\n\te${n}:SetCode(EVENT_FREE_CHAIN)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
+      else if(e.typeMain==='TRIGGER_O'){
+        const ev = e.eventCode==='CUSTOM' ? (e.eventRaw||'EVENT_SUMMON_SUCCESS') : e.eventCode;
+        code += `\te${n}:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)\n\te${n}:SetCode(${ev})\n`;
+      }
+      else if(e.typeMain==='TRIGGER_F'){
+        const ev = e.eventCode==='CUSTOM' ? (e.eventRaw||'EVENT_SUMMON_SUCCESS') : e.eventCode;
+        code += `\te${n}:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F)\n\te${n}:SetCode(${ev})\n`;
+      }
+      else if(e.typeMain==='FLIP'){ code += `\te${n}:SetType(EFFECT_TYPE_FLIP+EFFECT_TYPE_TRIGGER_O)\n\te${n}:SetCode(EVENT_FLIP)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
+      else if(e.typeMain==='CONTINUOUS'){ code += `\te${n}:SetType(EFFECT_TYPE_SINGLE)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
+      else if(e.typeMain==='SINGLE'){ code += `\te${n}:SetType(EFFECT_TYPE_SINGLE)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
+      else if(e.typeMain==='FIELD'){ code += `\te${n}:SetType(EFFECT_TYPE_FIELD)\n\te${n}:SetRange(LOCATION_MZONE)\n\te${n}:SetTargetRange(1,0)\n`; }
+    } else {
+      if(e.typeMain==='ACTIVATE'){ code += `\te${n}:SetType(EFFECT_TYPE_ACTIVATE)\n\te${n}:SetCode(EVENT_FREE_CHAIN)\n`; }
+      else if(e.typeMain==='CONTINUOUS'){ code += `\te${n}:SetType(EFFECT_TYPE_SINGLE)\n`; }
+      else if(e.typeMain==='FIELD'){ code += `\te${n}:SetType(EFFECT_TYPE_FIELD)\n\te${n}:SetTargetRange(0,1)\n`; }
+      else if(e.typeMain==='EQUIP'){ code += `\te${n}:SetType(EFFECT_TYPE_EQUIP)\n`; }
+      else if(e.typeMain==='QUICK_O'){ code += `\te${n}:SetType(EFFECT_TYPE_QUICK_O)\n\te${n}:SetCode(EVENT_FREE_CHAIN)\n`; }
+    }
+
+    // OPT
+    if(e.optScope!=='NONE'){
+      let codeFlags = [];
+      if(e.optOath) codeFlags.push('EFFECT_COUNT_CODE_OATH');
+      if(e.optDuel) codeFlags.push('EFFECT_COUNT_CODE_DUEL');
+      const idArg = e.optScope==='CARD' ? ',id' : '';
+      if(codeFlags.length){
+        code += `\te${n}:SetCountLimit(${e.optN}${idArg},${codeFlags.join('+')})\n`;
+      } else {
+        code += `\te${n}:SetCountLimit(${e.optN}${idArg})\n`;
+      }
+    }
+
+    if(e.cond!=='NONE') code += `\te${n}:SetCondition(s.con${n})\n`;
+    if(e.cost!=='NONE') code += `\te${n}:SetCost(s.cost${n})\n`;
+    if(e.typeMain==='CONTINUOUS' || e.typeMain==='SINGLE' || e.typeMain==='FIELD'){
+      if(e.continuousRaw && e.continuousRaw.trim()) code += e.continuousRaw.split('\n').map(l=>'\t'+l).join('\n') + '\n';
+    } else {
+      code += `\te${n}:SetTarget(s.tg${n})\n`;
+      code += `\te${n}:SetOperation(s.op${n})\n`;
+    }
+    code += `\tc:RegisterEffect(e${n})\n`;
+    if(['TRIGGER_O','TRIGGER_F'].includes(e.typeMain) && e.cloneEvent && e.cloneEvent!=='NONE'){
+      code += `\tlocal e${n}b=e${n}:Clone()\n\te${n}b:SetCode(${e.cloneEvent})\n\tc:RegisterEffect(e${n}b)\n`;
+    }
+    code += `\n`;
+  });
+
+  code += `end\n\n`;
+
+  if(setcodes.length) code += `s.listed_series={${setcodes.map(s=>s.h).join(',')}}\n`;
+  if(listedRaw) code += `s.listed_names={${listedRaw}}\n`;
+  if(setcodes.length || listedRaw) code += `\n`;
+
+  effects.forEach((e,idx) => {
+    const n = idx+1;
+    code += genCondition(e, n);
+    code += genCost(e, n);
+    if(e.typeMain!=='CONTINUOUS' && e.typeMain!=='SINGLE' && e.typeMain!=='FIELD'){
+      code += genTargetOperation(e, n);
+    }
+    if(e.extraFunctions && e.extraFunctions.trim()){
+      code += e.extraFunctions.trim() + '\n\n';
+    }
+  });
+
+  return code.replace(/\n{3,}/g,'\n\n');
+}
+
+/* Coloration syntaxique : classes génériques .tok-* (définies dans ygo.css) */
+function highlightLua(code){
+  return esc(code)
+    .replace(/(--.*)/g, '<span class="tok-cm">$1</span>')
+    .replace(/\b(local|function|end|return|if|then|else|elseif|for|do|not|and|or|nil|true|false)\b/g, '<span class="tok-kw">$1</span>')
+    .replace(/\b(GetID|Effect|Duel|Card|CreateEffect|RegisterEffect|SetType|SetCategory|SetCode|SetProperty|SetCountLimit|SetCondition|SetCost|SetTarget|SetOperation|SetReset|SetValue|IsExistingMatchingCard|GetMatchingGroup|SelectMatchingCard|SelectReleaseGroup|GetDecktopGroup|SpecialSummon|SendtoHand|SendtoGrave|Destroy|Draw|Damage|Recover|Remove|Release|CreateToken|ConfirmCards|NegateActivation|GetFirstTarget|IsRelateToEffect|SetOperationInfo|SetTargetPlayer|SetTargetParam|GetChainInfo|GetLocationCount|CheckLPCost|PayLPCost|DiscardHand|Hint|GetHandler|IsFaceup|IsCanBeSpecialSummoned|IsAbleToHand|IsAbleToRemove|IsAbleToRemoveAsCost|IsDiscardable|IsDestructible|IsReleasable|IsMonster|IsSetCard|IsPlayerCanDraw)\b/g, '<span class="tok-fn">$1</span>')
+    .replace(/\b(EFFECT_TYPE_\w+|EVENT_\w+|LOCATION_\w+|CATEGORY_\w+|REASON_\w+|POS_\w+|EFFECT_COUNT_CODE_\w+|HINT_\w+|HINTMSG_\w+|CHAININFO_\w+|EFFECT_\w+|RESET_\w+|RESETS_\w+|TOKEN_\w+)\b/g, '<span class="tok-const">$1</span>')
+    .replace(/\b(\d+|0x[0-9a-fA-F]+)\b/g, '<span class="tok-num">$1</span>');
+}
+
+/* ================= RENDER ================= */
+function render(){
+  // conditional stat fields based on monster main type
+  if(cardType==='MONSTER'){
+    const main = document.getElementById('m-main').value;
+    document.getElementById('m-rank-field').style.display = main==='XYZ' ? 'flex' : 'none';
+    document.getElementById('m-level-field').style.display = (main==='XYZ'||main==='LINK') ? 'none' : 'flex';
+    document.getElementById('m-link-field').style.display = main==='LINK' ? 'flex' : 'none';
+    document.getElementById('m-linkmarkers-field').style.display = main==='LINK' ? 'flex' : 'none';
+    document.getElementById('m-def-field').style.display = main==='LINK' ? 'none' : 'flex';
+    document.getElementById('m-scale-field').style.display = document.getElementById('flag-pendulum').checked ? 'flex' : 'none';
+  }
+
+  // setcode pills
+  const pillWrap = document.getElementById('setcode-pills');
+  pillWrap.innerHTML = setcodes.length ? setcodes.map(s=>`<span class="chip">${s.n} <span style="opacity:.6">${s.h}</span> <span onclick="removeSetcode('${s.h}')" style="cursor:pointer;margin-left:4px">✕</span></span>`).join('') : '<span class="hint">—</span>';
+  document.getElementById('setcode-hint').innerText = setcodes.length ? setcodes.length+' archétype(s)' : 'Aucun';
+
+  // filename
+  const cardId = document.getElementById('card-id').value;
+  document.getElementById('code-file-label').innerText = cardId ? `c${cardId}.lua` : 'c.lua';
+
+  // type bitmask
+  const bm = computeTypeBitmask();
+  document.getElementById('type-bitmask').innerText = bm;
+  document.getElementById('type-bitmask-sub').innerText = bm.split('+')[0];
+
+  const code = generateScript();
+  document.getElementById('lua-output').innerHTML = highlightLua(code);
+  window.generatedRawLua = code;
+}
+
+/* ================= ACTIONS (utilitaires YGO.*) ================= */
+function copyCode(){
+  if(!window.generatedRawLua) return;
+  YGO.copy(window.generatedRawLua, 'Script Lua copié !');
+}
+function exportLuaFile(){
+  const cardId = document.getElementById('card-id').value;
+  const filename = cardId ? `c${cardId}.lua` : 'script.lua';
+  YGO.download(window.generatedRawLua || '', filename, 'text/plain;charset=utf-8');
+  YGO.toast(filename + ' téléchargé !');
+}
+
+function buildReference(){
+  const grid = document.getElementById('ref-grid');
+  grid.innerHTML = REF_SECTIONS.map((sec, i)=>`
+    <div class="card ref-card" style="margin-bottom:0">
+      <h3 class="card-title">${sec.title}</h3>
+      <ul class="result-list">
+        ${sec.rows.map(([k,v])=>`<li data-k="${k.toLowerCase()}"><span>${k}</span><span class="muted">${v}</span></li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+}
+function filterRef(q){
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('.ref-card').forEach(card=>{
+    let anyVisible = false;
+    card.querySelectorAll('li').forEach(row=>{
+      const match = !q || row.dataset.k.includes(q) || row.innerText.toLowerCase().includes(q);
+      row.style.display = match ? 'flex' : 'none';
+      if(match) anyVisible = true;
+    });
+    card.style.display = anyVisible ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>
