@@ -79,13 +79,15 @@
             <div class="field">
                 <label for="existingFolder">Dossier « script » existant <small>(optionnel)</small></label>
                 <input type="file" id="existingFolder" webkitdirectory directory multiple>
-                <span class="hint" id="existingHint">Les cartes qui ont déjà un script sont ignorées.</span>
+                <span class="hint" id="existingHint">Utilisé seulement avec « Ignorer les cartes qui ont déjà un script ».</span>
             </div>
         </div>
 
         <div class="opts">
             <label class="opt"><input type="checkbox" id="optAddCode" checked>
                 <span>Injecter <code>EFFECT_ADD_CODE</code><small>La carte custom est considérée comme la carte officielle. Décoché : copie du script tel quel.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optSkipExisting" checked>
+                <span>Ignorer les cartes qui ont déjà un script<small>Nécessite le dossier « script » existant.</small></span></label>
             <label class="opt"><input type="checkbox" id="optForce">
                 <span>Forcer l'écrasement<small>Traite aussi les cartes taguées et celles qui ont déjà un script.</small></span></label>
             <label class="opt"><input type="checkbox" id="optDry">
@@ -258,6 +260,7 @@ btn.addEventListener('click', async () => {
     const existingFiles = [...$('existingFolder').files];
     const tags = $('customTag').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
     const addCode = $('optAddCode').checked;
+    const skipExisting = $('optSkipExisting').checked;
     const force = $('optForce').checked;
     const dry = $('optDry').checked;
 
@@ -298,7 +301,7 @@ btn.addEventListener('click', async () => {
             if (tagged && !force) { skipped++; continue; }
 
             // Script déjà présent
-            if (hasScript.has(cid) && !force) {
+            if (skipExisting && hasScript.has(cid) && !force) {
                 existing++;
                 out.log(`${cid} ${name} : script existant (ignoré)`);
                 continue;
