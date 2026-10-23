@@ -178,17 +178,24 @@ async function loadDb() {
 loadDb();
 YGO.initSql().then((s) => { SQL = s; }).catch((e) => out.log('sql.js indisponible : ' + e.message, 'err'));
 
-/** Cherche une carte par nom FR ou EN -> {en, fr, dEn, dFr} ou null. */
+/** Cherche une carte par nom FR ou EN -> {en, fr, dEn, dFr} ou null.
+ *  🆕 Fusionne YGOPRODeck + Yugipedia : si YGOPRODeck n'a pas de FR (nom ou effet),
+ *  on complète avec Yugipedia au lieu de s'arrêter là. */
 function lookup(name, yugi = true) {
     const k = nk(name);
     if (!k) return null;
+    let r = null;
     const id = DB.byFr.get(k) || DB.byEn.get(k);
-    if (id) return fromCard(DB.cards.get(id));
+    if (id) r = fromCard(DB.cards.get(id));
     if (yugi) {
         const y = DB.yugi.get(k) || DB.yugi.get(DB.yugiFr.get(k));
-        if (y) return { en: y.en || '', fr: y.fr || '', dEn: y.lore || '', dFr: y.fr_lore || '' };
+        if (y) {
+            const yc = { en: y.en || '', fr: y.fr || '', dEn: y.lore || '', dFr: y.fr_lore || '' };
+            if (!r) r = yc;
+            else for (const f of ['en', 'fr', 'dEn', 'dFr']) if (!r[f]) r[f] = yc[f];
+        }
     }
-    return null;
+    return r;
 }
 
 // ============================================================
@@ -332,12 +339,18 @@ async function runCdb() {
             const tilde = (d.match(/~([^~]+)~/) || [])[1];
             if (!m && tilde) m = lookup(tilde.trim(), yugi);
 
-            if (!m || !m.fr) { missing.push(tilde ? tilde.trim() : name); }
-            else if (keep && isModified(d, tag, m.dFr, m.dEn)) {
-                upd.push([modName ? m.fr : name, tagDesc(d, tag), id]);
+            if (!m) {
+                // Carte inconnue des bases : on ne touche à rien
+                missing.push(tilde ? tilde.trim() : name);
+            } else if (keep && isModified(d, tag, m.dFr, m.dEn)) {
+                // 🆕 Testé AVANT le « pas de FR » : une custom trouvée sans nom/effet FR est bien taguée
+                upd.push([modName && m.fr ? m.fr : name, tagDesc(d, tag), id]);
                 modified++;
+            } else if (!m.fr && !m.dFr) {
+                // Trouvée mais rien de FR à appliquer
+                missing.push(tilde ? tilde.trim() : name);
             } else {
-                upd.push([m.fr, m.dFr || d, id]);
+                upd.push([m.fr || name, m.dFr || d, id]);
                 done++;
             }
             if (i % 200 === 0) { prog.set((i / rows.length) * 90, `Analyse ${i + 1} / ${rows.length}…`); await tick(); }
