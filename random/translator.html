@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traducteur · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
+<style>
+    .opts { display: grid; gap: 10px; margin: 6px 0 16px; }
+    .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+    .opt input { margin-top: 4px; }
+    .opt small { display: block; opacity: .7; }
+    .tabs { margin-bottom: 18px; }
+    #out { min-height: 220px; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-language"></i></div>
+        <div>
+            <h1>Traducteur</h1>
+            <p>Traduis une carte, une decklist ou un .cdb entier (FR ↔ EN) à partir des bases locales YGOPRODeck et Yugipedia. Pour un .cdb custom, les effets modifiés peuvent être préservés et taggés.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
+
+        <div class="tabs" id="modes">
+            <button class="tab active" type="button" data-mode="card"><i class="fa-solid fa-id-card"></i> Carte</button>
+            <button class="tab" type="button" data-mode="deck"><i class="fa-solid fa-layer-group"></i> Decklist</button>
+            <button class="tab" type="button" data-mode="cdb"><i class="fa-solid fa-database"></i> .cdb</button>
+        </div>
+
+        <div class="field" id="dstField">
+            <label for="dst">Traduire vers</label>
+            <select id="dst">
+                <option value="fr">Français</option>
+                <option value="en">Anglais</option>
+            </select>
+        </div>
+
+        <!-- CARTE -->
+        <div id="p-card">
+            <div class="field">
+                <label for="cardIn">Nom de la carte (FR ou EN)</label>
+                <input type="text" id="cardIn" autocomplete="off" placeholder="ex : Dragon Blanc aux Yeux Bleus">
+                <span class="hint">Affiche le nom et l'effet dans la langue choisie.</span>
+            </div>
+        </div>
+
+        <!-- DECKLIST -->
+        <div id="p-deck" class="hidden">
+            <div class="field">
+                <label for="deckIn">Decklist</label>
+                <textarea id="deckIn" placeholder="3 Dark Magician&#10;2x Pot of Greed&#10;Main Deck / Extra Deck / Side Deck acceptés"></textarea>
+                <span class="hint">Formats : « 3 Nom », « 3x Nom », « Nom x3 », ou un .ydk (codes). Les sections sont conservées.</span>
+            </div>
+            <div class="field">
+                <label for="deckFile">… ou charger un fichier <small>(.ydk / .txt)</small></label>
+                <input type="file" id="deckFile" accept=".ydk,.txt">
+            </div>
+        </div>
+
+        <!-- CDB -->
+        <div id="p-cdb" class="hidden">
+            <div class="field">
+                <label for="cdbFile">Fichier .cdb à traduire *</label>
+                <input type="file" id="cdbFile" accept=".cdb">
+                <span class="hint" id="cdbInfo"></span>
+            </div>
+            <div class="opts">
+                <label class="opt"><input type="checkbox" id="optKeep" checked>
+                    <span>Préserver les effets modifiés<small>Si la description diffère de l'officielle (FR et EN), elle est conservée et taguée au lieu d'être écrasée.</small></span></label>
+                <label class="opt"><input type="checkbox" id="optModName">
+                    <span>Traduire aussi le nom des cartes modifiées<small>Décoché : nom et effet des cartes modifiées restent intacts.</small></span></label>
+                <label class="opt"><input type="checkbox" id="optYugi" checked>
+                    <span>Utiliser le cache Yugipedia<small>Pour les cartes absentes de YGOPRODeck (anime, TCG récent…).</small></span></label>
+            </div>
+            <div class="field">
+                <label for="tag">Tag ajouté aux cartes modifiées</label>
+                <input type="text" id="tag" value="[CUSTOM]" autocomplete="off">
+                <span class="hint">Vide = aucun tag. Ignoré dans la comparaison des descriptions.</span>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> <span id="startLbl">Traduire</span></button>
+            <button id="copyBtn" class="btn hidden" type="button"><i class="fa-solid fa-copy"></i> Copier</button>
+            <button id="dlBtn" class="btn hidden" type="button"><i class="fa-solid fa-download"></i> <span id="dlLbl">Télécharger</span></button>
+            <button id="missBtn" class="btn hidden" type="button"><i class="fa-solid fa-triangle-exclamation"></i> Non traduites (.txt)</button>
+        </div>
+
+        <div class="progress hidden" id="prog">
+            <div class="progress-meta"><span class="progress-text"></span><span class="progress-percent">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+        </div>
+    </div>
+
+    <div class="card" id="outCard">
+        <h2 class="card-title"><i class="fa-solid fa-file-lines"></i> Résultat</h2>
+        <textarea id="out" readonly placeholder="Le résultat s'affiche ici."></textarea>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script>
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const prog = YGO.progress($('prog'));
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const nk = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+// ============================================================
+// BASES LOCALES (mêmes fichiers que l'ancien site)
+// ============================================================
+const DB = { ready: false, cards: new Map(), byFr: new Map(), byEn: new Map(), yugi: new Map(), yugiFr: new Map() };
+let SQL = null;
+
+const fromCard = (c) => ({ en: c.en || '', fr: c.fr || '', dEn: c.desc_en || '', dFr: c.desc_fr || '' });
+
+async function loadDb() {
+    try {
+        const r = await fetch('data/cards-db.json');
+        if (r.ok) {
+            for (const [id, c] of Object.entries(await r.json())) {
+                DB.cards.set(String(id), c);
+                if (c.fr && !DB.byFr.has(nk(c.fr))) DB.byFr.set(nk(c.fr), String(id));
+                if (c.en && !DB.byEn.has(nk(c.en))) DB.byEn.set(nk(c.en), String(id));
+            }
+        }
+    } catch (e) { out.log('cards-db.json indisponible : ' + e.message, 'warn'); }
+    try {
+        const r = await fetch('data/yugipedia-db.json');
+        if (r.ok) {
+            for (const [k, c] of Object.entries(await r.json())) {
+                if (!c.en && !c.fr) continue;
+                DB.yugi.set(k, c);
+                if (c.fr) DB.yugiFr.set(nk(c.fr), k);
+            }
+        }
+    } catch (e) { out.log('yugipedia-db.json indisponible : ' + e.message, 'warn'); }
+    DB.ready = DB.cards.size > 0 || DB.yugi.size > 0;
+    out.log(DB.ready
+        ? `Bases prêtes : ${DB.cards.size.toLocaleString('fr-FR')} cartes YGOPRODeck, ${DB.yugi.size.toLocaleString('fr-FR')} Yugipedia.`
+        : 'Aucune base chargée (dossier data/ introuvable ?).', DB.ready ? 'ok' : 'err');
+}
+loadDb();
+YGO.initSql().then((s) => { SQL = s; }).catch((e) => out.log('sql.js indisponible : ' + e.message, 'err'));
+
+/** Cherche une carte par nom FR ou EN -> {en, fr, dEn, dFr} ou null. */
+function lookup(name, yugi = true) {
+    const k = nk(name);
+    if (!k) return null;
+    const id = DB.byFr.get(k) || DB.byEn.get(k);
+    if (id) return fromCard(DB.cards.get(id));
+    if (yugi) {
+        const y = DB.yugi.get(k) || DB.yugi.get(DB.yugiFr.get(k));
+        if (y) return { en: y.en || '', fr: y.fr || '', dEn: y.lore || '', dFr: y.fr_lore || '' };
+    }
+    return null;
+}
+
+// ============================================================
+// ÉTAT / ONGLETS
+// ============================================================
+let mode = 'card';
+let result = null;   // { text } ou { bytes, name }
+let missing = [];
+const LABELS = { card: 'Traduire la carte', deck: 'Traduire la decklist', cdb: 'Traduire le .cdb' };
+
+function showResult(r) {
+    result = r;
+    $('copyBtn').classList.toggle('hidden', !r || !r.text);
+    $('dlBtn').classList.toggle('hidden', !r);
+    $('dlLbl').textContent = r && r.bytes ? '.cdb' : '.txt';
+    $('missBtn').classList.toggle('hidden', !missing.length);
+}
+
+$('modes').addEventListener('click', (e) => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    mode = t.dataset.mode;
+    document.querySelectorAll('#modes .tab').forEach((x) => x.classList.toggle('active', x === t));
+    ['card', 'deck', 'cdb'].forEach((m) => $('p-' + m).classList.toggle('hidden', m !== mode));
+    $('dstField').classList.toggle('hidden', mode === 'cdb');
+    $('outCard').classList.toggle('hidden', mode === 'cdb');
+    $('startLbl').textContent = LABELS[mode];
+    missing = []; showResult(null);
+});
+
+$('deckFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if (f) $('deckIn').value = await f.text();
+});
+YGO.bindFileCount($('cdbFile'), $('cdbInfo'));
+
+// ============================================================
+// CARTE
+// ============================================================
+function runCard() {
+    const q = $('cardIn').value.trim();
+    if (!q) return YGO.toast('Saisis un nom de carte.', 'err');
+    const dst = $('dst').value;
+    const m = lookup(q);
+    if (!m) {
+        out.log(`Introuvable : ${q}`, 'warn');
+        $('out').value = '';
+        return YGO.toast('Carte introuvable.', 'err');
+    }
+    if (!m[dst]) out.log(`Pas de version ${dst.toUpperCase()} pour « ${q} ».`, 'warn');
+    const text = `FR : ${m.fr || '—'}\nEN : ${m.en || '—'}\n\n${(dst === 'fr' ? m.dFr : m.dEn) || '(pas de description dans cette langue)'}`;
+    $('out').value = text;
+    out.log(`${q}  ->  ${m[dst] || '—'}`, 'ok');
+    showResult({ text, name: 'carte.txt' });
+}
+
+// ============================================================
+// DECKLIST (texte ou .ydk)
+// ============================================================
+function parseDeck(text) {
+    const items = [];
+    for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line) continue;
+        const sec = line.match(/^[#!]?\s*(main|extra|side)(?:\s*deck)?\s*:?$/i);
+        if (sec) { items.push({ section: sec[1][0].toUpperCase() + sec[1].slice(1).toLowerCase() + ' Deck' }); continue; }
+        if (/^[#!]/.test(line)) continue;                                   // commentaires .ydk
+        if (/^\d{5,}$/.test(line)) { items.push({ qty: 1, id: line }); continue; } // code .ydk
+        if (lookup(line)) { items.push({ qty: 1, name: line }); continue; }  // ex : « 7 Colored Fish »
+        let m = line.match(/^(\d{1,2})\s*[x×]?\s+(.+)$/i);
+        if (m) { items.push({ qty: +m[1], name: m[2].trim() }); continue; }
+        m = line.match(/^(.+?)\s+[x×]\s*(\d{1,2})$/i);
+        if (m) { items.push({ qty: +m[2], name: m[1].trim() }); continue; }
+        items.push({ qty: 1, name: line });
+    }
+    return items;
+}
+
+function runDeck() {
+    const items = parseDeck($('deckIn').value);
+    if (!items.some((i) => !i.section)) return YGO.toast('Decklist vide.', 'err');
+    const dst = $('dst').value;
+    const lines = [];
+    let ok = 0;
+    for (const it of items) {
+        if (it.section) { lines.push(it.section + ':'); continue; }
+        let m = null, label = it.name;
+        if (it.id) {
+            const c = DB.cards.get(it.id);
+            if (c) { m = fromCard(c); label = c.en || it.id; } else label = it.id;
+        } else m = lookup(it.name);
+        const tr = m && m[dst];
+        if (tr) ok++;
+        else { missing.push(label); out.log(`Non traduit : ${label}`, 'warn'); }
+        lines.push(`${it.qty} ${tr || label}`);
+    }
+    const text = lines.join('\n');
+    $('out').value = text;
+    out.log(`${ok} ligne(s) traduite(s), ${missing.length} non traduite(s).`, missing.length ? 'warn' : 'ok');
+    showResult({ text, name: `decklist_${dst}.txt` });
+}
+
+// ============================================================
+// .CDB
+// ============================================================
+// Clé de comparaison tolérante : ignore casse, accents, ponctuation, ~nom EN~, [tags] et le tag configuré.
+function descKey(s, tag) {
+    let t = String(s || '').toLowerCase();
+    if (tag) t = t.split(tag.toLowerCase()).join('');
+    return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/~[^~]*~/g, '').replace(/\[[^\]]*\]/g, '').replace(/[^a-z0-9]/g, '');
+}
+// Modifiée = la desc locale diffère de TOUTES les descs officielles connues (FR et EN)
+function isModified(local, tag, ...officials) {
+    const valid = officials.filter(Boolean);
+    return valid.length > 0 && String(local || '').trim() !== '' && valid.every((d) => descKey(local, tag) !== descKey(d, tag));
+}
+const tagDesc = (d, tag) => !tag || d.toLowerCase().includes(tag.toLowerCase()) ? d : (d ? `${tag} ${d}` : tag);
+
+async function runCdb() {
+    const f = $('cdbFile').files[0];
+    if (!f) return YGO.toast('Sélectionne un .cdb.', 'err');
+    if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
+    const keep = $('optKeep').checked, modName = keep && $('optModName').checked, yugi = $('optYugi').checked;
+    const tag = keep ? $('tag').value.trim() : '';
+
+    const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+    try {
+        let res;
+        try { res = db.exec('SELECT id, name, "desc" FROM texts'); }
+        catch (e) { throw new Error('Pas un .cdb valide (table texts manquante).'); }
+        const rows = res.length ? res[0].values : [];
+        out.log(`📂 ${f.name} : ${rows.length} cartes.`);
+        prog.show(); prog.set(0, 'Analyse…');
+
+        const upd = [];
+        let done = 0, modified = 0;
+        for (let i = 0; i < rows.length; i++) {
+            const [id, name, desc] = rows[i];
+            const d = desc || '';
+            let m = lookup(name, yugi);
+            const tilde = (d.match(/~([^~]+)~/) || [])[1];
+            if (!m && tilde) m = lookup(tilde.trim(), yugi);
+
+            if (!m || !m.fr) { missing.push(tilde ? tilde.trim() : name); }
+            else if (keep && isModified(d, tag, m.dFr, m.dEn)) {
+                upd.push([modName ? m.fr : name, tagDesc(d, tag), id]);
+                modified++;
+            } else {
+                upd.push([m.fr, m.dFr || d, id]);
+                done++;
+            }
+            if (i % 200 === 0) { prog.set((i / rows.length) * 90, `Analyse ${i + 1} / ${rows.length}…`); await tick(); }
+        }
+
+        const stmt = db.prepare('UPDATE texts SET name = ?, "desc" = ? WHERE id = ?');
+        db.run('BEGIN TRANSACTION');
+        try { for (const u of upd) stmt.run(u); db.run('COMMIT'); }
+        catch (e) { db.run('ROLLBACK'); throw e; }
+        finally { stmt.free(); }
+
+        prog.set(100, 'Terminé !');
+        out.log(`✅ ${done} traduite(s)` + (modified ? `, ${modified} custom conservée(s)${tag ? ' (tag ' + tag + ')' : ''}` : '') + `, ${missing.length} sans trad. FR.`, 'ok');
+        missing.slice(0, 250).forEach((n) => out.log('Non traduit : ' + n, 'warn'));
+        if (missing.length > 250) out.log(`… et ${missing.length - 250} autres (voir le .txt).`, 'warn');
+        showResult({ bytes: db.export(), name: f.name.replace(/\.cdb$/i, '') + '_fr.cdb' });
+        YGO.toast('Traduction terminée !');
+    } finally { db.close(); }
+}
+
+// ============================================================
+// LANCEMENT / EXPORTS
+// ============================================================
+$('startBtn').addEventListener('click', async () => {
+    if (!DB.ready) return YGO.toast('Bases locales non chargées.', 'err');
+    const btn = $('startBtn');
+    btn.disabled = true; missing = []; showResult(null);
+    try {
+        if (mode === 'card') runCard();
+        else if (mode === 'deck') runDeck();
+        else await runCdb();
+    } catch (err) {
+        out.log('❌ ' + err.message, 'err');
+        YGO.toast('Une erreur est survenue.', 'err');
+    } finally { btn.disabled = false; }
+});
+
+$('copyBtn').addEventListener('click', () => result && result.text && YGO.copy(result.text));
+$('dlBtn').addEventListener('click', () => {
+    if (!result) return;
+    YGO.download(result.bytes || result.text, result.name, result.bytes ? 'application/octet-stream' : 'text/plain;charset=utf-8');
+});
+$('missBtn').addEventListener('click', () => YGO.download(missing.join('\n'), 'non_traduites.txt', 'text/plain;charset=utf-8'));
+
+out.log('Choisis un mode (carte, decklist ou .cdb), puis lance la traduction.');
+</script>
+</body>
+</html>
