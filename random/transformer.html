@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transformeur JSON · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="assets/ygo.css">
+<script src="assets/ygo.js"></script>
+<style>
+    .tabs { margin-bottom: 18px; }
+    #out { min-height: 260px; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-file-code"></i></div>
+        <div>
+            <h1>Transformeur JSON</h1>
+            <p>Transforme une carte, une decklist ou un .cdb en JSON ygopro.org (un fichier par carte, en ZIP) ou en CSV pour le Card Maker Manager. Les Pendules, Liens et Magies/Pièges d'un .cdb sont décodés depuis le fichier.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
+
+        <div class="tabs" id="modes">
+            <button class="tab active" type="button" data-mode="card"><i class="fa-solid fa-id-card"></i> Carte</button>
+            <button class="tab" type="button" data-mode="deck"><i class="fa-solid fa-layer-group"></i> Decklist</button>
+            <button class="tab" type="button" data-mode="cdb"><i class="fa-solid fa-database"></i> .cdb</button>
+        </div>
+
+        <div class="field" id="langField">
+            <label for="lang">Langue du nom et de l'effet</label>
+            <select id="lang">
+                <option value="fr">Français (repli sur l'anglais)</option>
+                <option value="en">Anglais</option>
+            </select>
+        </div>
+
+        <div id="p-card">
+            <div class="field">
+                <label for="cardIn">Nom (FR ou EN) ou code de la carte</label>
+                <input type="text" id="cardIn" autocomplete="off" placeholder="ex : Magicien Sombre ou 46986414">
+            </div>
+        </div>
+
+        <div id="p-deck" class="hidden">
+            <div class="field">
+                <label for="deckIn">Decklist</label>
+                <textarea id="deckIn" placeholder="3 Dark Magician&#10;2x Pot of Greed&#10;ou les codes d'un .ydk"></textarea>
+                <span class="hint">Formats : « 3 Nom », « 3x Nom », « Nom x3 » ou codes .ydk. Chaque carte n'est générée qu'une fois.</span>
+            </div>
+            <div class="field">
+                <label for="deckFile">… ou charger un fichier <small>(.ydk / .txt)</small></label>
+                <input type="file" id="deckFile" accept=".ydk,.txt">
+            </div>
+        </div>
+
+        <div id="p-cdb" class="hidden">
+            <div class="field">
+                <label for="cdbFile">Fichier .cdb *</label>
+                <input type="file" id="cdbFile" accept=".cdb">
+                <span class="hint" id="cdbInfo"></span>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> <span id="startLbl">Générer le JSON</span></button>
+            <button id="copyBtn" class="btn hidden" type="button"><i class="fa-solid fa-copy"></i> Copier le JSON</button>
+            <button id="zipBtn" class="btn hidden" type="button"><i class="fa-solid fa-file-zipper"></i> ZIP des JSON</button>
+            <button id="csvBtn" class="btn hidden" type="button"><i class="fa-solid fa-file-csv"></i> CSV Manager</button>
+            <button id="missBtn" class="btn hidden" type="button"><i class="fa-solid fa-triangle-exclamation"></i> Non trouvées (.txt)</button>
+        </div>
+
+        <div class="progress hidden" id="prog">
+            <div class="progress-meta"><span class="progress-text"></span><span class="progress-percent">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-file-lines"></i> Aperçu</h2>
+        <textarea id="out" readonly placeholder="Le JSON d'une carte unique s'affiche ici."></textarea>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const prog = YGO.progress($('prog'));
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const nk = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+// ============================================================
+// BASES LOCALES
+// ============================================================
+const DB = { ready: false, cards: new Map(), byFr: new Map(), byEn: new Map(), yugi: new Map(), yugiFr: new Map(), crop: new Map() };
+let SQL = null;
+
+// "…/Blue-EyesWhiteDragon-LOB-EN-UR-1E.png" -> clés de nom possibles (ignore anime/manga)
+function scanKeys(url) {
+    if (!url) return [];
+    let f = String(url).split('/').pop().split('?')[0];
+    try { f = decodeURIComponent(f); } catch (e) {}
+    f = f.replace(/\.[a-z0-9]+$/i, '');
+    if (/-(?:Anime|Manga|Game|Artwork)/i.test(f)) return [];
+    const o = [];
+    for (let i = f.length - 1; i > 0; i--) if (f[i] === '-') { const k = nk(f.slice(0, i)); if (k && !o.includes(k)) o.push(k); }
+    return o;
+}
+
+async function loadDb() {
+    try {
+        const r = await fetch('data/cards-db.json');
+        if (r.ok) for (const [rawId, c] of Object.entries(await r.json())) {
+            const id = String(rawId);
+            DB.cards.set(id, c);
+            if (c.fr && !DB.byFr.has(nk(c.fr))) DB.byFr.set(nk(c.fr), id);
+            if (c.en && !DB.byEn.has(nk(c.en))) DB.byEn.set(nk(c.en), id);
+            if (c.img_cropped) { DB.crop.set(nk(c.en), c.img_cropped); if (c.fr) DB.crop.set(nk(c.fr), c.img_cropped); }
+        }
+    } catch (e) { out.log('cards-db.json indisponible : ' + e.message, 'warn'); }
+    try {
+        const r = await fetch('data/yugipedia-db.json');
+        if (r.ok) for (const [k, c] of Object.entries(await r.json())) {
+            if (!c.en && !c.fr) continue;
+            DB.yugi.set(k, c);
+            if (c.fr) DB.yugiFr.set(nk(c.fr), k);
+        }
+    } catch (e) { out.log('yugipedia-db.json indisponible : ' + e.message, 'warn'); }
+    DB.ready = DB.cards.size > 0 || DB.yugi.size > 0;
+    out.log(DB.ready ? `Bases prêtes : ${DB.cards.size.toLocaleString('fr-FR')} cartes YGOPRODeck, ${DB.yugi.size.toLocaleString('fr-FR')} Yugipedia.` : 'Aucune base chargée (dossier data/ introuvable ?).', DB.ready ? 'ok' : 'err');
+}
+loadDb();
+YGO.initSql().then((s) => { SQL = s; }).catch((e) => out.log('sql.js indisponible : ' + e.message, 'err'));
+
+// Carte YGOPRODeck -> objet commun
+function fromDb(id, lang) {
+    const c = DB.cards.get(id);
+    const en = lang === 'en';
+    return { id: +id, name: (en ? c.en : c.fr || c.en) || c.en, desc: (en ? c.desc_en : c.desc_fr || c.desc_en) || '',
+        type: c.type, frameType: c.frameType, atk: c.atk, def: c.def, level: c.level, race: c.race, attribute: c.attribute,
+        linkval: c.linkval, linkmarkers: c.linkmarkers, scale: c.scale, art: c.img_cropped || '' };
+}
+// Carte Yugipedia -> objet commun (illustration YGOPRODeck préférée au scan)
+function fromYugi(key, y, lang) {
+    const en = lang === 'en';
+    const t = y.card_type === 'Spell' ? 'Spell Card' : y.card_type === 'Trap' ? 'Trap Card' : 'Effect Monster';
+    const raw = y.img || y.img_en || '';
+    let art = DB.crop.get(nk(y.en)) || DB.crop.get(key);
+    for (const k of art ? [] : scanKeys(raw)) if (DB.crop.has(k)) { art = DB.crop.get(k); break; }
+    return { id: '', name: (en ? y.en : y.fr || y.en) || y.en, desc: (en ? y.lore : y.fr_lore || y.lore) || '',
+        type: t, frameType: t === 'Spell Card' ? 'spell' : t === 'Trap Card' ? 'trap' : /fusion/i.test(y.type || '') ? 'fusion' : 'effect',
+        atk: y.atk, def: y.def, level: y.level, race: y.race, attribute: y.attribute, art: art || raw };
+}
+// Recherche par nom FR/EN ou code -> objet commun | null
+function find(q, lang) {
+    q = String(q).trim();
+    if (/^\d{4,}$/.test(q) && DB.cards.has(q)) return fromDb(q, lang);
+    const k = nk(q);
+    const id = DB.byFr.get(k) || DB.byEn.get(k);
+    if (id) return fromDb(id, lang);
+    const yk = DB.yugi.has(k) ? k : DB.yugiFr.get(k);
+    return yk ? fromYugi(yk, DB.yugi.get(yk), lang) : null;
+}
+
+// ============================================================
+// PENDULE
+// ============================================================
+const PEND_HEAD = /\[\s*(?:Pendulum Effect|Effet Pendule|Effet de Pendule)\s*\]/i;
+const MON_HEAD = /\[\s*(?:Monster Effect|Flavor Text|Effet de Monstre|Effet Monstre|Texte d['’]ambiance)\s*\]/i;
+const SCALE_RE = /(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*(\d+)/i;
+const MAT_SEP = '\n'; // séparateur matériaux / effet (remplace par ' ' si l'éditeur l'affiche mal)
+
+const cleanPend = (s) => String(s || '')
+    .replace(/^[-=_\s]{5,}$/gm, ' ').replace(/(?:\s*◆\s*){3}/g, ' ')
+    .replace(/(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*\d+/gi, '')
+    .replace(/\[\s*(?:VAACT|VAN|VNM|VSYN|VXYZ|VLINK|VRIT)\s*\]/gi, '')
+    .replace(new RegExp(PEND_HEAD.source + '\\s*:?', 'gi'), '').replace(new RegExp(MON_HEAD.source + '\\s*:?', 'gi'), '')
+    .replace(/^[\s|:-]+/, '').replace(/\s+/g, ' ').trim();
+
+function splitPend(desc) {
+    if (typeof desc !== 'string') return null;
+    const pm = desc.match(PEND_HEAD), sm = desc.match(SCALE_RE);
+    let pend = '', mon = '', mat = '';
+    if (pm) {
+        mat = cleanPend(desc.slice(0, pm.index));
+        const mm = desc.match(MON_HEAD), st = pm.index + pm[0].length;
+        if (mm && mm.index > pm.index) { pend = desc.slice(st, mm.index); mon = desc.slice(mm.index + mm[0].length); }
+        else pend = desc.slice(st);
+    } else {
+        const ps = desc.split(/\r?\n\s*\r?\n/).filter((x) => x.trim());
+        if (ps.length >= 2) { pend = ps[0]; mon = ps.slice(1).join('\n\n'); } else mon = desc;
+    }
+    return { pend: cleanPend(pend), mon: cleanPend(mon), mat, scale: sm ? +sm[1] : null };
+}
+
+function normPend(c) {
+    if (!c || c.type === 'Spell Card' || c.type === 'Trap Card') return c;
+    const frame = c.frameType || '';
+    const lv = typeof c.level === 'number' ? c.level : parseInt(c.level, 10);
+    const hi = Number.isFinite(lv) && lv > 255;
+    if (!(frame.includes('pendulum') || String(c.type || '').includes('Pendulum') || PEND_HEAD.test(String(c.desc || '')) || hi)) return c;
+    const sp = splitPend(c.desc);
+    let { pend_desc: pend, monster_desc: mon, scale, scaleRight: sr, level } = c, mat = c.materials_desc || '';
+    if (sp) { mat = mat || sp.mat; pend = pend || sp.pend; mon = mon || sp.mon; if (scale == null && sp.scale !== null) scale = sp.scale; }
+    if (hi) { if (scale == null) scale = (lv >> 24) & 0xff; if (sr == null) sr = (lv >> 16) & 0xff; level = lv & 0xff; }
+    return { ...c, frameType: (frame || 'effect').split('_')[0] + '_pendulum', pend_desc: cleanPend(pend), monster_desc: cleanPend(mon),
+        materials_desc: mat, scale: scale ?? 0, scaleRight: sr ?? scale ?? 0, level, desc: cleanPend(mon || c.desc) };
+}
+
+// ============================================================
+// JSON ygopro.org
+// ============================================================
+const RACE_FR = { Aqua: 'Aqua', Beast: 'Bête', 'Beast-Warrior': 'Bête-Guerrier', 'Creator God': 'Dieu Créateur', Cyberse: 'Cyberse', Dinosaur: 'Dinosaure', 'Divine-Beast': 'Bête Divine', Dragon: 'Dragon', Fairy: 'Fée', Fiend: 'Démon', Fish: 'Poisson', Illusion: 'Illusion', Insect: 'Insecte', Machine: 'Machine', Plant: 'Plante', Psychic: 'Psychique', Pyro: 'Pyro', Reptile: 'Reptile', Rock: 'Rocher', 'Sea Serpent': 'Serpent de Mer', Spellcaster: 'Magicien', Thunder: 'Tonnerre', Warrior: 'Guerrier', 'Winged Beast': 'Bête Ailée', Wyrm: 'Wyrm', Zombie: 'Zombie' };
+const AB_FR = { Effect: 'Effet', Normal: 'Normal', Fusion: 'Fusion', Synchro: 'Synchro', Xyz: 'Xyz', Ritual: 'Rituel', Link: 'Lien', Tuner: 'Syntoniseur', Flip: 'Retournement', Spirit: 'Esprit', Union: 'Union', Toon: 'Toon', Gemini: 'Gémeau', Pendulum: 'Pendule' };
+const LAYOUT = { normal: 'Normal', effect: 'Effect', ritual: 'Ritual', fusion: 'Fusion', synchro: 'Synchro', xyz: 'Xyz', link: 'Link', token: 'Token', spell: 'Spell', trap: 'Trap', skill: 'Skill' };
+const ICON = { Continuous: 'Continuous', Counter: 'Counter', Equip: 'Equip', Field: 'Field', 'Quick-Play': 'Quick-play', Ritual: 'Ritual', Normal: 'None' };
+
+function typeLine(c) {
+    if (c.type === 'Spell Card') return 'Carte Magie';
+    if (c.type === 'Trap Card') return 'Carte Piège';
+    const rc = RACE_FR[c.race] || c.race;
+    let line;
+    if (Array.isArray(c.typeline) && c.typeline.length) line = [rc, ...c.typeline.slice(1).map((a) => AB_FR[a] || a)].join('/');
+    else {
+        const t = c.type || '', ab = [];
+        [['Ritual', 'Ritual'], ['Fusion', 'Fusion'], ['Synchro', 'Synchro'], ['XYZ', 'Xyz'], ['Link', 'Link'], ['Gemini', 'Gemini'], ['Spirit', 'Spirit'], ['Union', 'Union'], ['Toon', 'Toon'], ['Flip', 'Flip'], ['Tuner', 'Tuner']]
+            .forEach(([k, v]) => t.includes(k) && ab.push(v));
+        if (t.includes('Effect') && !ab.length) ab.push('Effect');
+        if (t === 'Normal Monster') ab.push('Normal');
+        if (!ab.length) ab.push('Effect');
+        line = rc + '/' + ab.map((a) => AB_FR[a] || a).join('/');
+    }
+    if (String(c.frameType || '').includes('pendulum') || String(c.type || '').includes('Pendulum')) {
+        const p = line.split('/');
+        if (!p.includes('Pendule')) {
+            const last = p[p.length - 1];
+            if (p.length > 1 && (last === 'Effet' || last === 'Normal')) p.splice(p.length - 1, 0, 'Pendule'); else p.push('Pendule');
+            line = p.join('/');
+        }
+    }
+    return line;
+}
+function effectText(c) {
+    let t = c.monster_desc || c.desc || '';
+    t = t.replace(/^[#=*\-_\s]{3,}$/gm, ' ◆ ◆ ◆ ').replace(/\r\n|\n|\r/g, ' ').replace(/\s+/g, ' ')
+        .replace(/(\s*●\s*)+/g, ' ● ').replace(/^\s*●\s*/, '').replace(/\s*●\s*$/, '').trim();
+    return c.materials_desc ? c.materials_desc + (t ? MAT_SEP + t : '') : t;
+}
+function linkMarkers(c) {
+    const b = { topLeft: false, topCenter: false, topRight: false, middleLeft: false, middleRight: false, bottomLeft: false, bottomCenter: false, bottomRight: false };
+    const m = { 'Top-Left': 'topLeft', Top: 'topCenter', 'Top-Right': 'topRight', Left: 'middleLeft', Right: 'middleRight', 'Bottom-Left': 'bottomLeft', Bottom: 'bottomCenter', 'Bottom-Right': 'bottomRight' };
+    (c.linkmarkers || []).forEach((x) => { if (m[x]) b[m[x]] = true; });
+    return b;
+}
+function toJson(c) {
+    c = normPend(c);
+    const st = c.type === 'Spell Card' || c.type === 'Trap Card';
+    const [base, ps] = (c.frameType || '').split('_');
+    const pend = ps === 'pendulum', link = base === 'link';
+    return {
+        version: '1.0.0', name: c.name, level: String(c.level || c.linkval || 0), type: typeLine(c),
+        icon: st ? ICON[c.race] || 'None' : 'None', effect: effectText(c),
+        atk: st ? '' : String(c.atk ?? '0'), def: st || link ? '' : String(c.def ?? '0'),
+        serial: '', copyright: '© 2026 YGOPRO.ORG',
+        attribute: c.type === 'Spell Card' ? 'Spell' : c.type === 'Trap Card' ? 'Trap' : c.attribute ? c.attribute[0] + c.attribute.slice(1).toLowerCase() : 'Light',
+        id: String(c.id || ''), rarity: 'common',
+        pendulum: { enabled: pend, effect: pend ? cleanPend(c.pend_desc) : '', blue: pend ? String(c.scale ?? '0') : '0', red: pend ? String(c.scaleRight ?? c.scale ?? '0') : '0', boxSize: 'Normal', boxSizeEnabled: true },
+        variant: 'Normal', link: linkMarkers(c), layout: LAYOUT[base] || 'Effect',
+        boxSize: (c.desc || '').length > 300 ? 'Small' : 'Normal',
+    };
+}
+
+// ============================================================
+// CSV Card Maker Manager
+// ============================================================
+const CSV_FIELDS = 'Format,Frame,Name,Attribute,Star,Spell/Trap Icon,Art Link,Type Ability,Effect,Set Id,ATK,DEF,Password,Sticker,Copyright,Is Pendulum,Pendulum Effect,Pendulum Scale Red,Pendulum Scale Blue,Is Link,Link - Top Left Arrow,Link - Top Arrow,Link - Top Right Arrow,Link - Left Arrow,Link - Right Arrow,Link - Bottom Left Arrow,Link - Bottom Arrow,Link - Bottom Right Arrow,Is First Edition,Is Speed Card,Is Limited Edition,Is Duel Terminal Card,Is Legacy Card,Foil,Art Finish,Card Finish,Art Crop - X (%),Art Crop - Y (%),Art Crop - Width (%),Art Crop - Height (%),Is Using Full Art,Region,Star Type,Star Alignment,Card Icon Type,Link Rating,Opacity - Body,Opacity - Pendulum,Opacity - Text,Opacity - Name,Opacity - Base Fill,Opacity - Art Border,Opacity - Name Border,Opacity - Effect Box,Opacity - Boundless,Has Background,Background Link,Is Using Full Background,Background Type,Background Crop - X (%),Background Crop - Y (%),Background Crop - Width (%),Background Crop - Height (%),Bottom Frame,Condense Rate,Use Furigana Helper,Name Style Type,Name Style - Font,Name Style - Fill Style,Name Style - Headtext Fill Style,Name Style - Shadow Color,Name Style - Shadow Offset Y,Name Style - Shadow Offset X,Name Style - Shadow Blur,Name Style - Has Shadow,Name Style - Line Color,Name Style - Line Width,Name Style - Line Offset Y,Name Style - Line Offset X,Name Style - Has Outline,Name Style - Gradient Angle,Name Style - Gradient Color,Name Style - Has Gradient,Name Style - Emboss Pitch,Name Style - Emboss Yaw,Name Style - Emboss Thickness,Name Style - Has Emboss,Name Style - Preset,Name Style - Pattern,Stat Style - Is Custom,Stat Style - Fill Color,Stat Style - Has Shadow,Stat Style - Shadow Color,Type Style - Is Custom,Type Style - Fill Color,Type Style - Has Shadow,Type Style - Shadow Color,Effect Style - Is Custom,Effect Style - Fill Color,Effect Style - Has Shadow,Effect Style - Shadow Color,Effect Style - Upsize,Effect Style - Font Style,Effect Style - Background,Effect Style - Min Line,Effect Style - Justify Ratio,Pendulum Size,Pendulum Effect Style - Is Custom,Pendulum Effect Style - Fill Color,Pendulum Effect Style - Has Shadow,Pendulum Effect Style - Shadow Color,Pendulum Effect Style - Upsize,Pendulum Effect Style - Font Style,Pendulum Effect Style - Background,Pendulum Effect Style - Min Line,Pendulum Effect Style - Justify Ratio,Other Style - Is Custom,Other Style - Fill Color,Other Style - Has Shadow,Other Style - Shadow Color,Other Finish - Attribute,Other Finish - Background,Other Finish - Icon,Other Finish - Sticker,Left Frame,Right Frame,Bottom Right Frame,Dye List,Star List,Flag,External Info (JSON)'.split(',');
+const ICON_CSV = { Continuous: 'CONTINUOUS', Counter: 'COUNTER', Equip: 'EQUIP', Field: 'FIELD', 'Quick-Play': 'QUICK-PLAY', Ritual: 'RITUAL' };
+const PLACEHOLDER = 'https://kevinraphael95.github.io/ygo_outil_fr/placeholder.png';
+const csvQ = (v, nl) => {
+    if (v === undefined || v === null || v === '') return '';
+    let s = String(v).replace(/"/g, '""').replace(/\r\n|\r/g, '\n');
+    return `"${nl ? s : s.replace(/\n/g, ' ')}"`;
+};
+function csvRow(c) {
+    c = normPend(c);
+    const st = c.type === 'Spell Card' || c.type === 'Trap Card';
+    const [base, ps] = (c.frameType || '').split('_');
+    const pend = ps === 'pendulum', link = base === 'link', L = linkMarkers(c), b = (x) => (x ? 'true' : 'false');
+    const art = c.art ? `https://images.weserv.nl/?url=${encodeURIComponent(c.art.replace(/^https?:\/\//, ''))}` : PLACEHOLDER;
+    const v = {
+        Format: 'tcg', Frame: (LAYOUT[base] || 'Effect').toLowerCase(), Name: c.name,
+        Attribute: c.type === 'Spell Card' ? 'SPELL' : c.type === 'Trap Card' ? 'TRAP' : c.attribute ? c.attribute.toUpperCase() : 'NONE',
+        Star: String(c.level || c.linkval || ''), 'Spell/Trap Icon': st ? ICON_CSV[c.race] || 'NO ICON' : 'NO ICON',
+        'Art Link': art, 'Type Ability': typeLine(c), Effect: effectText(c), 'Set Id': String(c.id || ''),
+        ATK: st ? '' : String(c.atk ?? ''), DEF: st || link ? '' : String(c.def ?? ''), Sticker: 'no-sticker', Copyright: '© 2026 YGOPRO.ORG',
+        'Is Pendulum': b(pend), 'Pendulum Effect': pend ? c.pend_desc || '' : '',
+        'Pendulum Scale Red': pend ? String(c.scaleRight ?? c.scale ?? '0') : '', 'Pendulum Scale Blue': pend ? String(c.scale ?? '0') : '',
+        'Is Link': b(link), 'Link - Top Left Arrow': b(L.topLeft), 'Link - Top Arrow': b(L.topCenter), 'Link - Top Right Arrow': b(L.topRight),
+        'Link - Left Arrow': b(L.middleLeft), 'Link - Right Arrow': b(L.middleRight), 'Link - Bottom Left Arrow': b(L.bottomLeft),
+        'Link - Bottom Arrow': b(L.bottomCenter), 'Link - Bottom Right Arrow': b(L.bottomRight),
+        Region: 'fr', 'Effect Style - Justify Ratio': '100', 'Effect Style - Min Line': '0',
+    };
+    return CSV_FIELDS.map((f) => csvQ(v[f], f === 'Effect')).join(',');
+}
+
+// ============================================================
+// DÉCODAGE .CDB (bits de la colonne type d'EDOPro / YGOPro)
+// ============================================================
+const RACES = { 0x1: 'Warrior', 0x2: 'Spellcaster', 0x4: 'Fairy', 0x8: 'Fiend', 0x10: 'Zombie', 0x20: 'Machine', 0x40: 'Aqua', 0x80: 'Pyro', 0x100: 'Rock', 0x200: 'Winged Beast', 0x400: 'Plant', 0x800: 'Insect', 0x1000: 'Thunder', 0x2000: 'Dragon', 0x4000: 'Beast', 0x8000: 'Beast-Warrior', 0x10000: 'Dinosaur', 0x20000: 'Fish', 0x40000: 'Sea Serpent', 0x80000: 'Reptile', 0x100000: 'Psychic', 0x200000: 'Divine-Beast', 0x400000: 'Creator God', 0x800000: 'Wyrm', 0x1000000: 'Cyberse', 0x2000000: 'Illusion' };
+const ATTRS = { 0x1: 'EARTH', 0x2: 'WATER', 0x4: 'FIRE', 0x8: 'WIND', 0x10: 'LIGHT', 0x20: 'DARK', 0x40: 'DIVINE' };
+const bitName = (map, code, dflt) => { for (const [b, n] of Object.entries(map)) if (code & +b) return n; return dflt; };
+const ARROWS = { 0x1: 'Bottom-Left', 0x2: 'Bottom', 0x4: 'Bottom-Right', 0x8: 'Left', 0x20: 'Right', 0x40: 'Top-Left', 0x80: 'Top', 0x100: 'Top-Right' };
+
+function decodeCdb(t, race, attr, lvl, atk, def) {
+    t = t | 0; lvl = lvl | 0; atk = atk ?? 0; def = def ?? 0;
+    const has = (b) => (t & b) !== 0;
+    if (has(0x2) || has(0x4)) {
+        const sp = has(0x2);
+        const sub = has(0x10000) ? 'Quick-Play' : has(0x20000) ? 'Continuous' : has(0x40000) ? 'Equip' : has(0x80000) ? 'Field' : has(0x100000) ? 'Counter' : has(0x80) ? 'Ritual' : 'Normal';
+        return { type: sp ? 'Spell Card' : 'Trap Card', frameType: sp ? 'spell' : 'trap', race: sub, attribute: undefined, atk: 0, def: 0, level: 0 };
+    }
+    const link = has(0x4000000), pend = has(0x1000000);
+    const base = has(0x4000) ? 'token' : link ? 'link' : has(0x800000) ? 'xyz' : has(0x2000) ? 'synchro' : has(0x40) ? 'fusion' : has(0x80) ? 'ritual' : has(0x20) ? 'effect' : has(0x10) ? 'normal' : 'effect';
+    const ab = [];
+    [[0x40, 'Fusion'], [0x2000, 'Synchro'], [0x800000, 'Xyz'], [0x4000000, 'Link'], [0x80, 'Ritual'], [0x200, 'Spirit'], [0x400, 'Union'], [0x800, 'Gemini'], [0x400000, 'Toon'], [0x1000000, 'Pendulum'], [0x200000, 'Flip'], [0x1000, 'Tuner'], [0x20, 'Effect'], [0x10, 'Normal']]
+        .forEach(([b, n]) => has(b) && ab.push(n));
+    const rn = bitName(RACES, race, 'Warrior');
+    const o = { type: has(0x4000) ? 'Token' : (ab.length ? ab.join(' ') : 'Effect') + ' Monster', frameType: pend ? base + '_pendulum' : base,
+        race: rn, attribute: bitName(ATTRS, attr, 'DARK'), typeline: [rn, ...ab], atk: atk === -2 ? '?' : atk, def: def === -2 ? '?' : def, level: lvl & 0xff };
+    if (pend) { o.scale = (lvl >> 24) & 0xff; o.scaleRight = (lvl >> 16) & 0xff; }
+    if (link) { o.linkval = lvl & 0xff; o.linkmarkers = Object.entries(ARROWS).filter(([b]) => def & +b).map(([, n]) => n); o.def = ''; }
+    return o;
+}
+
+// ============================================================
+// ENTRÉES
+// ============================================================
+let mode = 'card', cards = [], missing = [];
+const LABELS = { card: 'Générer le JSON', deck: 'Générer les JSON', cdb: 'Générer les JSON' };
+
+function finish() {
+    const n = cards.length;
+    $('out').value = n === 1 ? JSON.stringify(toJson(cards[0]), null, 2) : n ? `${n} cartes prêtes.\nTélécharge le ZIP des JSON ou le CSV du Manager.` : '';
+    $('copyBtn').classList.toggle('hidden', n !== 1);
+    $('zipBtn').classList.toggle('hidden', !n);
+    $('csvBtn').classList.toggle('hidden', !n);
+    $('missBtn').classList.toggle('hidden', !missing.length);
+}
+
+$('modes').addEventListener('click', (e) => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    mode = t.dataset.mode;
+    document.querySelectorAll('#modes .tab').forEach((x) => x.classList.toggle('active', x === t));
+    ['card', 'deck', 'cdb'].forEach((m) => $('p-' + m).classList.toggle('hidden', m !== mode));
+    $('langField').classList.toggle('hidden', mode === 'cdb');
+    $('startLbl').textContent = LABELS[mode];
+    cards = []; missing = []; finish();
+});
+$('deckFile').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) $('deckIn').value = await f.text(); });
+YGO.bindFileCount($('cdbFile'), $('cdbInfo'));
+
+function runCard() {
+    const q = $('cardIn').value.trim();
+    if (!q) return YGO.toast('Saisis un nom ou un code.', 'err');
+    const c = find(q, $('lang').value);
+    if (!c) { missing.push(q); out.log('Introuvable : ' + q, 'warn'); return YGO.toast('Carte introuvable.', 'err'); }
+    cards = [c];
+    out.log(`${c.name} (${c.id || 'Yugipedia'})`, 'ok');
+}
+
+function runDeck() {
+    const lang = $('lang').value, seen = new Set();
+    for (const raw of $('deckIn').value.split(/\r?\n/)) {
+        let line = raw.trim();
+        if (!line || /^[#!]/.test(line) || /^(main|extra|side)\s*deck\s*:?$/i.test(line)) continue;
+        let c = find(line, lang);
+        if (!c) {
+            const m = line.match(/^(\d{1,2})\s*[x×]?\s+(.+)$/i) || line.match(/^()(.+?)\s+[x×]\s*\d{1,2}$/i);
+            if (m) { line = m[2].trim(); c = find(line, lang); }
+        }
+        if (!c) { missing.push(line); out.log('Introuvable : ' + line, 'warn'); continue; }
+        const key = c.id || nk(c.name);
+        if (!seen.has(key)) { seen.add(key); cards.push(c); }
+    }
+    if (!cards.length) YGO.toast('Aucune carte trouvée.', 'err');
+    out.log(`${cards.length} carte(s) unique(s), ${missing.length} introuvable(s).`, missing.length ? 'warn' : 'ok');
+}
+
+async function runCdb() {
+    const f = $('cdbFile').files[0];
+    if (!f) return YGO.toast('Sélectionne un .cdb.', 'err');
+    if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
+    const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+    try {
+        let res;
+        try { res = db.exec('SELECT t.id, t.name, t."desc", d.type, d.atk, d.def, d.level, d.race, d.attribute FROM texts t LEFT JOIN datas d ON t.id = d.id'); }
+        catch (e) { throw new Error('Pas un .cdb valide (tables texts / datas).'); }
+        const rows = res.length ? res[0].values : [];
+        out.log(`📂 ${f.name} : ${rows.length} cartes.`);
+        prog.show();
+        for (let i = 0; i < rows.length; i++) {
+            const [id, name, desc, ty, atk, def, lvl, race, attr] = rows[i];
+            const d = desc || '';
+            const tilde = (d.match(/~([^~]+)~/) || [])[1];
+            const m = find(name, 'fr') || (tilde && find(tilde.trim(), 'fr'));   // sert surtout à l'illustration
+            const base = m || { type: 'Effect Monster', frameType: 'effect', atk: 0, def: 0, level: 0, race: 'Warrior', attribute: 'DARK' };
+            const st = ty != null ? decodeCdb(ty, race, attr, lvl, atk, def) : {};
+            cards.push({ ...base, ...st, id, name, desc: d, art: m ? m.art : '' });
+            if (i % 200 === 0) { prog.set((i / rows.length) * 100, `Analyse ${i + 1} / ${rows.length}…`); await tick(); }
+        }
+        prog.set(100, 'Terminé !');
+        out.log(`✅ ${cards.length} cartes décodées.`, 'ok');
+    } finally { db.close(); }
+}
+
+$('startBtn').addEventListener('click', async () => {
+    if (!DB.ready) return YGO.toast('Bases locales non chargées.', 'err');
+    const btn = $('startBtn');
+    btn.disabled = true; cards = []; missing = [];
+    try {
+        if (mode === 'card') runCard(); else if (mode === 'deck') runDeck(); else await runCdb();
+        finish();
+    } catch (err) {
+        out.log('❌ ' + err.message, 'err');
+        YGO.toast('Une erreur est survenue.', 'err');
+    } finally { btn.disabled = false; }
+});
+
+// ============================================================
+// EXPORTS
+// ============================================================
+const safe = (s) => String(s).replace(/[\\/:*?"<>|]/g, '').trim() || 'carte';
+$('copyBtn').addEventListener('click', () => YGO.copy($('out').value, 'JSON copié !'));
+$('zipBtn').addEventListener('click', async () => {
+    const zip = new JSZip(), used = new Map();
+    for (const c of cards) {
+        let n = safe(c.name);
+        const k = used.get(n) || 0; used.set(n, k + 1);
+        if (k) n += '-' + (k + 1);
+        zip.file(n + '.json', JSON.stringify(toJson(c), null, 2));
+    }
+    const size = YGO.download(await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }), 'cartes-ygopro.zip');
+    out.log(`📦 ${cards.length} JSON zippés (${YGO.fmtBytes(size)}).`, 'ok');
+});
+$('csvBtn').addEventListener('click', () => {
+    const csv = '\uFEFF' + [CSV_FIELDS.join(','), ...cards.map(csvRow)].join('\n');
+    YGO.download(csv, 'cartes-ygopro-manager.csv', 'text/csv;charset=utf-8');
+    out.log(`📄 CSV de ${cards.length} carte(s) exporté.`, 'ok');
+});
+$('missBtn').addEventListener('click', () => YGO.download(missing.join('\n'), 'non_trouvees.txt', 'text/plain;charset=utf-8'));
+
+out.log('Choisis un mode (carte, decklist ou .cdb), puis lance la génération.');
+</script>
+</body>
+</html>
