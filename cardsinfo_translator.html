@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Card Info Translator</title>
+<title>Traducteur d'archétypes · YGO Tools</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -34,7 +34,7 @@
         <div class="hero-icon"><i class="fa-solid fa-language"></i></div>
         <div>
             <h1>Traducteur d'archétypes YGOPro</h1>
-            <p>Traduit les infos du card info anglais avec les infos officielles trouvées sur Yugipedia.</p>
+            <p>Traduit la section <code>##setname</code> du card info anglais avec les noms trouvés sur Yugipedia.</p>
         </div>
     </section>
 
@@ -45,10 +45,15 @@
             <div class="field">
                 <label for="langSelect">Langue cible</label>
                 <select id="langSelect">
-                    <option value="french">Français (TCG officiel)</option>
+                    <option value="french">Français</option>
                     <option value="german">Deutsch</option>
                     <option value="spanish">Español</option>
                     <option value="italian">Italiano</option>
+                    <option value="portuguese">Português</option>
+                    <option value="japanese">日本語</option>
+                    <option value="korean">한국어</option>
+                    <option value="tchinese">繁體中文</option>
+                    <option value="schinese">简体中文</option>
                 </select>
             </div>
             <div class="field">
@@ -66,8 +71,9 @@
 
     <div class="card">
         <h2 class="card-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Traduction</h2>
+        <p class="hint" style="margin:0 0 12px;">Les requêtes sont groupées et espacées pour respecter la limite de débit de Yugipedia. <strong>Garde cet onglet visible</strong> pendant la traduction.</p>
         <div class="actions">
-            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Lancer la traduction officielle</button>
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Lancer la traduction</button>
             <button id="stopBtn" class="btn btn-danger" type="button" disabled><i class="fa-solid fa-stop"></i> Stop</button>
             <button id="exportBtn" class="btn" type="button" disabled><i class="fa-solid fa-download"></i> Exporter <span id="exportName">cardinfo_fr_setname.txt</span></button>
         </div>
@@ -82,7 +88,7 @@
         <h2 class="card-title"><i class="fa-solid fa-table-list"></i> Résultats</h2>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Hex</th><th>Nom EN</th><th>Traduction officielle</th><th>Statut</th></tr></thead>
+                <thead><tr><th>Hex</th><th>Nom EN</th><th>Traduction</th><th>Statut</th></tr></thead>
                 <tbody id="tbody"></tbody>
             </table>
         </div>
@@ -94,19 +100,28 @@
 
 <script>
 const { $ } = YGO;
-const YUGIPEDIA_API = 'https://yugipedia.com/api.php';
-const BATCH_DELAY_MS = 200;
+const API = 'https://yugipedia.com/api.php';
+const DELAY = 1200;   // pause entre requêtes (comme le générateur de yugipedia-db.json)
+const BATCH = 25;     // titres par requête
+const TRIES = 4;      // tentatives par requête en cas d'erreur réseau
 
 const LANGS = {
-    french:  { field: 'fr_name', ext: 'fr' },
-    german:  { field: 'de_name', ext: 'de' },
-    spanish: { field: 'es_name', ext: 'es' },
-    italian: { field: 'it_name', ext: 'it' },
+    french:     { field: 'fr_name', ext: 'fr' },
+    german:     { field: 'de_name', ext: 'de' },
+    spanish:    { field: 'es_name', ext: 'es' },
+    italian:    { field: 'it_name', ext: 'it' },
+    portuguese: { field: 'pt_name', ext: 'pt' },
+    japanese:   { field: 'ja_name', ext: 'ja' },
+    korean:     { field: 'ko_name', ext: 'ko' },
+    tchinese:   { field: 'tc_name', ext: 'tc' },
+    schinese:   { field: 'sc_name', ext: 'sc' },
 };
+// Une page qui contient un de ces templates est une carte, pas un archétype
+const CARD_TPL = /\{\{\s*(?:CardTable2|Anime card|Manga card|Video game card|OCG card|TCG card)\b/i;
 
 const progress = YGO.progress(document.querySelector('.progress'));
 let parsedEntries = [];
-let results = [];
+let state = [];            // un élément par archétype : { entry, val, status, failed }
 let stopRequested = false;
 let lastLang = 'french';
 
@@ -115,11 +130,13 @@ $('langSelect').addEventListener('change', () => {
     $('exportName').textContent = `cardinfo_${LANGS[$('langSelect').value].ext}_setname.txt`;
 });
 
+// ============================================================
+// Lecture du cardinfo
+// ============================================================
 function parseSetname(text) {
-    const lines = text.split('\n');
     const entries = [];
     let inSetname = false;
-    for (const raw of lines) {
+    for (const raw of text.split('\n')) {
         const line = raw.replace(/\r$/, '');
         if (line.startsWith('##')) { inSetname = line.trim() === '##setname'; continue; }
         if (line.trim() === '#end') break;
@@ -131,113 +148,184 @@ function parseSetname(text) {
     return entries;
 }
 
-function extractLang(wikitext) {
-    if (!wikitext) return null;
-    const cfg = LANGS[$('langSelect').value];
-    const re = new RegExp(`\\|\\s*${cfg.field}\\s*=\\s*([^\\n|]+)`, 'i');
-    const m = wikitext.match(re);
-    if (!m) return null;
-    let val = m[1].trim()
+// ============================================================
+// Nettoyage et extraction d'un champ de wikitext
+// ============================================================
+function clean(s) {
+    const v = String(s || '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, '')
         .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
         .replace(/\[\[([^\]]+)\]\]/g, '$1')
-        .replace(/<ref[^>]*>.*?<\/ref>/gi, '')
-        .split('\n')[0].trim().replace(/''/g, '');
-    return (val && val !== '—' && val !== '-') ? val : null;
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/'{2,3}/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return (v && !['—', '-', '?'].includes(v)) ? v : null;
 }
 
-async function fetchWikitext(pageTitle) {
-    const params = new URLSearchParams({
-        action: 'parse', format: 'json', origin: '*',
-        page: pageTitle, prop: 'wikitext', redirects: '1'
-    });
-    try {
-        const res = await fetch(`${YUGIPEDIA_API}?${params}`);
-        const data = await res.json();
-        return data?.parse?.wikitext?.['*'] || null;
-    } catch (e) {
-        return null;
+/** Valeur de « | champ = … », en ne coupant ni sur les | des liens [[a|b]] ni sur les {{…}}. */
+function fieldValue(wikitext, field) {
+    const m = new RegExp('\\|\\s*' + field + '\\s*=\\s*', 'i').exec(wikitext);
+    if (!m) return null;
+    const start = m.index + m[0].length;
+    let j = start, depth = 0;
+    while (j < wikitext.length) {
+        const two = wikitext.substr(j, 2);
+        if (two === '[[' || two === '{{') { depth++; j += 2; continue; }
+        if (two === ']]' || two === '}}') { if (depth === 0) break; depth--; j += 2; continue; }
+        const ch = wikitext[j];
+        if (depth === 0 && (ch === '|' || ch === '\n')) break;
+        j++;
     }
+    return clean(wikitext.slice(start, j));
 }
 
-function setStats(done, translated, missing, total) {
-    progress.set(total ? (done / total) * 100 : 0, `${done} / ${total}`);
-    $('stats').replaceChildren(
-        YGO.el('span', { className: 'chip ok', text: `✅ ${translated} traduits` }),
-        YGO.el('span', { className: 'chip warn', text: `⚠️ ${missing} non trouvés` }));
+// ============================================================
+// API Yugipedia : requêtes groupées + nouvelles tentatives
+// ============================================================
+/** Renvoie le JSON, ou null si toutes les tentatives ont échoué (erreur réseau / limite de débit). */
+async function api(params) {
+    const url = new URL(API);
+    const q = { format: 'json', formatversion: '2', origin: '*', ...params };
+    for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
+    for (let t = 0; t < TRIES; t++) {
+        try {
+            const res = await fetch(url);
+            if (res.status === 429 || res.status >= 500) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.code || 'erreur API');
+            return data;
+        } catch (e) {
+            await YGO.sleep(DELAY * (t + 2));
+        }
+    }
+    return null;
+}
+
+/** Titres demandés -> Map(titre demandé -> wikitext | null). null = page absente. Renvoie null si la requête a échoué. */
+async function fetchPages(titles) {
+    const data = await api({
+        action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main',
+        titles: titles.join('|'), redirects: '1',
+    });
+    if (!data) return null;
+    const norm = new Map((data.query?.normalized || []).map((x) => [x.from, x.to]));
+    const redir = new Map((data.query?.redirects || []).map((x) => [x.from, x.to]));
+    const pages = new Map();
+    for (const p of data.query?.pages || []) {
+        if (!p || p.missing) continue;
+        const wt = p.revisions?.[0]?.slots?.main?.content || p.revisions?.[0]?.content || null;
+        if (wt) pages.set(p.title, wt);
+    }
+    const out = new Map();
+    for (const t of titles) {
+        let f = norm.get(t) || t;
+        for (let n = 0; n < 5 && redir.has(f); n++) f = redir.get(f);
+        out.set(t, pages.get(f) || null);
+    }
+    return out;
+}
+
+// ============================================================
+// Traduction
+// ============================================================
+function setStats() {
+    const ok = state.filter((s) => s.status === 'ok').length;
+    const miss = state.filter((s) => s.status === 'missing').length;
+    const err = state.filter((s) => s.status === 'error').length;
+    const chips = [
+        YGO.el('span', { className: 'chip ok', text: `✅ ${ok} traduits` }),
+        YGO.el('span', { className: 'chip warn', text: `⚠️ ${miss} non trouvés` }),
+    ];
+    if (err) chips.push(YGO.el('span', { className: 'chip warn', text: `🌐 ${err} en erreur réseau` }));
+    $('stats').replaceChildren(...chips);
+}
+
+const STATUS_TXT = { ok: 'trouvé (Yugipedia)', missing: 'non trouvé', error: 'erreur réseau', stopped: 'arrêté', pending: 'en attente' };
+function paintRow(s, tr) {
+    tr.className = s.status === 'ok' ? 'ok' : s.status === 'pending' ? '' : 'miss';
+    tr.children[2].className = s.val ? '' : 'dim';
+    tr.children[2].textContent = s.val || s.entry.label;   // EN conservé si rien de trouvé
+    tr.children[3].textContent = STATUS_TXT[s.status];
 }
 
 async function runScraping() {
     stopRequested = false;
-    results = [];
     lastLang = $('langSelect').value;
+    const cfg = LANGS[lastLang];
     $('exportName').textContent = exportName();
-    const tbody = $('tbody');
-    tbody.replaceChildren();
     $('exportBtn').disabled = true;
     $('startBtn').disabled = true;
     $('stopBtn').disabled = false;
 
-    const total = parsedEntries.length;
-    let done = 0, translated = 0, missing = 0;
-
-    const rowMap = {};
-    for (const entry of parsedEntries) {
+    const tbody = $('tbody');
+    tbody.replaceChildren();
+    state = parsedEntries.map((entry) => ({ entry, val: null, status: 'pending', failed: false }));
+    const rows = state.map((s) => {
         const tr = YGO.el('tr', {},
-            YGO.el('td', { className: 'mono', text: entry.hex }),
-            YGO.el('td', { text: entry.label }),
+            YGO.el('td', { className: 'mono', text: s.entry.hex }),
+            YGO.el('td', { text: s.entry.label }),
             YGO.el('td', { className: 'dim', text: '…' }),
-            YGO.el('td', { text: 'en attente' }));
+            YGO.el('td', { text: STATUS_TXT.pending }));
         tbody.append(tr);
-        rowMap[entry.hex] = tr;
-    }
-    setStats(0, 0, 0, total);
+        return tr;
+    });
+    setStats();
 
-    for (const entry of parsedEntries) {
-        if (stopRequested) break;
-        const tr = rowMap[entry.hex];
-        let wt = await fetchWikitext(entry.label);
-        let val = extractLang(wt);
-
-        // Tentative de fallback si la page directe ne donne rien
-        if (!val) {
-            wt = await fetchWikitext(`${entry.label} (archetype)`);
-            val = extractLang(wt);
+    // Passe 1 : « Nom (archetype) » ; passe 2 : « Nom » seul, en écartant les pages de cartes
+    const passes = [{ suffix: ' (archetype)', rejectCard: false }, { suffix: '', rejectCard: true }];
+    for (let p = 0; p < passes.length && !stopRequested; p++) {
+        const { suffix, rejectCard } = passes[p];
+        const todo = state.map((s, i) => i).filter((i) => state[i].status === 'pending' && !state[i].entry.label.includes('|'));
+        const nBatches = Math.ceil(todo.length / BATCH);
+        for (let b = 0; b < nBatches && !stopRequested; b++) {
+            const idxs = todo.slice(b * BATCH, (b + 1) * BATCH);
+            progress.set(((p + b / nBatches) / passes.length) * 100, `Passe ${p + 1}/${passes.length} · lot ${b + 1}/${nBatches}`);
+            const pages = await fetchPages(idxs.map((i) => state[i].entry.label + suffix));
+            if (!pages) { idxs.forEach((i) => { state[i].failed = true; }); }
+            else {
+                for (const i of idxs) {
+                    const wt = pages.get(state[i].entry.label + suffix);
+                    if (!wt || (rejectCard && CARD_TPL.test(wt))) continue;
+                    const val = fieldValue(wt, cfg.field);
+                    if (val) { state[i].val = val; state[i].status = 'ok'; paintRow(state[i], rows[i]); }
+                }
+            }
+            setStats();
+            await YGO.sleep(DELAY);
         }
-
-        tr.children[2].className = '';
-        if (val) {
-            translated++;
-            tr.className = 'ok';
-            tr.children[2].textContent = val;
-            tr.children[3].textContent = 'officiel';
-            results.push({ hex: entry.hex, label: entry.label, tr: val });
-        } else {
-            missing++;
-            tr.className = 'miss';
-            tr.children[2].textContent = entry.label; // garde EN en cas d'absence
-            tr.children[3].textContent = 'non trouvé';
-            results.push({ hex: entry.hex, label: entry.label, tr: entry.label });
-        }
-
-        done++;
-        setStats(done, translated, missing, total);
-        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
     }
+
+    // Statuts finaux pour tout ce qui n'a rien donné
+    for (let i = 0; i < state.length; i++) {
+        const s = state[i];
+        if (s.status === 'ok') continue;
+        s.status = stopRequested ? 'stopped' : s.failed ? 'error' : 'missing';
+        paintRow(s, rows[i]);
+    }
+    setStats();
+    progress.set(100, stopRequested ? 'Arrêté (le reste garde le nom anglais)' : 'Terminé !');
 
     $('startBtn').disabled = false;
     $('stopBtn').disabled = true;
     $('exportBtn').disabled = false;
+    const err = state.filter((s) => s.status === 'error').length;
+    YGO.toast(err ? `Terminé, mais ${err} archétype(s) en erreur réseau : relance pour les retenter.` : 'Traduction terminée !', err ? 'err' : undefined);
 }
 
 function buildFile() {
     const lines = ['################ use tab', '##setname'];
-    for (const r of results) {
-        lines.push(`${r.hex}\t${r.tr}`);
-    }
+    for (const s of state) lines.push(`${s.entry.hex}\t${s.val || s.entry.label}`);
     lines.push('#end');
     return lines.join('\n');
 }
 
+// ============================================================
+// Entrées / boutons
+// ============================================================
 $('fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -249,13 +337,11 @@ $('fileInput').addEventListener('change', async (e) => {
 });
 
 $('startBtn').addEventListener('click', () => {
-    const text = $('input').value;
-    parsedEntries = parseSetname(text);
-    if (parsedEntries.length) runScraping();
+    parsedEntries = parseSetname($('input').value);
+    if (!parsedEntries.length) return YGO.toast('Aucun archétype trouvé dans la section ##setname.', 'err');
+    runScraping();
 });
-
 $('stopBtn').addEventListener('click', () => { stopRequested = true; });
-
 $('exportBtn').addEventListener('click', () => {
     YGO.download(buildFile(), exportName(), 'text/plain;charset=utf-8');
 });
