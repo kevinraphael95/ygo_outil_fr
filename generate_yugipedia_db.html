@@ -42,6 +42,20 @@
         <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Lancer l'extraction Yugipedia</h2>
         <p class="card-sub">Parcourt les 6 templates de cartes et génère <code>yugipedia-db.json</code>. Compte plusieurs minutes (limite de débit de l'API). <strong>Garde cet onglet visible</strong> pendant l'extraction.</p>
 
+        <h3 class="card-sub" style="margin:0 0 8px;"><i class="fa-solid fa-language"></i> Langues des descriptions à ajouter</h3>
+        <p class="hint" style="margin:0 0 8px;">L'anglais (<code>desc_en</code>) est toujours inclus. Les noms de cartes sont toujours inclus dans toutes les langues. Une langue cochée ajoute <code>desc_xx</code> et, pour les Pendules, <code>pendulum_desc_xx</code>.</p>
+        <div id="langs" style="display:flex;flex-wrap:wrap;gap:6px 22px;margin-bottom:16px;">
+            <label class="check"><input type="checkbox" name="lang" value="fr" checked> Français</label>
+            <label class="check"><input type="checkbox" name="lang" value="de"> Allemand</label>
+            <label class="check"><input type="checkbox" name="lang" value="it"> Italien</label>
+            <label class="check"><input type="checkbox" name="lang" value="pt"> Portugais</label>
+            <label class="check"><input type="checkbox" name="lang" value="es"> Espagnol</label>
+            <label class="check"><input type="checkbox" name="lang" value="ja"> Japonais</label>
+            <label class="check"><input type="checkbox" name="lang" value="ko"> Coréen</label>
+            <label class="check"><input type="checkbox" name="lang" value="tc"> Chinois traditionnel</label>
+            <label class="check"><input type="checkbox" name="lang" value="sc"> Chinois simplifié</label>
+        </div>
+
         <label class="check" style="margin-bottom:16px;">
             <input type="checkbox" id="minify">
             Minifier le JSON <span class="hint">(désactivé = indenté, comme le script Node)</span>
@@ -76,6 +90,7 @@ const TEMPLATES = ['CardTable2', 'Anime card', 'Manga card', 'Video game card', 
 const out = YGO.console($('console'));
 const progress = YGO.progress($('progress'));
 const btn = $('start-btn');
+const langBoxes = [...document.querySelectorAll('input[name="lang"]')];
 out.log('Prêt à lancer l\'extraction Yugipedia…');
 
 /** Une seule tentative, comme le script Node : toute erreur est gérée par l'appelant. */
@@ -90,10 +105,12 @@ async function fetchJson(params) {
 function clean(s) {
     if (!s) return null;
     return String(s)
+        .replace(/<!--[\s\S]*?-->/g, '')                    // commentaires HTML
         .replace(/\{\{Ruby\|([^|]+)\|[^}]+\}\}/gi, '$1')   // balises Ruby
         .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')      // [[cible|texte]]
         .replace(/\[\[([^\]]+)\]\]/g, '$1')                 // [[texte]]
         .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, '')
+        .replace(/<br\s*\/?>/gi, '\n')                      // <br /> -> retour à la ligne
         .replace(/<[^>]+>/g, '')
         .replace(/'{2,3}/g, '')
         .replace(/&nbsp;/g, ' ')
@@ -141,49 +158,99 @@ function parseParams(body) {
     return params;
 }
 
-const int = (v) => (v ? parseInt(v, 10) || null : null);
+/** Entier ou null. Garde 0 (ATK/DEF 0), ignore "?" et le vide. */
+const int = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    const n = parseInt(v, 10);
+    return Number.isNaN(n) ? null : n;
+};
 const redirect = (f) => 'https://yugipedia.com/wiki/Special:Redirect/file/' + encodeURIComponent(f);
 
-function parseCard(wikitext, title) {
+/**
+ * Nom de fichier de l'image. Gère :
+ *  - un simple nom de fichier ;
+ *  - une liste multi-lignes « 1; carte.png; artwork.png » (on prend la ligne
+ *    dont la clé vaut current_image, sinon la première).
+ */
+function pickImageName(raw, current) {
+    if (!raw) return null;
+    const entries = raw.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean).map((line) => {
+        const parts = line.split(';').map((s) => s.trim()).filter(Boolean);
+        if (parts.length >= 2 && /^[\d.]+$/.test(parts[0])) return { key: parts[0], files: parts.slice(1) };
+        return { key: null, files: parts };
+    });
+    let e = null;
+    if (current) e = entries.find((x) => x.key === String(current).trim());
+    e = e || entries[0];
+    if (!e) return null;
+    const f = e.files.find((t) => t && !t.includes('='));
+    return f ? f.replace(/^.*?:/, '').trim() : null;
+}
+
+// Yugipedia écrit les flèches Lien un peu différemment de YGOPRODeck
+const ARROW_MAP = { 'top-center': 'Top', 'bottom-center': 'Bottom', 'middle-left': 'Left', 'middle-right': 'Right' };
+
+/**
+ * langs : langues de description cochées (ex. ['fr','de']). L'anglais est toujours inclus.
+ * Clés de sortie : desc_en, desc_xx, pendulum_desc_en, pendulum_desc_xx (comme cards-db.json).
+ */
+function parseCard(wikitext, title, langs) {
+    wikitext = String(wikitext || '').replace(/<!--[\s\S]*?-->/g, '');   // commentaires <!-- alt_art_2 = … -->
+    langs = langs || [];
     for (const tpl of TEMPLATES) {
         const body = extractTemplateParams(wikitext, tpl);
         if (!body) continue;
         const p = parseParams(body);
 
         const fr = clean(p.fr_name);
-        let en = clean(p.en_name || p.translated_name);
+        // Nom EN : en_name, sinon le titre de la page (PAS translated_name = traduction littérale du japonais)
+        let en = clean(p.en_name);
         if (!en && title) en = clean(title);
         if (!fr && !en) continue;
 
-        const id = p.passcode ? String(p.passcode).trim() : null;
-        const cropped = id ? `https://images.ygoprodeck.com/images/card_cropped/${id}.jpg` : null;
-        const rawImg = p.image_ca || p.artwork || p.image_cropped || p.image || p.en_image || p.ja_image || '';
+        // Passcode : « password » (ou « passcode »), sans zéros devant
+        const rawId = String(p.password || p.passcode || '').trim();
+        const id = /^\d+$/.test(rawId) ? rawId.replace(/^0+(?=\d)/, '') : null;
+        const cropped = id ? `https://images.ygoprodeck.com/images/cards_cropped/${id}.jpg` : null;
 
-        let imgName = null;
-        if (rawImg) {
-            const line = rawImg.split(/[\r\n]+/)[0].trim();
-            for (const part of line.split(';')) {
-                const t = part.trim();
-                if (t && !t.includes('=')) { imgName = t.replace(/^.*?:/, '').trim(); break; }
-            }
-            if (!imgName) imgName = line.replace(/^.*?:/, '').split(';')[0].trim();
+        const rawImg = p.image_ca || p.artwork || p.image_cropped || p.image || p.en_image || p.ja_image || '';
+        const imgName = pickImageName(rawImg, p.current_image);
+        const enImgName = pickImageName(p.en_image, null);
+
+        // Flèches et valeur Lien
+        const arrows = p.link_arrows ? p.link_arrows.split(',').map((s) => clean(s)).filter(Boolean) : [];
+        const linkmarkers = arrows.map((a) => ARROW_MAP[a.toLowerCase()] || a);
+
+        // Descriptions : EN toujours, les autres langues selon les cases
+        const descs = { desc_en: clean(p.text || p.lore) };
+        for (const l of langs) descs['desc_' + l] = clean(p[l + '_text'] || p[l + '_lore']);
+
+        // Effet Pendule (champs séparés de l'effet de monstre)
+        const hasPend = !!(p.pendulum_effect || langs.some((l) => p[l + '_pendulum_effect']));
+        if (hasPend) {
+            descs.pendulum_desc_en = clean(p.pendulum_effect);
+            for (const l of langs) descs['pendulum_desc_' + l] = clean(p[l + '_pendulum_effect']);
         }
 
         const types = p.types || p.type || '';
+        const dbMatch = p.database_id ? String(p.database_id).match(/\d+/) : null;
         return {
             title: title || null, fr, en, tpl, id,
-            database_id: p.database_id ? String(p.database_id).trim() : null,
+            database_id: dbMatch ? dbMatch[0] : null,
             img: cropped || (imgName ? redirect(imgName) : null),
-            img_en: p.en_image ? redirect(p.en_image.replace(/^.*?:/, '')) : null,
+            img_en: enImgName ? redirect(enImgName) : null,
             de: clean(p.de_name), it: clean(p.it_name), pt: clean(p.pt_name), es: clean(p.es_name),
             ja: clean(p.ja_name), ko: clean(p.ko_name), tc: clean(p.tc_name), sc: clean(p.sc_name),
-            romaji: clean(p.romaji_name),
+            romaji: clean(p.romaji_name), translated_name: clean(p.translated_name),
             card_type: clean(p.card_type), property: clean(p.property),
             type: clean(types), race: clean(types.split('/')[0]) || null,
             attribute: clean(p.attribute),
             atk: int(p.atk), def: int(p.def), level: int(p.level), rank: int(p.rank),
-            link: int(p.link), link_arrows: p.link_arrows ? clean(p.link_arrows) : null, scale: int(p.scale),
-            lore: clean(p.lore || p.text), fr_lore: clean(p.fr_lore || p.fr_text),
+            link: int(p.link) ?? (arrows.length || null),
+            link_arrows: p.link_arrows ? clean(p.link_arrows) : null,
+            linkmarkers: linkmarkers.length ? linkmarkers : null,
+            scale: int(p.pendulum_scale || p.scale),
+            ...descs,
             effect_types: clean(p.effect_types),
             archetype: clean(p.archetype), archseries: clean(p.archseries),
             supports: clean(p.supports), anti_supports: clean(p.anti_supports),
@@ -198,10 +265,15 @@ const normalize = (s) => String(s || '').toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 
 btn.addEventListener('click', async () => {
+    const langs = langBoxes.filter((b) => b.checked).map((b) => b.value);
+
     btn.disabled = true;
+    langBoxes.forEach((b) => { b.disabled = true; });
     progress.show();
     out.clear();
     try {
+        out.log(`🌐 Descriptions : EN${langs.length ? ' + ' + langs.map((l) => l.toUpperCase()).join(', ') : ' seulement'}`);
+
         /* Étape 1 : titres (en cas d'erreur : on passe au template suivant, comme le script) */
         out.log('📥 Récupération des pages de cartes (6 templates)...');
         const titles = new Set();
@@ -268,7 +340,7 @@ btn.addEventListener('click', async () => {
         const db = {};
         let count = 0;
         for (const [title, wt] of wikitexts) {
-            const card = parseCard(wt, title);
+            const card = parseCard(wt, title, langs);
             if (!card) continue;
             const key = normalize(card.fr || card.en || title);
             if (!key) continue;
@@ -293,6 +365,7 @@ btn.addEventListener('click', async () => {
         YGO.toast("Erreur pendant l'extraction", 'err');
     } finally {
         btn.disabled = false;
+        langBoxes.forEach((b) => { b.disabled = false; });
     }
 });
 </script>
