@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fiche carte · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="utils/ygo.css">
+<script src="utils/ygo.js"></script>
+<style>
+    .sheet { display: grid; grid-template-columns: 220px 1fr; gap: 20px; }
+    @media (max-width: 700px) { .sheet { grid-template-columns: 1fr; } }
+    .sheet img { width: 100%; border-radius: 10px; background: rgba(255,255,255,.05); }
+    .names { width: 100%; border-collapse: collapse; margin: 8px 0 16px; }
+    .names td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,.08); vertical-align: top; }
+    .names td:first-child { opacity: .7; white-space: nowrap; width: 1%; }
+    .names button { background: none; border: 0; color: inherit; cursor: pointer; opacity: .5; }
+    .names button:hover { opacity: 1; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+    .chip { padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.08); font-size: .85rem; }
+    .sugg { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .tabs { margin: 8px 0 10px; flex-wrap: wrap; }
+    #desc { min-height: 140px; }
+    #json { min-height: 280px; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-id-card"></i></div>
+        <div>
+            <h1>Fiche carte</h1>
+            <p>Cherche une carte (nom dans n'importe quelle langue, ou code), vois ses noms et effets dans toutes les langues disponibles, et récupère son JSON ygopro.org.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-magnifying-glass"></i> Recherche</h2>
+        <div class="field">
+            <label for="q">Nom (toutes langues) ou code de la carte</label>
+            <input type="text" id="q" autocomplete="off" placeholder="ex : Magicien Sombre, Dark Magician, ブラック・マジシャン ou 46986414">
+        </div>
+        <div class="actions">
+            <button id="go" class="btn btn-primary" type="button"><i class="fa-solid fa-search"></i> Chercher</button>
+        </div>
+        <div class="sugg" id="sugg"></div>
+    </div>
+
+    <div class="card hidden" id="res">
+        <h2 class="card-title"><i class="fa-solid fa-scroll"></i> <span id="title">Carte</span></h2>
+        <div class="sheet">
+            <div><img id="art" alt="" referrerpolicy="no-referrer"></div>
+            <div>
+                <div class="stats" id="stats"></div>
+                <table class="names" id="names"></table>
+                <label>Effet</label>
+                <div class="tabs" id="dtabs"></div>
+                <textarea id="desc" readonly></textarea>
+                <div class="actions"><button id="copyDesc" class="btn" type="button"><i class="fa-solid fa-copy"></i> Copier l'effet</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card hidden" id="jcard">
+        <h2 class="card-title"><i class="fa-solid fa-file-code"></i> JSON ygopro.org</h2>
+        <div class="field">
+            <label for="jlang">Langue du nom et de l'effet dans le JSON</label>
+            <select id="jlang"></select>
+        </div>
+        <textarea id="json" readonly></textarea>
+        <div class="actions">
+            <button id="copyJson" class="btn" type="button"><i class="fa-solid fa-copy"></i> Copier le JSON</button>
+            <button id="dlJson" class="btn" type="button"><i class="fa-solid fa-download"></i> Télécharger .json</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+<script>
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const nk = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const LANGS = [['en', 'Anglais'], ['fr', 'Français'], ['de', 'Allemand'], ['it', 'Italien'], ['pt', 'Portugais'], ['es', 'Espagnol'], ['ja', 'Japonais'], ['ko', 'Coréen'], ['tc', 'Chinois trad.'], ['sc', 'Chinois simpl.']];
+
+// ============================================================
+// BASES (même logique que les autres outils, + index multilingue)
+// ============================================================
+const DB = { ready: false, cards: new Map(), yugi: new Map(), names: new Map(), list: [] };
+
+// Un nom normalisé -> { id, yk }
+function addName(name, ref) {
+    const k = nk(name);
+    if (!k) return;
+    const cur = DB.names.get(k);
+    if (!cur) { DB.names.set(k, { ...ref }); DB.list.push({ label: name, k }); }
+    else { cur.id = cur.id || ref.id; cur.yk = cur.yk || ref.yk; }
+}
+
+async function loadDb() {
+    try {
+        const r = await fetch('data/cards-db.json');
+        if (r.ok) for (const [id, c] of Object.entries(await r.json())) {
+            DB.cards.set(String(id), c);
+            addName(c.en, { id: String(id) });
+            addName(c.fr, { id: String(id) });
+        }
+    } catch (e) { out.log('cards-db.json indisponible : ' + e.message, 'warn'); }
+    try {
+        const r = await fetch('data/yugipedia-db.json');
+        if (r.ok) for (const [k, c] of Object.entries(await r.json())) {
+            if (!c.en && !c.fr) continue;
+            DB.yugi.set(k, c);
+            const ref = { yk: k, id: c.id && DB.cards.has(String(c.id)) ? String(c.id) : undefined };
+            for (const [l] of LANGS) addName(c[l], ref);
+            addName(c.translated_name, ref);   // ancien nom « traduction littérale » : toujours trouvable
+            addName(c.title, ref);
+        }
+    } catch (e) { out.log('yugipedia-db.json indisponible : ' + e.message, 'warn'); }
+    DB.ready = DB.cards.size > 0 || DB.yugi.size > 0;
+    out.log(DB.ready ? `Bases prêtes : ${DB.cards.size.toLocaleString('fr-FR')} cartes YGOPRODeck, ${DB.yugi.size.toLocaleString('fr-FR')} Yugipedia.` : 'Aucune base chargée (dossier data/ introuvable ?).', DB.ready ? 'ok' : 'err');
+}
+loadDb();
+
+// ============================================================
+// FUSION YGOPRODeck + Yugipedia -> fiche
+// ============================================================
+function frameFromYugi(y) {
+    const t = String(y.type || '') + ' ' + String(y.card_type || '');
+    if (/spell/i.test(y.card_type || '')) return 'spell';
+    if (/trap/i.test(y.card_type || '')) return 'trap';
+    const base = /link/i.test(t) ? 'link' : /xyz/i.test(t) ? 'xyz' : /synchro/i.test(t) ? 'synchro' : /fusion/i.test(t) ? 'fusion'
+        : /ritual/i.test(t) ? 'ritual' : /normal/i.test(t) ? 'normal' : 'effect';
+    return /pendulum/i.test(t) ? base + '_pendulum' : base;
+}
+
+function build(ref) {
+    const c = ref.id ? DB.cards.get(ref.id) : null;
+    let y = ref.yk ? DB.yugi.get(ref.yk) : null;
+    if (!y && c) { const yk = DB.names.get(nk(c.en))?.yk; if (yk) y = DB.yugi.get(yk); }
+
+    const names = {}, descs = {}, pends = {};
+    for (const [l] of LANGS) {
+        const n = (l === 'en' ? c?.en : l === 'fr' ? c?.fr : null) || y?.[l] || (l === 'en' ? y?.translated_name : null);
+        if (n) names[l] = n;
+        const d = (l === 'en' ? c?.desc_en : l === 'fr' ? c?.desc_fr : null) || y?.['desc_' + l];
+        if (d) descs[l] = d;
+        const p = y?.['pendulum_desc_' + l];
+        if (p) pends[l] = p;
+    }
+    if (!Object.keys(names).length) return null;
+
+    const spell = c ? c.type === 'Spell Card' : /spell/i.test(y?.card_type || '');
+    const trap = c ? c.type === 'Trap Card' : /trap/i.test(y?.card_type || '');
+    const frameType = c?.frameType || frameFromYugi(y || {});
+    const linkMarkers = c?.linkmarkers || y?.linkmarkers || [];
+    return {
+        id: c ? +ref.id : (y?.id || ''), names, descs, pends,
+        type: c?.type || (spell ? 'Spell Card' : trap ? 'Trap Card' : 'Effect Monster'),
+        frameType, race: c?.race || y?.race, attribute: c?.attribute || y?.attribute,
+        atk: c ? c.atk : y?.atk, def: c ? c.def : y?.def,
+        level: c ? c.level : (y?.level ?? y?.rank), linkval: c?.linkval ?? y?.link,
+        linkmarkers: linkMarkers, scale: c?.scale ?? y?.scale,
+        art: c?.img_cropped || y?.img || y?.img_en || '', src: [c && 'YGOPRODeck', y && 'Yugipedia'].filter(Boolean).join(' + '),
+    };
+}
+
+// ============================================================
+// PENDULE (découpe d'un texte unique quand pas de champ séparé)
+// ============================================================
+const PEND_HEAD = /\[\s*(?:Pendulum Effect|Effet Pendule|Effet de Pendule)\s*\]/i;
+const MON_HEAD = /\[\s*(?:Monster Effect|Flavor Text|Effet de Monstre|Effet Monstre|Texte d['’]ambiance)\s*\]/i;
+const SCALE_RE = /(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*(\d+)/i;
+const cleanPend = (s) => String(s || '')
+    .replace(/^[-=_\s]{5,}$/gm, ' ').replace(/(?:\s*◆\s*){3}/g, ' ')
+    .replace(/(?:Pendulum Scale|[ÉE]chelle Pendule|[ÉE]chelle)\s*=\s*\d+/gi, '')
+    .replace(/\[\s*(?:VAACT|VAN|VNM|VSYN|VXYZ|VLINK|VRIT)\s*\]/gi, '')
+    .replace(new RegExp(PEND_HEAD.source + '\\s*:?', 'gi'), '').replace(new RegExp(MON_HEAD.source + '\\s*:?', 'gi'), '')
+    .replace(/^[\s|:-]+/, '').replace(/\s+/g, ' ').trim();
+function splitPend(desc) {
+    const pm = desc.match(PEND_HEAD), sm = desc.match(SCALE_RE);
+    let pend = '', mon = '', mat = '';
+    if (pm) {
+        mat = cleanPend(desc.slice(0, pm.index));
+        const mm = desc.match(MON_HEAD), st = pm.index + pm[0].length;
+        if (mm && mm.index > pm.index) { pend = desc.slice(st, mm.index); mon = desc.slice(mm.index + mm[0].length); } else pend = desc.slice(st);
+    } else {
+        const ps = desc.split(/\r?\n\s*\r?\n/).filter((x) => x.trim());
+        if (ps.length >= 2) { pend = ps[0]; mon = ps.slice(1).join('\n\n'); } else mon = desc;
+    }
+    return { pend: cleanPend(pend), mon: cleanPend(mon), mat, scale: sm ? +sm[1] : null };
+}
+
+// ============================================================
+// JSON ygopro.org (même format que le Transformeur)
+// ============================================================
+const RACE_FR = { Aqua: 'Aqua', Beast: 'Bête', 'Beast-Warrior': 'Bête-Guerrier', 'Creator God': 'Dieu Créateur', Cyberse: 'Cyberse', Dinosaur: 'Dinosaure', 'Divine-Beast': 'Bête Divine', Dragon: 'Dragon', Fairy: 'Fée', Fiend: 'Démon', Fish: 'Poisson', Illusion: 'Illusion', Insect: 'Insecte', Machine: 'Machine', Plant: 'Plante', Psychic: 'Psychique', Pyro: 'Pyro', Reptile: 'Reptile', Rock: 'Rocher', 'Sea Serpent': 'Serpent de Mer', Spellcaster: 'Magicien', Thunder: 'Tonnerre', Warrior: 'Guerrier', 'Winged Beast': 'Bête Ailée', Wyrm: 'Wyrm', Zombie: 'Zombie' };
+const AB_FR = { Effect: 'Effet', Normal: 'Normal', Fusion: 'Fusion', Synchro: 'Synchro', Xyz: 'Xyz', Ritual: 'Rituel', Link: 'Lien', Tuner: 'Syntoniseur', Flip: 'Retournement', Spirit: 'Esprit', Union: 'Union', Toon: 'Toon', Gemini: 'Gémeau', Pendulum: 'Pendule' };
+const LAYOUT = { normal: 'Normal', effect: 'Effect', ritual: 'Ritual', fusion: 'Fusion', synchro: 'Synchro', xyz: 'Xyz', link: 'Link', token: 'Token', spell: 'Spell', trap: 'Trap', skill: 'Skill' };
+const ICON = { Continuous: 'Continuous', Counter: 'Counter', Equip: 'Equip', Field: 'Field', 'Quick-Play': 'Quick-play', Ritual: 'Ritual', Normal: 'None' };
+
+function typeLine(c, fr) {
+    if (c.type === 'Spell Card') return fr ? 'Carte Magie' : 'Spell Card';
+    if (c.type === 'Trap Card') return fr ? 'Carte Piège' : 'Trap Card';
+    const R = (x) => (fr ? RACE_FR[x] || x : x), A = (x) => (fr ? AB_FR[x] || x : x);
+    const t = c.type || '', ab = [];
+    [['Ritual', 'Ritual'], ['Fusion', 'Fusion'], ['Synchro', 'Synchro'], ['XYZ', 'Xyz'], ['Link', 'Link'], ['Gemini', 'Gemini'], ['Spirit', 'Spirit'], ['Union', 'Union'], ['Toon', 'Toon'], ['Flip', 'Flip'], ['Tuner', 'Tuner']]
+        .forEach(([k, v]) => t.includes(k) && ab.push(v));
+    if (t === 'Normal Monster' || /normal/i.test(c.frameType || '')) ab.push('Normal');
+    if (!ab.length) ab.push('Effect');
+    const parts = [R(c.race), ...ab.map(A)];
+    if (String(c.frameType).includes('pendulum')) parts.splice(parts.length - 1, 0, A('Pendulum'));
+    return parts.join('/');
+}
+function oneLine(t) {
+    return String(t || '').replace(/^[#=*\-_\s]{3,}$/gm, ' ◆ ◆ ◆ ').replace(/\r\n|\n|\r/g, ' ').replace(/\s+/g, ' ')
+        .replace(/(\s*●\s*)+/g, ' ● ').replace(/^\s*●\s*/, '').replace(/\s*●\s*$/, '').trim();
+}
+function linkMarkers(list) {
+    const b = { topLeft: false, topCenter: false, topRight: false, middleLeft: false, middleRight: false, bottomLeft: false, bottomCenter: false, bottomRight: false };
+    const m = { 'Top-Left': 'topLeft', Top: 'topCenter', 'Top-Right': 'topRight', Left: 'middleLeft', Right: 'middleRight', 'Bottom-Left': 'bottomLeft', Bottom: 'bottomCenter', 'Bottom-Right': 'bottomRight' };
+    (list || []).forEach((x) => { if (m[x]) b[m[x]] = true; });
+    return b;
+}
+
+function toJson(f, lang) {
+    const pick = (o) => o[lang] || o.en || Object.values(o)[0] || '';
+    const name = f.names[lang] || f.names.en || Object.values(f.names)[0];
+    const desc = f.descs[lang] || f.descs.en || '';
+    const st = f.type === 'Spell Card' || f.type === 'Trap Card';
+    const [base, ps] = (f.frameType || '').split('_');
+    const pend = ps === 'pendulum', link = base === 'link';
+
+    let pendText = '', mon = desc, mat = '', scale = f.scale;
+    if (pend) {
+        const sp = splitPend(desc);
+        pendText = f.pends[lang] || f.pends.en || sp.pend;
+        if (f.pends[lang] || f.pends.en) mon = desc;           // champs séparés : l'effet est déjà seul
+        else { mon = sp.mon; mat = sp.mat; }
+        if (scale == null && sp.scale !== null) scale = sp.scale;
+    }
+    const effect = oneLine(cleanPend(mon || desc));
+    const fr = lang === 'fr';
+    return {
+        version: '1.0.0', name, level: String(f.level || f.linkval || 0), type: typeLine(f, fr),
+        icon: st ? ICON[f.race] || 'None' : 'None', effect: mat ? mat + '\n' + effect : effect,
+        atk: st ? '' : String(f.atk ?? '0'), def: st || link ? '' : String(f.def ?? '0'),
+        serial: '', copyright: '© 2026 YGOPRO.ORG',
+        attribute: f.type === 'Spell Card' ? 'Spell' : f.type === 'Trap Card' ? 'Trap' : f.attribute ? f.attribute[0] + f.attribute.slice(1).toLowerCase() : 'Light',
+        id: String(f.id || ''), rarity: 'common',
+        pendulum: { enabled: pend, effect: pend ? cleanPend(pendText) : '', blue: pend ? String(scale ?? '0') : '0', red: pend ? String(scale ?? '0') : '0', boxSize: 'Normal', boxSizeEnabled: true },
+        variant: 'Normal', link: linkMarkers(f.linkmarkers), layout: LAYOUT[base] || 'Effect',
+        boxSize: desc.length > 300 ? 'Small' : 'Normal',
+    };
+}
+
+// ============================================================
+// AFFICHAGE
+// ============================================================
+let cur = null, curDescLang = 'en';
+
+function show(f) {
+    cur = f;
+    const first = f.names.en || f.names.fr || Object.values(f.names)[0];
+    $('title').textContent = first;
+    $('art').src = f.art || '';
+    $('art').style.display = f.art ? '' : 'none';
+
+    const chips = [f.type, f.race, f.attribute, f.level != null && f.level !== 0 ? 'Niv/Rang ' + f.level : null,
+        f.linkval ? 'Lien ' + f.linkval : null, f.atk != null && f.atk !== '' ? 'ATK ' + f.atk : null,
+        f.def != null && f.def !== '' ? 'DEF ' + f.def : null, f.scale != null ? 'Échelle ' + f.scale : null, f.id ? 'Code ' + f.id : null, f.src]
+        .filter(Boolean);
+    $('stats').innerHTML = chips.map((x) => `<span class="chip">${esc(x)}</span>`).join('');
+
+    $('names').innerHTML = LANGS.filter(([l]) => f.names[l]).map(([l, label]) =>
+        `<tr><td>${label}</td><td>${esc(f.names[l])}</td><td><button type="button" data-copy="${esc(f.names[l])}" title="Copier"><i class="fa-solid fa-copy"></i></button></td></tr>`).join('');
+
+    const avail = LANGS.filter(([l]) => f.descs[l]);
+    curDescLang = avail.find(([l]) => l === 'fr') ? 'fr' : avail[0]?.[0];
+    renderDesc();
+
+    $('jlang').innerHTML = LANGS.filter(([l]) => f.names[l]).map(([l, label]) => `<option value="${l}">${label}</option>`).join('');
+    $('jlang').value = f.names.fr ? 'fr' : 'en' in f.names ? 'en' : $('jlang').value;
+    renderJson();
+
+    $('res').classList.remove('hidden');
+    $('jcard').classList.remove('hidden');
+    $('sugg').innerHTML = '';
+    out.log(`${first} (${f.src})`, 'ok');
+}
+
+function renderDesc() {
+    const avail = LANGS.filter(([l]) => cur.descs[l]);
+    $('dtabs').innerHTML = avail.map(([l, label]) => `<button class="tab${l === curDescLang ? ' active' : ''}" type="button" data-l="${l}">${label}</button>`).join('')
+        || '<span class="hint">Aucune description disponible.</span>';
+    let d = cur.descs[curDescLang] || '';
+    const p = cur.pends[curDescLang];
+    if (p) d = `[Effet Pendule]\n${p}\n\n[Effet de monstre]\n${d}`;
+    $('desc').value = d;
+}
+function renderJson() {
+    $('json').value = JSON.stringify(toJson(cur, $('jlang').value), null, 2);
+}
+
+// ============================================================
+// RECHERCHE
+// ============================================================
+function search() {
+    if (!DB.ready) return YGO.toast('Bases locales non chargées.', 'err');
+    const q = $('q').value.trim();
+    if (!q) return YGO.toast('Saisis un nom ou un code.', 'err');
+    $('sugg').innerHTML = '';
+
+    let ref = null;
+    if (/^\d{4,}$/.test(q)) {
+        if (DB.cards.has(q)) ref = { id: q };
+        else { const yk = [...DB.yugi].find(([, c]) => String(c.id) === q.replace(/^0+/, ''))?.[0]; if (yk) ref = { yk }; }
+    }
+    ref = ref || DB.names.get(nk(q));
+    if (ref) { const f = build(ref); if (f) return show(f); }
+
+    // pas de correspondance exacte : propositions
+    const k = nk(q);
+    const hits = k ? DB.list.filter((x) => x.k.includes(k)).sort((a, b) => a.k.length - b.k.length).slice(0, 12) : [];
+    out.log('Introuvable : ' + q, 'warn');
+    if (!hits.length) return YGO.toast('Carte introuvable.', 'err');
+    $('sugg').innerHTML = '<span class="hint" style="width:100%">Tu voulais dire :</span>' +
+        hits.map((h) => `<button class="btn" type="button" data-name="${esc(h.label)}">${esc(h.label)}</button>`).join('');
+}
+
+$('go').addEventListener('click', search);
+$('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+$('sugg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-name]');
+    if (b) { $('q').value = b.dataset.name; search(); }
+});
+$('names').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-copy]');
+    if (b) YGO.copy(b.dataset.copy, 'Nom copié !');
+});
+$('dtabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-l]');
+    if (b) { curDescLang = b.dataset.l; renderDesc(); }
+});
+$('jlang').addEventListener('change', renderJson);
+$('copyDesc').addEventListener('click', () => YGO.copy($('desc').value, 'Effet copié !'));
+$('copyJson').addEventListener('click', () => YGO.copy($('json').value, 'JSON copié !'));
+$('dlJson').addEventListener('click', () => {
+    const n = (cur.names[$('jlang').value] || cur.names.en || 'carte').replace(/[\\/:*?"<>|]/g, '').trim();
+    YGO.download($('json').value, n + '.json', 'application/json;charset=utf-8');
+});
+
+out.log('Tape un nom ou un code, puis valide.');
+</script>
+</body>
+</html>
