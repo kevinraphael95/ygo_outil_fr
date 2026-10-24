@@ -38,7 +38,7 @@
         <div class="hero-icon"><i class="fa-solid fa-file-code"></i></div>
         <div>
             <h1>Transformeur JSON</h1>
-            <p>Transforme une carte, une decklist ou un .cdb en JSON ygopro.org (un fichier par carte, en ZIP) ou en CSV.</p>
+            <p>Transforme une decklist ou un .cdb en JSON ygopro.org (un fichier par carte, en ZIP) ou en CSV.</p>
         </div>
     </section>
 
@@ -46,8 +46,7 @@
         <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
 
         <div class="tabs" id="modes">
-            <button class="tab active" type="button" data-mode="card"><i class="fa-solid fa-id-card"></i> Carte</button>
-            <button class="tab" type="button" data-mode="deck"><i class="fa-solid fa-layer-group"></i> Decklist</button>
+            <button class="tab active" type="button" data-mode="deck"><i class="fa-solid fa-layer-group"></i> Decklist</button>
             <button class="tab" type="button" data-mode="cdb"><i class="fa-solid fa-database"></i> .cdb</button>
         </div>
 
@@ -59,14 +58,7 @@
             </select>
         </div>
 
-        <div id="p-card">
-            <div class="field">
-                <label for="cardIn">Nom (FR ou EN) ou code de la carte</label>
-                <input type="text" id="cardIn" autocomplete="off" placeholder="ex : Magicien Sombre ou 46986414">
-            </div>
-        </div>
-
-        <div id="p-deck" class="hidden">
+        <div id="p-deck">
             <div class="field">
                 <label for="deckIn">Decklist</label>
                 <textarea id="deckIn" placeholder="3 Dark Magician&#10;2x Pot of Greed&#10;ou les codes d'un .ydk"></textarea>
@@ -87,7 +79,7 @@
         </div>
 
         <div class="actions">
-            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> <span id="startLbl">Générer le JSON</span></button>
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> <span id="startLbl">Générer les JSON</span></button>
             <button id="copyBtn" class="btn hidden" type="button"><i class="fa-solid fa-copy"></i> Copier le JSON</button>
             <button id="zipBtn" class="btn hidden" type="button"><i class="fa-solid fa-file-zipper"></i> ZIP des JSON</button>
             <button id="csvBtn" class="btn hidden" type="button"><i class="fa-solid fa-file-csv"></i> CSV Manager</button>
@@ -102,7 +94,7 @@
 
     <div class="card">
         <h2 class="card-title"><i class="fa-solid fa-file-lines"></i> Aperçu</h2>
-        <textarea id="out" readonly placeholder="Le JSON d'une carte unique s'affiche ici."></textarea>
+        <textarea id="out" readonly placeholder="Le JSON s'affiche ici quand il n'y a qu'une seule carte."></textarea>
     </div>
 
     <div class="card">
@@ -157,6 +149,8 @@ async function loadDb() {
             if (!c.en && !c.fr) continue;
             DB.yugi.set(k, c);
             if (c.fr) DB.yugiFr.set(nk(c.fr), k);
+            // anciens noms (translated_name) et titre de page : toujours retrouvables
+            for (const n of [c.translated_name, c.title]) if (n && !DB.yugiFr.has(nk(n))) DB.yugiFr.set(nk(n), k);
         }
     } catch (e) { out.log('yugipedia-db.json indisponible : ' + e.message, 'warn'); }
     DB.ready = DB.cards.size > 0 || DB.yugi.size > 0;
@@ -176,13 +170,23 @@ function fromDb(id, lang) {
 // Carte Yugipedia -> objet commun (illustration YGOPRODeck préférée au scan)
 function fromYugi(key, y, lang) {
     const en = lang === 'en';
-    const t = y.card_type === 'Spell' ? 'Spell Card' : y.card_type === 'Trap' ? 'Trap Card' : 'Effect Monster';
+    const ct = String(y.card_type || '');
+    const t = /spell/i.test(ct) ? 'Spell Card' : /trap/i.test(ct) ? 'Trap Card' : 'Effect Monster';
+    const ty = `${y.type || ''} ${ct}`;
+    const base = t === 'Spell Card' ? 'spell' : t === 'Trap Card' ? 'trap'
+        : /link/i.test(ty) ? 'link' : /xyz/i.test(ty) ? 'xyz' : /synchro/i.test(ty) ? 'synchro'
+        : /fusion/i.test(ty) ? 'fusion' : /ritual/i.test(ty) ? 'ritual' : /normal/i.test(ty) ? 'normal' : 'effect';
+    const frameType = base + (t === 'Effect Monster' && /pendulum/i.test(ty) ? '_pendulum' : '');
     const raw = y.img || y.img_en || '';
     let art = DB.crop.get(nk(y.en)) || DB.crop.get(key);
     for (const k of art ? [] : scanKeys(raw)) if (DB.crop.has(k)) { art = DB.crop.get(k); break; }
-    return { id: '', name: (en ? y.en : y.fr || y.en) || y.en, desc: (en ? y.lore : y.fr_lore || y.lore) || '',
-        type: t, frameType: t === 'Spell Card' ? 'spell' : t === 'Trap Card' ? 'trap' : /fusion/i.test(y.type || '') ? 'fusion' : 'effect',
-        atk: y.atk, def: y.def, level: y.level, race: y.race, attribute: y.attribute, art: art || raw };
+    const desc = (en ? y.desc_en : y.desc_fr || y.desc_en) || '';
+    const typeline = t === 'Effect Monster' && y.type ? String(y.type).split('/').map((s) => s.trim()).filter(Boolean) : undefined;
+    return { id: y.id || '', name: (en ? y.en : y.fr || y.en) || y.en, desc, monster_desc: desc,
+        pend_desc: (en ? y.pendulum_desc_en : y.pendulum_desc_fr || y.pendulum_desc_en) || '',
+        type: t, frameType, typeline, atk: y.atk, def: y.def, level: y.level ?? y.rank,
+        race: t === 'Effect Monster' ? y.race : (y.property || 'Normal'), attribute: y.attribute,
+        linkval: y.link, linkmarkers: y.linkmarkers || [], scale: y.scale, art: art || raw };
 }
 // Recherche par nom FR/EN ou code -> objet commun | null
 function find(q, lang) {
@@ -368,8 +372,8 @@ function decodeCdb(t, race, attr, lvl, atk, def) {
 // ============================================================
 // ENTRÉES
 // ============================================================
-let mode = 'card', cards = [], missing = [];
-const LABELS = { card: 'Générer le JSON', deck: 'Générer les JSON', cdb: 'Générer les JSON' };
+let mode = 'deck', cards = [], missing = [];
+const LABELS = { deck: 'Générer les JSON', cdb: 'Générer les JSON' };
 
 function finish() {
     const n = cards.length;
@@ -385,22 +389,13 @@ $('modes').addEventListener('click', (e) => {
     if (!t) return;
     mode = t.dataset.mode;
     document.querySelectorAll('#modes .tab').forEach((x) => x.classList.toggle('active', x === t));
-    ['card', 'deck', 'cdb'].forEach((m) => $('p-' + m).classList.toggle('hidden', m !== mode));
+    ['deck', 'cdb'].forEach((m) => $('p-' + m).classList.toggle('hidden', m !== mode));
     $('langField').classList.toggle('hidden', mode === 'cdb');
     $('startLbl').textContent = LABELS[mode];
     cards = []; missing = []; finish();
 });
 $('deckFile').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) $('deckIn').value = await f.text(); });
 YGO.bindFileCount($('cdbFile'), $('cdbInfo'));
-
-function runCard() {
-    const q = $('cardIn').value.trim();
-    if (!q) return YGO.toast('Saisis un nom ou un code.', 'err');
-    const c = find(q, $('lang').value);
-    if (!c) { missing.push(q); out.log('Introuvable : ' + q, 'warn'); return YGO.toast('Carte introuvable.', 'err'); }
-    cards = [c];
-    out.log(`${c.name} (${c.id || 'Yugipedia'})`, 'ok');
-}
 
 function runDeck() {
     const lang = $('lang').value, seen = new Set();
@@ -452,7 +447,7 @@ $('startBtn').addEventListener('click', async () => {
     const btn = $('startBtn');
     btn.disabled = true; cards = []; missing = [];
     try {
-        if (mode === 'card') runCard(); else if (mode === 'deck') runDeck(); else await runCdb();
+        if (mode === 'deck') runDeck(); else await runCdb();
         finish();
     } catch (err) {
         out.log('❌ ' + err.message, 'err');
@@ -483,7 +478,7 @@ $('csvBtn').addEventListener('click', () => {
 });
 $('missBtn').addEventListener('click', () => YGO.download(missing.join('\n'), 'non_trouvees.txt', 'text/plain;charset=utf-8'));
 
-out.log('Choisis un mode (carte, decklist ou .cdb), puis lance la génération.');
+out.log('Choisis un mode (decklist ou .cdb), puis lance la génération.');
 </script>
 </body>
 </html>
