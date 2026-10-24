@@ -34,13 +34,24 @@
         <div class="hero-icon"><i class="fa-solid fa-database"></i></div>
         <div>
             <h1>Génération de <span class="grad">cards-db.json</span></h1>
-            <p>Récupère et fusionne les bases anglaise et française de YGOPRODeck, directement depuis ton navigateur.</p>
+            <p>Récupère la base anglaise de YGOPRODeck et la fusionne avec les langues de ton choix, directement depuis ton navigateur.</p>
         </div>
     </section>
 
     <div class="card">
         <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Téléchargement et fusion</h2>
-        <p class="card-sub">Génère le fichier <code>cards-db.json</code> directement sur ton ordinateur.</p>
+        <p class="card-sub">Génère le fichier <code>cards-db.json</code> directement sur ton ordinateur. L'anglais est toujours inclus.</p>
+
+        <h3 class="card-sub" style="margin:0 0 8px;"><i class="fa-solid fa-language"></i> Langues à ajouter</h3>
+        <div id="langs" style="display:flex;flex-wrap:wrap;gap:6px 22px;margin-bottom:8px;">
+            <label class="check"><input type="checkbox" name="lang" value="fr" checked> Français</label>
+            <label class="check"><input type="checkbox" name="lang" value="de"> Allemand</label>
+            <label class="check"><input type="checkbox" name="lang" value="it"> Italien</label>
+            <label class="check"><input type="checkbox" name="lang" value="pt"> Portugais</label>
+        </div>
+        <p id="fr-warn" class="hint hidden" style="margin:0 0 16px;">
+            <i class="fa-solid fa-triangle-exclamation"></i> Sans le français, les champs <code>fr</code> et <code>desc_fr</code> seront absents du fichier : les outils qui les lisent n'auront rien.
+        </p>
 
         <label class="check" style="margin-bottom:16px;">
             <input type="checkbox" id="minify">
@@ -69,10 +80,19 @@
 <script>
 const { $ } = YGO;
 const API = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
+const LANG_NAMES = { fr: 'Français', de: 'Allemand', it: 'Italien', pt: 'Portugais' };
 const out = YGO.console($('console'));
 const progress = YGO.progress($('progress'));
 const btn = $('start-btn');
+const langBoxes = [...document.querySelectorAll('input[name="lang"]')];
 out.log('En attente du lancement…');
+
+// Avertissement si le français est décoché
+const frBox = langBoxes.find((b) => b.value === 'fr');
+const frWarn = $('fr-warn');
+const syncWarn = () => frWarn.classList.toggle('hidden', frBox.checked);
+frBox.addEventListener('change', syncWarn);
+syncWarn();
 
 async function getJson(url, label) {
     const res = await fetch(url);
@@ -81,44 +101,59 @@ async function getJson(url, label) {
 }
 
 btn.addEventListener('click', async () => {
+    const langs = langBoxes.filter((b) => b.checked).map((b) => b.value);   // ordre : fr, de, it, pt
+
     btn.disabled = true;
+    langBoxes.forEach((b) => { b.disabled = true; });
     progress.show();
     out.clear();
     try {
-        out.log('📥 Téléchargement des cartes EN et FR en parallèle…');
-        progress.set(10, 'Téléchargement EN + FR…');
-        const [en, fr] = await Promise.all([
-            getJson(API, 'EN'),
-            getJson(API + '?language=fr', 'FR'),
-        ]);
-        out.log(`→ ${en.data.length} cartes EN, ${fr.data.length} cartes FR.`, 'ok');
+        const names = ['Anglais', ...langs.map((l) => LANG_NAMES[l])];
+        out.log(`📥 Téléchargement en parallèle : ${names.join(', ')}…`);
+        if (!langs.includes('fr')) out.log('⚠️ Français décoché : pas de champs fr / desc_fr dans le fichier.', 'warn');
+        progress.set(10, `Téléchargement (${names.length} langue${names.length > 1 ? 's' : ''})…`);
+
+        // EN (base) + une requête par langue cochée, toutes en parallèle
+        const jobs = [{ code: 'en', label: 'Anglais', url: API }]
+            .concat(langs.map((l) => ({ code: l, label: LANG_NAMES[l], url: `${API}?language=${l}` })));
+        let finished = 0;
+        const results = await Promise.all(jobs.map(async (j) => {
+            const json = await getJson(j.url, j.label);
+            finished++;
+            progress.set(10 + Math.round((finished / jobs.length) * 55), `Téléchargé : ${j.label} (${finished}/${jobs.length})`);
+            out.log(`→ ${json.data.length} cartes ${j.label}.`, 'ok');
+            return [j.code, json.data];
+        }));
+        const data = Object.fromEntries(results);
 
         out.log('🔄 Indexation et fusion des données…');
         progress.set(70, 'Fusion des données…');
-        const frById = new Map(fr.data.map((c) => [String(c.id), c]));
+        const byId = {};
+        for (const l of langs) byId[l] = new Map(data[l].map((c) => [String(c.id), c]));
 
         const merged = {};
-        for (const c of en.data) {
+        for (const c of data.en) {
             const id = String(c.id);
-            const f = frById.get(id);
-            merged[id] = {
-                fr: f ? f.name : null,
-                en: c.name,
-                type: c.type,
-                frameType: c.frameType,
-                desc_fr: f ? f.desc : null,
-                desc_en: c.desc,
-                atk: c.atk ?? null,
-                def: c.def ?? null,
-                level: c.level ?? null,
-                race: c.race || null,
-                attribute: c.attribute || null,
-                linkval: c.linkval ?? null,
-                linkmarkers: c.linkmarkers || null,
-                scale: c.scale ?? null,
-                img_cropped: `https://images.ygoprodeck.com/images/cards_cropped/${id}.jpg`,
-                img_full: `https://images.ygoprodeck.com/images/cards/${id}.jpg`,
-            };
+            const card = {};
+            // noms par langue (fr, de, it, pt) puis EN
+            for (const l of langs) { const f = byId[l].get(id); card[l] = f ? f.name : null; }
+            card.en = c.name;
+            card.type = c.type;
+            card.frameType = c.frameType;
+            // descriptions par langue puis EN
+            for (const l of langs) { const f = byId[l].get(id); card['desc_' + l] = f ? f.desc : null; }
+            card.desc_en = c.desc;
+            card.atk = c.atk ?? null;
+            card.def = c.def ?? null;
+            card.level = c.level ?? null;
+            card.race = c.race || null;
+            card.attribute = c.attribute || null;
+            card.linkval = c.linkval ?? null;
+            card.linkmarkers = c.linkmarkers || null;
+            card.scale = c.scale ?? null;
+            card.img_cropped = `https://images.ygoprodeck.com/images/cards_cropped/${id}.jpg`;
+            card.img_full = `https://images.ygoprodeck.com/images/cards/${id}.jpg`;
+            merged[id] = card;
         }
 
         out.log('📦 Création du fichier JSON…');
@@ -127,13 +162,14 @@ btn.addEventListener('click', async () => {
         const size = YGO.download(json, 'cards-db.json', 'application/json;charset=utf-8');
 
         progress.set(100, 'Terminé !');
-        out.log(`✅ cards-db.json généré (${YGO.fmtBytes(size)}, ${Object.keys(merged).length} cartes).`, 'ok');
+        out.log(`✅ cards-db.json généré (${YGO.fmtBytes(size)}, ${Object.keys(merged).length} cartes, langues : ${names.join(', ')}).`, 'ok');
         YGO.toast(`cards-db.json généré (${YGO.fmtBytes(size)}) !`);
     } catch (err) {
         out.log('❌ Erreur : ' + err.message, 'err');
         YGO.toast('Une erreur est survenue', 'err');
     } finally {
         btn.disabled = false;
+        langBoxes.forEach((b) => { b.disabled = false; });
     }
 });
 </script>
