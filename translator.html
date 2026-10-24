@@ -42,7 +42,7 @@
         <div class="hero-icon"><i class="fa-solid fa-language"></i></div>
         <div>
             <h1>Traducteur</h1>
-            <p>Traduis une carte, une decklist ou un .cdb entier (FR ↔ EN) à partir des bases locales YGOPRODeck et Yugipedia. Pour un .cdb custom, les effets modifiés peuvent être préservés et taggés.</p>
+            <p>Traduis une decklist ou un .cdb entier (FR ↔ EN) à partir des bases locales YGOPRODeck et Yugipedia. Pour un .cdb custom, les effets modifiés peuvent être préservés et taggés.</p>
         </div>
     </section>
 
@@ -50,8 +50,7 @@
         <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
 
         <div class="tabs" id="modes">
-            <button class="tab active" type="button" data-mode="card"><i class="fa-solid fa-id-card"></i> Carte</button>
-            <button class="tab" type="button" data-mode="deck"><i class="fa-solid fa-layer-group"></i> Decklist</button>
+            <button class="tab active" type="button" data-mode="deck"><i class="fa-solid fa-layer-group"></i> Decklist</button>
             <button class="tab" type="button" data-mode="cdb"><i class="fa-solid fa-database"></i> .cdb</button>
         </div>
 
@@ -63,17 +62,8 @@
             </select>
         </div>
 
-        <!-- CARTE -->
-        <div id="p-card">
-            <div class="field">
-                <label for="cardIn">Nom de la carte (FR ou EN)</label>
-                <input type="text" id="cardIn" autocomplete="off" placeholder="ex : Dragon Blanc aux Yeux Bleus">
-                <span class="hint">Affiche le nom et l'effet dans la langue choisie.</span>
-            </div>
-        </div>
-
         <!-- DECKLIST -->
-        <div id="p-deck" class="hidden">
+        <div id="p-deck">
             <div class="field">
                 <label for="deckIn">Decklist</label>
                 <textarea id="deckIn" placeholder="3 Dark Magician&#10;2x Pot of Greed&#10;Main Deck / Extra Deck / Side Deck acceptés"></textarea>
@@ -108,7 +98,7 @@
         </div>
 
         <div class="actions">
-            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> <span id="startLbl">Traduire</span></button>
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> <span id="startLbl">Traduire la decklist</span></button>
             <button id="copyBtn" class="btn hidden" type="button"><i class="fa-solid fa-copy"></i> Copier</button>
             <button id="dlBtn" class="btn hidden" type="button"><i class="fa-solid fa-download"></i> <span id="dlLbl">Télécharger</span></button>
             <button id="missBtn" class="btn hidden" type="button"><i class="fa-solid fa-triangle-exclamation"></i> Non traduites (.txt)</button>
@@ -167,6 +157,8 @@ async function loadDb() {
                 if (!c.en && !c.fr) continue;
                 DB.yugi.set(k, c);
                 if (c.fr) DB.yugiFr.set(nk(c.fr), k);
+                // anciens noms (translated_name) et titre de page : toujours retrouvables
+                for (const n of [c.translated_name, c.title]) if (n && !DB.yugiFr.has(nk(n))) DB.yugiFr.set(nk(n), k);
             }
         }
     } catch (e) { out.log('yugipedia-db.json indisponible : ' + e.message, 'warn'); }
@@ -179,7 +171,7 @@ loadDb();
 YGO.initSql().then((s) => { SQL = s; }).catch((e) => out.log('sql.js indisponible : ' + e.message, 'err'));
 
 /** Cherche une carte par nom FR ou EN -> {en, fr, dEn, dFr} ou null.
- *  🆕 Fusionne YGOPRODeck + Yugipedia : si YGOPRODeck n'a pas de FR (nom ou effet),
+ *  Fusionne YGOPRODeck + Yugipedia : si YGOPRODeck n'a pas de FR (nom ou effet),
  *  on complète avec Yugipedia au lieu de s'arrêter là. */
 function lookup(name, yugi = true) {
     const k = nk(name);
@@ -190,7 +182,7 @@ function lookup(name, yugi = true) {
     if (yugi) {
         const y = DB.yugi.get(k) || DB.yugi.get(DB.yugiFr.get(k));
         if (y) {
-            const yc = { en: y.en || '', fr: y.fr || '', dEn: y.lore || '', dFr: y.fr_lore || '' };
+            const yc = { en: y.en || '', fr: y.fr || '', dEn: y.desc_en || '', dFr: y.desc_fr || '' };
             if (!r) r = yc;
             else for (const f of ['en', 'fr', 'dEn', 'dFr']) if (!r[f]) r[f] = yc[f];
         }
@@ -201,10 +193,10 @@ function lookup(name, yugi = true) {
 // ============================================================
 // ÉTAT / ONGLETS
 // ============================================================
-let mode = 'card';
+let mode = 'deck';
 let result = null;   // { text } ou { bytes, name }
 let missing = [];
-const LABELS = { card: 'Traduire la carte', deck: 'Traduire la decklist', cdb: 'Traduire le .cdb' };
+const LABELS = { deck: 'Traduire la decklist', cdb: 'Traduire le .cdb' };
 
 function showResult(r) {
     result = r;
@@ -219,7 +211,7 @@ $('modes').addEventListener('click', (e) => {
     if (!t) return;
     mode = t.dataset.mode;
     document.querySelectorAll('#modes .tab').forEach((x) => x.classList.toggle('active', x === t));
-    ['card', 'deck', 'cdb'].forEach((m) => $('p-' + m).classList.toggle('hidden', m !== mode));
+    ['deck', 'cdb'].forEach((m) => $('p-' + m).classList.toggle('hidden', m !== mode));
     $('dstField').classList.toggle('hidden', mode === 'cdb');
     $('outCard').classList.toggle('hidden', mode === 'cdb');
     $('startLbl').textContent = LABELS[mode];
@@ -231,26 +223,6 @@ $('deckFile').addEventListener('change', async (e) => {
     if (f) $('deckIn').value = await f.text();
 });
 YGO.bindFileCount($('cdbFile'), $('cdbInfo'));
-
-// ============================================================
-// CARTE
-// ============================================================
-function runCard() {
-    const q = $('cardIn').value.trim();
-    if (!q) return YGO.toast('Saisis un nom de carte.', 'err');
-    const dst = $('dst').value;
-    const m = lookup(q);
-    if (!m) {
-        out.log(`Introuvable : ${q}`, 'warn');
-        $('out').value = '';
-        return YGO.toast('Carte introuvable.', 'err');
-    }
-    if (!m[dst]) out.log(`Pas de version ${dst.toUpperCase()} pour « ${q} ».`, 'warn');
-    const text = `FR : ${m.fr || '—'}\nEN : ${m.en || '—'}\n\n${(dst === 'fr' ? m.dFr : m.dEn) || '(pas de description dans cette langue)'}`;
-    $('out').value = text;
-    out.log(`${q}  ->  ${m[dst] || '—'}`, 'ok');
-    showResult({ text, name: 'carte.txt' });
-}
 
 // ============================================================
 // DECKLIST (texte ou .ydk)
@@ -343,7 +315,7 @@ async function runCdb() {
                 // Carte inconnue des bases : on ne touche à rien
                 missing.push(tilde ? tilde.trim() : name);
             } else if (keep && isModified(d, tag, m.dFr, m.dEn)) {
-                // 🆕 Testé AVANT le « pas de FR » : une custom trouvée sans nom/effet FR est bien taguée
+                // Testé AVANT le « pas de FR » : une custom trouvée sans nom/effet FR est bien taguée
                 upd.push([modName && m.fr ? m.fr : name, tagDesc(d, tag), id]);
                 modified++;
             } else if (!m.fr && !m.dFr) {
@@ -379,8 +351,7 @@ $('startBtn').addEventListener('click', async () => {
     const btn = $('startBtn');
     btn.disabled = true; missing = []; showResult(null);
     try {
-        if (mode === 'card') runCard();
-        else if (mode === 'deck') runDeck();
+        if (mode === 'deck') runDeck();
         else await runCdb();
     } catch (err) {
         out.log('❌ ' + err.message, 'err');
@@ -395,7 +366,7 @@ $('dlBtn').addEventListener('click', () => {
 });
 $('missBtn').addEventListener('click', () => YGO.download(missing.join('\n'), 'non_traduites.txt', 'text/plain;charset=utf-8'));
 
-out.log('Choisis un mode (carte, decklist ou .cdb), puis lance la traduction.');
+out.log('Choisis un mode (decklist ou .cdb), puis lance la traduction.');
 </script>
 </body>
 </html>
