@@ -283,7 +283,7 @@ function toJson(f, lang) {
 let cur = null, curLang = 'en';
 const LABEL = Object.fromEntries(LANGS);
 
-function show(f) {
+function show(f, startLang) {
     cur = f;
     const first = f.names.en || f.names.fr || Object.values(f.names)[0];
     $('title').textContent = first;
@@ -302,7 +302,8 @@ function show(f) {
     $('jlang').innerHTML = LANGS.filter(([l]) => f.names[l])
         .map(([l, label]) => `<option value="${l}">${label}${f.descs[l] ? '' : ' (nom seulement)'}</option>`).join('');
 
-    setLang(f.descs.fr ? 'fr' : f.descs.en ? 'en' : Object.keys(f.names)[0]);
+    // langue du nom tapé, sinon anglais, sinon la première disponible
+    setLang(startLang && f.names[startLang] ? startLang : f.names.en ? 'en' : Object.keys(f.names)[0]);
 
     $('res').classList.remove('hidden');
     $('jcard').classList.remove('hidden');
@@ -349,7 +350,14 @@ function search() {
         else { const yk = [...DB.yugi].find(([, c]) => String(c.id) === q.replace(/^0+/, ''))?.[0]; if (yk) ref = { yk }; }
     }
     ref = ref || DB.names.get(nk(q));
-    if (ref) { const f = build(ref); if (f) return show(f); }
+    if (ref) {
+        const f = build(ref);
+        if (f) {
+            const qk = nk(q);
+            const typed = LANGS.find(([l]) => f.names[l] && nk(f.names[l]) === qk);   // un code ou un ancien nom ne matche aucune langue
+            return show(f, typed ? typed[0] : 'en');
+        }
+    }
 
     // pas de correspondance exacte : propositions
     const k = nk(q);
