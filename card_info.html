@@ -63,6 +63,7 @@
         <div class="actions">
             <button id="go" class="btn btn-primary" type="button"><i class="fa-solid fa-search"></i> Chercher</button>
         </div>
+        <p class="hint" id="status" style="margin-top:10px;">Chargement des bases…</p>
         <div class="sugg" id="sugg"></div>
     </div>
 
@@ -87,6 +88,7 @@
             <label for="jlang">Langue du nom et de l'effet dans le JSON</label>
             <select id="jlang"></select>
         </div>
+        <p class="hint" id="jnote"></p>
         <textarea id="json" readonly></textarea>
         <div class="actions">
             <button id="copyJson" class="btn" type="button"><i class="fa-solid fa-copy"></i> Copier le JSON</button>
@@ -94,17 +96,13 @@
         </div>
     </div>
 
-    <div class="card">
-        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
-        <div id="console" class="console" role="log"></div>
-    </div>
 </main>
 
 <footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
 <script>
 const { $ } = YGO;
-const out = YGO.console($('console'));
+const status = (msg) => { $('status').textContent = msg; };
 const nk = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const LANGS = [['en', 'Anglais'], ['fr', 'Français'], ['de', 'Allemand'], ['it', 'Italien'], ['pt', 'Portugais'], ['es', 'Espagnol'], ['ja', 'Japonais'], ['ko', 'Coréen'], ['tc', 'Chinois trad.'], ['sc', 'Chinois simpl.']];
@@ -131,7 +129,7 @@ async function loadDb() {
             addName(c.en, { id: String(id) });
             addName(c.fr, { id: String(id) });
         }
-    } catch (e) { out.log('cards-db.json indisponible : ' + e.message, 'warn'); }
+    } catch (e) { YGO.toast('cards-db.json indisponible', 'err'); }
     try {
         const r = await fetch('data/yugipedia-db.json');
         if (r.ok) for (const [k, c] of Object.entries(await r.json())) {
@@ -142,9 +140,9 @@ async function loadDb() {
             addName(c.translated_name, ref);   // ancien nom « traduction littérale » : toujours trouvable
             addName(c.title, ref);
         }
-    } catch (e) { out.log('yugipedia-db.json indisponible : ' + e.message, 'warn'); }
+    } catch (e) { YGO.toast('yugipedia-db.json indisponible', 'err'); }
     DB.ready = DB.cards.size > 0 || DB.yugi.size > 0;
-    out.log(DB.ready ? `Bases prêtes : ${DB.cards.size.toLocaleString('fr-FR')} cartes YGOPRODeck, ${DB.yugi.size.toLocaleString('fr-FR')} Yugipedia.` : 'Aucune base chargée (dossier data/ introuvable ?).', DB.ready ? 'ok' : 'err');
+    status(DB.ready ? `Bases prêtes : ${DB.cards.size.toLocaleString('fr-FR')} cartes YGOPRODeck, ${DB.yugi.size.toLocaleString('fr-FR')} Yugipedia.` : 'Aucune base chargée (dossier data/ introuvable ?).');
 }
 loadDb();
 
@@ -250,7 +248,6 @@ function linkMarkers(list) {
 }
 
 function toJson(f, lang) {
-    const pick = (o) => o[lang] || o.en || Object.values(o)[0] || '';
     const name = f.names[lang] || f.names.en || Object.values(f.names)[0];
     const desc = f.descs[lang] || f.descs.en || '';
     const st = f.type === 'Spell Card' || f.type === 'Trap Card';
@@ -281,9 +278,10 @@ function toJson(f, lang) {
 }
 
 // ============================================================
-// AFFICHAGE
+// AFFICHAGE (une seule langue active : onglets effet + menu JSON liés)
 // ============================================================
-let cur = null, curDescLang = 'en';
+let cur = null, curLang = 'en';
+const LABEL = Object.fromEntries(LANGS);
 
 function show(f) {
     cur = f;
@@ -301,31 +299,38 @@ function show(f) {
     $('names').innerHTML = LANGS.filter(([l]) => f.names[l]).map(([l, label]) =>
         `<tr><td>${label}</td><td>${esc(f.names[l])}</td><td><button type="button" data-copy="${esc(f.names[l])}" title="Copier"><i class="fa-solid fa-copy"></i></button></td></tr>`).join('');
 
-    const avail = LANGS.filter(([l]) => f.descs[l]);
-    curDescLang = avail.find(([l]) => l === 'fr') ? 'fr' : avail[0]?.[0];
-    renderDesc();
+    $('jlang').innerHTML = LANGS.filter(([l]) => f.names[l])
+        .map(([l, label]) => `<option value="${l}">${label}${f.descs[l] ? '' : ' (nom seulement)'}</option>`).join('');
 
-    $('jlang').innerHTML = LANGS.filter(([l]) => f.names[l]).map(([l, label]) => `<option value="${l}">${label}</option>`).join('');
-    $('jlang').value = f.names.fr ? 'fr' : 'en' in f.names ? 'en' : $('jlang').value;
-    renderJson();
+    setLang(f.descs.fr ? 'fr' : f.descs.en ? 'en' : Object.keys(f.names)[0]);
 
     $('res').classList.remove('hidden');
     $('jcard').classList.remove('hidden');
     $('sugg').innerHTML = '';
-    out.log(`${first} (${f.src})`, 'ok');
+}
+
+function setLang(l) {
+    curLang = l;
+    $('jlang').value = l;
+    renderDesc();
+    renderJson();
 }
 
 function renderDesc() {
-    const avail = LANGS.filter(([l]) => cur.descs[l]);
-    $('dtabs').innerHTML = avail.map(([l, label]) => `<button class="tab${l === curDescLang ? ' active' : ''}" type="button" data-l="${l}">${label}</button>`).join('')
-        || '<span class="hint">Aucune description disponible.</span>';
-    let d = cur.descs[curDescLang] || '';
-    const p = cur.pends[curDescLang];
+    $('dtabs').innerHTML = LANGS.filter(([l]) => cur.names[l])
+        .map(([l, label]) => `<button class="tab${l === curLang ? ' active' : ''}" type="button" data-l="${l}" style="${cur.descs[l] ? '' : 'opacity:.55'}">${label}</button>`).join('');
+    let d = cur.descs[curLang] || '';
+    const p = cur.pends[curLang];
     if (p) d = `[Effet Pendule]\n${p}\n\n[Effet de monstre]\n${d}`;
-    $('desc').value = d;
+    $('desc').value = d || `(Pas de description en ${LABEL[curLang]}. Pour l'avoir, régénère yugipedia-db.json avec cette langue cochée.)`;
 }
+
 function renderJson() {
-    $('json').value = JSON.stringify(toJson(cur, $('jlang').value), null, 2);
+    $('json').value = JSON.stringify(toJson(cur, curLang), null, 2);
+    const noDesc = !cur.descs[curLang];
+    const fb = noDesc ? (cur.descs.en ? 'anglais' : 'vide') : '';
+    $('jnote').textContent = (noDesc ? `Pas de description en ${LABEL[curLang]} : l'effet du JSON est en ${fb}. ` : '')
+        + (curLang !== 'fr' ? 'Le type (race / catégorie) est écrit en anglais.' : '');
 }
 
 // ============================================================
@@ -348,7 +353,6 @@ function search() {
     // pas de correspondance exacte : propositions
     const k = nk(q);
     const hits = k ? DB.list.filter((x) => x.k.includes(k)).sort((a, b) => a.k.length - b.k.length).slice(0, 12) : [];
-    out.log('Introuvable : ' + q, 'warn');
     if (!hits.length) return YGO.toast('Carte introuvable.', 'err');
     $('sugg').innerHTML = '<span class="hint" style="width:100%">Tu voulais dire :</span>' +
         hits.map((h) => `<button class="btn" type="button" data-name="${esc(h.label)}">${esc(h.label)}</button>`).join('');
@@ -366,17 +370,16 @@ $('names').addEventListener('click', (e) => {
 });
 $('dtabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-l]');
-    if (b) { curDescLang = b.dataset.l; renderDesc(); }
+    if (b) setLang(b.dataset.l);
 });
-$('jlang').addEventListener('change', renderJson);
+$('jlang').addEventListener('change', () => setLang($('jlang').value));
 $('copyDesc').addEventListener('click', () => YGO.copy($('desc').value, 'Effet copié !'));
 $('copyJson').addEventListener('click', () => YGO.copy($('json').value, 'JSON copié !'));
 $('dlJson').addEventListener('click', () => {
-    const n = (cur.names[$('jlang').value] || cur.names.en || 'carte').replace(/[\\/:*?"<>|]/g, '').trim();
+    const n = (cur.names[curLang] || cur.names.en || 'carte').replace(/[\\/:*?"<>|]/g, '').trim();
     YGO.download($('json').value, n + '.json', 'application/json;charset=utf-8');
 });
 
-out.log('Tape un nom ou un code, puis valide.');
 </script>
 </body>
 </html>
