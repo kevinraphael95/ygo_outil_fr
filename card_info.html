@@ -311,6 +311,7 @@ function show(f) {
 
 function setLang(l) {
     curLang = l;
+    $('title').textContent = cur.names[l] || cur.names.en || Object.values(cur.names)[0];
     $('jlang').value = l;
     renderDesc();
     renderJson();
