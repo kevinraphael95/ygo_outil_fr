@@ -146,6 +146,41 @@
                             <label>Sous-types additionnels</label>
                             <div class="row" style="gap:14px" id="monster-flags"></div>
                         </div>
+
+                        <!-- Procédures d'invocation (selon la catégorie / les sous-types) -->
+                        <div id="proc-fusion" style="display:none">
+                            <div class="field">
+                                <label>Matériaux de Fusion <span class="hint">(Fusion.AddProcMix)</span></label>
+                                <div id="fusion-mats"></div>
+                                <div class="actions"><button class="btn btn-sm" type="button" onclick="addFusionMat()"><i class="fa-solid fa-plus"></i> Matériau</button></div>
+                            </div>
+                        </div>
+                        <div id="proc-synchro" style="display:none">
+                            <div class="grid-2">
+                                <div class="field"><label>Syntoniseur (1)</label><div data-widget="st" data-none="N'importe quel Syntoniseur"></div></div>
+                                <div class="field"><label>Non-Syntoniseurs</label><div data-widget="sn" data-none="N'importe quel non-Syntoniseur"></div></div>
+                                <div class="field"><label>Non-Syntoniseurs : minimum</label><input type="number" id="s-nmin" value="1" min="1" oninput="render()"></div>
+                                <div class="field"><label>Non-Syntoniseurs : maximum</label><input type="number" id="s-nmax" value="99" min="1" oninput="render()"></div>
+                            </div>
+                        </div>
+                        <div id="proc-xyz" style="display:none">
+                            <div class="grid-2">
+                                <div class="field"><label>Matériaux Xyz (filtre)</label><div data-widget="xf" data-none="N'importe quel monstre"></div></div>
+                                <div class="field"><label>Nombre de matériaux : minimum</label><input type="number" id="x-min" value="2" min="1" oninput="render()"></div>
+                                <div class="field"><label>Nombre de matériaux : maximum <span class="hint">(vide = identique)</span></label><input type="number" id="x-max" min="1" oninput="render()"></div>
+                            </div>
+                            <span class="hint">Le Niveau requis est le champ « Rang » ci-dessus.</span>
+                        </div>
+                        <div id="proc-link" style="display:none">
+                            <div class="grid-2">
+                                <div class="field"><label>Matériaux de Lien (filtre)</label><div data-widget="lf" data-none="N'importe quel monstre"></div></div>
+                                <div class="field"><label>Nombre de matériaux : minimum</label><input type="number" id="l-min" value="2" min="1" oninput="render()"></div>
+                                <div class="field"><label>Nombre de matériaux : maximum <span class="hint">(vide = cote de Lien)</span></label><input type="number" id="l-max" min="1" oninput="render()"></div>
+                            </div>
+                        </div>
+                        <div id="proc-union" style="display:none">
+                            <div class="field"><label>Union : peut s'équiper sur</label><div data-widget="uf" data-none="N'importe quel monstre"></div></div>
+                        </div>
                     </div>
 
                     <div id="spell-fields" style="display:none">
@@ -159,6 +194,10 @@
                                 <option value="FIELD">Terrain</option>
                                 <option value="RITUAL">Rituelle</option>
                             </select>
+                        </div>
+                        <div class="field" id="spell-filter-field" style="display:none">
+                            <label id="spell-filter-label">Filtre</label>
+                            <div data-widget="sf" data-none="Aucun filtre"></div>
                         </div>
                     </div>
 
@@ -205,7 +244,7 @@
     <div id="view-reference" class="hidden">
         <div class="alert info">
             <i class="fa-solid fa-circle-info"></i>
-            <p>Rappel de signature commune à toutes les fonctions d'effet : <code>function s.xx(e,tp,eg,ep,ev,re,r,rp,chk)</code> — <code>e</code> l'effet, <code>tp</code> le joueur déclencheur, <code>eg</code> le groupe d'event, <code>ep</code> le joueur d'event, <code>ev</code> la valeur d'event, <code>re</code> l'effet responsable (Reason Effect), <code>chk</code> vaut <code>0</code> pendant la vérification de légalité et <code>nil</code>/absent pendant la résolution.</p>
+            <p>Rappel de signature commune à toutes les fonctions d'effet : <code>function s.xx(e,tp,eg,ep,ev,re,r,rp,chk)</code> — <code>e</code> l'effet, <code>tp</code> le joueur déclencheur, <code>eg</code> le groupe d'event, <code>ep</code> le joueur d'event, <code>ev</code> la valeur d'event, <code>re</code> l'effet responsable (Reason Effect), <code>chk</code> vaut <code>0</code> pendant la vérification de légalité et <code>nil</code>/absent pendant la résolution. Référence complète : <a href="lua_reference.html">Référence Lua EDOPro →</a></p>
         </div>
         <div class="field">
             <label for="ref-search-input">Filtrer les constantes</label>
@@ -376,6 +415,10 @@ const REF_SECTIONS = [
 ];
 
 
+/* hex -> constante SET_* (archetype_setcode_constants.lua) */
+const SET_NAMES = {"0x1":"SET_ALLY_OF_JUSTICE","0x2":"SET_GENEX","0x1002":"SET_R_GENEX","0x2002":"SET_GENEX_ALLY","0x3":"SET_HORUS","0x1003":"SET_HORUS_BLACK_FLAME_DRAGON","0x4":"SET_AMAZONESS","0x5":"SET_ARCANA_FORCE","0x6":"SET_DARK_WORLD","0x7":"SET_ANCIENT_GEAR","0x8":"SET_HERO","0x3008":"SET_ELEMENTAL_HERO","0x5008":"SET_VISION_HERO","0x6008":"SET_EVIL_HERO","0xa008":"SET_MASKED_HERO","0xc008":"SET_DESTINY_HERO","0x9":"SET_NEOS","0xa":"SET_LSWARM","0x100a":"SET_STEELSWARM","0xb":"SET_INFERNITY","0xc":"SET_ALIEN","0xd":"SET_SABER","0x100d":"SET_X_SABER","0x300d":"SET_XX_SABER","0x400d":"SET_ELEMENTSABER","0xe":"SET_WATT","0xf":"SET_OJAMA","0x10":"SET_GUSTO","0x11":"SET_KARAKURI","0x12":"SET_FROG","0x13":"SET_MEKLORD","0x3013":"SET_MEKLORD_EMPEROR","0x6013":"SET_MEKLORD_ARMY","0x9013":"SET_MEKLORD_ASTRO","0x14":"SET_ALLURE_QUEEN","0x15":"SET_BES","0x16":"SET_ROID","0x1016":"SET_VEHICROID","0x2016":"SET_SPEEDROID","0x17":"SET_SYNCHRO","0x1017":"SET_SYNCHRON","0x2017":"SET_SYNCHRO_DRAGON","0x18":"SET_CLOUDIAN","0x19":"SET_GLADIATOR","0x1019":"SET_GLADIATOR_BEAST","0x1a":"SET_DARK_SCORPION","0x1b":"SET_PHANTOM_BEAST","0x101b":"SET_MECHA_PHANTOM_BEAST","0x1c":"SET_SPIRIT_MESSAGE","0x1d":"SET_KOAKI_MEIRU","0x1e":"SET_CHRYSALIS","0x1f":"SET_NEO_SPACIAN","0x20":"SET_SHIEN","0x21":"SET_EARTHBOUND","0x1021":"SET_EARTHBOUND_IMMORTAL","0x22":"SET_JURRAC","0x23":"SET_MALEFIC","0x24":"SET_SCRAP","0x25":"SET_IRON_CHAIN","0x26":"SET_MORPHTRONIC","0x27":"SET_TG","0x28":"SET_BATTERYMAN","0x29":"SET_DRAGUNITY","0x2a":"SET_NATURIA","0x2b":"SET_NINJA","0x2c":"SET_FLAMVELL","0x2d":"SET_NITRO","0x2e":"SET_GRAVEKEEPERS","0x2f":"SET_ICE_BARRIER","0x30":"SET_VYLON","0x31":"SET_FORTUNE_LADY","0x32":"SET_VOLCANIC","0x33":"SET_BLACKWING","0x1033":"SET_ASSAULT_BLACKWING","0x34":"SET_CRYSTAL","0x1034":"SET_CRYSTAL_BEAST","0x2034":"SET_ULTIMATE_CRYSTAL","0x5034":"SET_ADVANCED_CRYSTAL_BEAST","0x35":"SET_FABLED","0x36":"SET_MACHINA","0x37":"SET_MIST_VALLEY","0x38":"SET_LIGHTSWORN","0x39":"SET_LAVAL","0x3a":"SET_GISHKI","0x3b":"SET_RED_EYES","0x3c":"SET_REPTILIANNE","0x3d":"SET_SIX_SAMURAI","0x103d":"SET_SECRET_SIX_SAMURAI","0x3e":"SET_WORM","0x3f":"SET_MAJESTIC","0x40":"SET_FORBIDDEN_ONE","0x41":"SET_LV","0x42":"SET_NORDIC","0x3042":"SET_NORDIC_ASCENDANT","0x6042":"SET_NORDIC_BEAST","0xa042":"SET_NORDIC_ALFAR","0x5042":"SET_NORDIC_RELIC","0x43":"SET_JUNK","0x44":"SET_THE_AGENT","0x45":"SET_ARCHFIEND","0x1045":"SET_RED_DRAGON_ARCHFIEND","0x46":"SET_FUSION","0x1046":"SET_FUSION_DRAGON","0x47":"SET_GEM","0x1047":"SET_GEM_KNIGHT","0x48":"SET_NUMBER","0x1048":"SET_NUMBER_C","0x5048":"SET_NUMBER_C39","0x49":"SET_SKYBLASTER","0x4a":"SET_TIMELORD","0x4b":"SET_AESIR","0x4c":"SET_TRAP_HOLE","0x4d":"SET_BEASTS_BATTLE","0x304e":"SET_EVOLTILE","0x604e":"SET_EVOLSAUR","0x504e":"SET_EVOLZAR","0x4f":"SET_DARK_LUCIUS","0x104f":"SET_ASSAULT_MODE","0x50":"SET_VENOM","0x1050":"SET_STARVING_VENOM","0x51":"SET_GADGET","0x52":"SET_GUARDIAN","0x1052":"SET_GATE_GUARDIAN","0x2052":"SET_SKULL_GUARDIAN","0x53":"SET_CONSTELLAR","0x54":"SET_GAGAGA","0x55":"SET_PHOTON","0x56":"SET_INZEKTOR","0x57":"SET_RESONATOR","0x58":"SET_WIND_UP","0x59":"SET_GOGOGO","0x5a":"SET_PENGUIN","0x5b":"SET_INMATO","0x5c":"SET_SPHINX","0x5d":"SET_ULTIMATE_INSECT","0x5e":"SET_DARK_MIMIC","0x5f":"SET_MYSTIC_SWORDSMAN","0x60":"SET_BAMBOO_SWORD","0x61":"SET_NINJITSU_ART","0x62":"SET_TOON","0x63":"SET_REACTOR","0x64":"SET_HARPIE","0x65":"SET_INFESTATION","0x66":"SET_WARRIOR","0x1066":"SET_SYMPHONIC_WARRIOR","0x2066":"SET_MAGNET_WARRIOR","0x69":"SET_HIERATIC","0x6a":"SET_BUTTERSPY","0x6b":"SET_BOUNZER","0x6c":"SET_HELIOS","0x6d":"SET_DJINN","0x6e":"SET_PROPHECY","0x106e":"SET_SPELLBOOK","0x6f":"SET_HEROIC","0x106f":"SET_HEROIC_CHALLENGER","0x206f":"SET_HEROIC_CHAMPION","0x70":"SET_CHRONOMALY","0x71":"SET_MADOLCHE","0x72":"SET_GEARGIA","0x1072":"SET_GEARGIANO","0x73":"SET_XYZ","0x1073":"SET_CXYZ","0x2073":"SET_XYZ_DRAGON","0x4073":"SET_ARMORED_XYZ","0x74":"SET_MERMAIL","0x75":"SET_ABYSS","0x76":"SET_HERALDIC_BEAST","0x77":"SET_ATLANTEAN","0x78":"SET_NIMBLE","0x79":"SET_FIRE_FIST","0x107a":"SET_NOBLE_KNIGHT","0x507a":"SET_INFERNOBLE_KNIGHT","0x207a":"SET_NOBLE_ARMS","0x607a":"SET_INFERNOBLE_ARMS","0x7b":"SET_GALAXY","0x107b":"SET_GALAXY_EYES","0x307b":"SET_GALAXY_EYES_TACHYON_DRAGON","0x7c":"SET_FIRE_FORMATION","0x7d":"SET_HAZY","0x107d":"SET_HAZY_FLAME","0x7e":"SET_ZEXAL","0x107e":"SET_ZW","0x207e":"SET_ZS","0x7f":"SET_UTOPIC","0x107f":"SET_UTOPIA","0x207f":"SET_UTOPIC_FUTURE","0x80":"SET_DUSTON","0x81":"SET_FIRE_KING","0x1081":"SET_FIRE_KING_AVATAR","0x82":"SET_DODODO","0x83":"SET_PUPPET","0x1083":"SET_GIMMICK_PUPPET","0x84":"SET_BATTLIN_BOXER","0x85":"SET_SUPER_DEFENSE_ROBOT","0x86":"SET_STAR_SERAPH","0x87":"SET_UMBRAL_HORROR","0x88":"SET_BUJIN","0x89":"SET_HOLE","0x108a":"SET_TRAPTRIX","0x8b":"SET_MALICEVOROUS","0x8d":"SET_GHOSTRICK","0x8e":"SET_VAMPIRE","0x8f":"SET_ZUBABA","0x90":"SET_SYLVAN","0x91":"SET_NECROVALLEY","0x92":"SET_HERALDRY","0x93":"SET_CYBER","0x1093":"SET_CYBER_DRAGON","0x2093":"SET_CYBER_ANGEL","0x4093":"SET_CYBERDARK","0x94":"SET_CYBERNETIC","0x95":"SET_RANK_UP_MAGIC","0x96":"SET_FISHBORG","0x97":"SET_ARTIFACT","0x98":"SET_MAGICIAN","0x99":"SET_ODD_EYES","0x9a":"SET_SUPERHEAVY_SAMURAI","0x109a":"SET_SUPERHEAVY_SAMURAI_SOUL","0x9b":"SET_MELODIOUS","0x109b":"SET_MELODIOUS_MAESTRA","0x9c":"SET_TELLARKNIGHT","0x109c":"SET_STELLARKNIGHT","0x9d":"SET_SHADDOLL","0x9e":"SET_YANG_ZING","0x9f":"SET_PERFORMAPAL","0xa0":"SET_LEGENDARY_KNIGHT","0xa1":"SET_LEGENDARY_DRAGON","0x10a2":"SET_DARK_MAGICIAN","0x20a2":"SET_MAGICIAN_GIRL","0x30a2":"SET_DARK_MAGICIAN_GIRL","0xa3":"SET_STARDUST","0xa4":"SET_KURIBOH","0x10a4":"SET_WINGED_KURIBOH","0xa5":"SET_CHANGE","0xa6":"SET_SPROUT","0xa7":"SET_ARTORIGUS","0xa8":"SET_LAUNDSALLYN","0xa9":"SET_FLUFFAL","0xaa":"SET_QLI","0x10aa":"SET_APOQLIPHORT","0xab":"SET_DESKBOT","0xac":"SET_GOBLIN","0x10ac":"SET_GOBLIN_RIDER","0xad":"SET_FRIGHTFUR","0xae":"SET_DARK_CONTRACT","0xaf":"SET_DD","0x10af":"SET_DDD","0xb0":"SET_GOTTOMS","0xb1":"SET_BURNING_ABYSS","0xb2":"SET_UA","0xb3":"SET_YOSENJU","0xb4":"SET_NEKROZ","0xb5":"SET_RITUAL_BEAST","0x10b5":"SET_RITUAL_BEAST_TAMER","0x20b5":"SET_SPIRITUAL_BEAST","0x30b5":"SET_SPIRITUAL_BEAST_TAMER","0x40b5":"SET_RITUAL_BEAST_ULTI","0x10b7":"SET_OUTER_ENTITY","0x20b7":"SET_ELDER_ENTITY","0x40b7":"SET_OLD_ENTITY","0xb9":"SET_BLAZE_ACCELERATOR","0xba":"SET_RAIDRAPTOR","0xbb":"SET_INFERNOID","0xbc":"SET_JINZO","0xbd":"SET_GAIA_THE_FIERCE_KNIGHT","0xbe":"SET_MONARCH","0xbf":"SET_CHARMER","0xc0":"SET_POSSESSED","0x10c0":"SET_FAMILIAR_POSSESSED","0xc1":"SET_PSY_FRAME","0x10c1":"SET_PSY_FRAMEGEAR","0xc2":"SET_POWER_TOOL","0xc3":"SET_EDGE_IMP","0xc4":"SET_ZEFRA","0xc5":"SET_VOID","0xc6":"SET_PERFORMAGE","0xc7":"SET_DRACOSLAYER","0xc8":"SET_IGKNIGHT","0xc9":"SET_AROMA","0xca":"SET_EMPOWERED_WARRIOR","0xcb":"SET_AETHER","0xcc":"SET_PREDICTION_PRINCESS","0x10cd":"SET_AQUAACTRESS","0x20cd":"SET_AQUARIUM","0xcf":"SET_CHAOS","0x10cf":"SET_BLACK_LUSTER_SOLDIER","0xd0":"SET_MAJESPECTER","0xd1":"SET_GRAYDLE","0xd2":"SET_KOZMO","0xd3":"SET_KAIJU","0xd4":"SET_PALEOZOIC","0xd5":"SET_DANTE","0xd6":"SET_DESTRUCTION_SWORD","0xd7":"SET_BUSTER_BLADER","0xd8":"SET_DINOMIST","0xd9":"SET_SHIRANUI","0x10d9":"SET_SHIRANUI_SPECTRALSWORD","0xda":"SET_DRACOVERLORD","0xdb":"SET_PHANTOM_KNIGHTS","0x10db":"SET_THE_PHANTOM_KNIGHTS","0xdc":"SET_SUPER_QUANT","0x10dc":"SET_SUPER_QUANTUM","0x20dc":"SET_SUPER_QUANTAL_MECH_BEAST","0xdd":"SET_BLUE_EYES","0xde":"SET_EXODIA","0xdf":"SET_LUNALIGHT","0xe0":"SET_AMORPHAGE","0xe1":"SET_METALFOES","0xe2":"SET_TRIAMID","0xe3":"SET_CUBIC","0xe4":"SET_CELTIC_GUARD","0xe5":"SET_CIPHER","0x10e5":"SET_CIPHER_DRAGON","0xe6":"SET_FLOWER_CARDIAN","0xe7":"SET_SILENT_SWORDSMAN","0xe8":"SET_SILENT_MAGICIAN","0xe9":"SET_MAGNA_WARRIOR","0xea":"SET_CRYSTRON","0xeb":"SET_CHEMICRITTER","0x10ec":"SET_ABYSS_ACTOR","0x20ec":"SET_ABYSS_SCRIPT","0xed":"SET_SUBTERROR","0x10ed":"SET_SUBTERROR_BEHEMOTH","0xee":"SET_SPYRAL","0x10ee":"SET_SPYRAL_GEAR","0x20ee":"SET_SPYRAL_MISSION","0xef":"SET_DARKLORD","0xf0":"SET_WINDWITCH","0xf1":"SET_ZOODIAC","0xf2":"SET_PENDULUM","0x10f2":"SET_PENDULUM_DRAGON","0x20f2":"SET_PENDULUMGRAPH","0xf3":"SET_PREDAP","0x10f3":"SET_PREDAPLANT","0xf4":"SET_INVOKED","0xf5":"SET_GANDORA","0xf6":"SET_SKYSCRAPER","0xf7":"SET_LYRILUSC","0x10f8":"SET_SUPREME_KING_GATE","0x20f8":"SET_SUPREME_KING_DRAGON","0xf9":"SET_TRUE_DRACO_KING","0xfa":"SET_PHANTASM_SPIRAL","0xfb":"SET_TRICKSTAR","0xfc":"SET_GOUKI","0xfd":"SET_WORLD_CHALICE","0xfe":"SET_WORLD_LEGACY","0xff":"SET_CLEAR_WING","0x100":"SET_BONDING","0x101":"SET_CODE_TALKER","0x102":"SET_ROKKET","0x103":"SET_ALTERGEIST","0x104":"SET_KRAWLER","0x105":"SET_METAPHYS","0x106":"SET_VENDREAD","0x107":"SET_FA","0x108":"SET_MAGICAL_MUSKET","0x109":"SET_THE_WEATHER","0x10a":"SET_PARSHATH","0x10b":"SET_TINDANGLE","0x10c":"SET_MEKK_KNIGHT","0x10d":"SET_MYTHICAL_BEAST","0x10e":"SET_EVOLUTION_PILL","0x10f":"SET_BORREL","0x110":"SET_RELINQUISHED","0x1110":"SET_EYES_RESTRICT","0x111":"SET_ARMED_DRAGON","0x1111":"SET_ARMED_DRAGON_THUNDER","0x112":"SET_KNIGHTMARE","0x113":"SET_ELEMENTAL_LORD","0x114":"SET_FUR_HIRE","0x115":"SET_SKY_STRIKER","0x1115":"SET_SKY_STRIKER_ACE","0x116":"SET_CRUSADIA","0x117":"SET_IMPCANTATION","0x118":"SET_CYNET","0x119":"SET_SALAMANGREAT","0x11a":"SET_DINOWRESTLER","0x11b":"SET_ORCUST","0x11c":"SET_THUNDER_DRAGON","0x11d":"SET_FORBIDDEN","0x11e":"SET_DANGER","0x11f":"SET_NEPHTHYS","0x120":"SET_PRANK_KIDS","0x121":"SET_MAYAKASHI","0x122":"SET_VALKYRIE","0x123":"SET_ROSE","0x1123":"SET_ROSE_DRAGON","0x124":"SET_MACHINE_ANGEL","0x125":"SET_SMILE","0x126":"SET_TIME_THIEF","0x127":"SET_INFINITRACK","0x128":"SET_WITCHCRAFTER","0x129":"SET_EVIL_EYE","0x12a":"SET_ENDYMION","0x12b":"SET_MARINCESS","0x12c":"SET_TENYI","0x12d":"SET_SIMORGH","0x12e":"SET_FORTUNE_FAIRY","0x12f":"SET_BATTLEWASP","0x130":"SET_UNCHAINED","0x1130":"SET_UNCHAINED_SOUL","0x131":"SET_DREAM_MIRROR","0x132":"SET_MATHMECH","0x133":"SET_DRAGONMAID","0x134":"SET_GENERAIDER","0x135":"SET_IGNISTER","0x136":"SET_AI","0x137":"SET_ANCIENT_WARRIORS","0x138":"SET_MEGALITH","0x139":"SET_ONOMAT","0x13a":"SET_PALLADIUM","0x13b":"SET_REBELLION","0x13c":"SET_CODEBREAKER","0x13d":"SET_NEMESES","0x13e":"SET_BARBAROS","0x13f":"SET_PLUNDER_PATROLL","0x140":"SET_ADAMANCIPATOR","0x141":"SET_RIKKA","0x142":"SET_ELDLICH","0x143":"SET_ELDLIXIR","0x144":"SET_GOLDEN_LAND","0x145":"SET_PHANTASM","0x146":"SET_DOGMATIKA","0x147":"SET_MELFFY","0x148":"SET_POTAN","0x149":"SET_ROLAND","0x14a":"SET_APPLIANCER","0x14b":"SET_NUMERON","0x114b":"SET_NUMERON_GATE","0x14c":"SET_FOSSIL","0x314d":"SET_SPIRITUAL_EARTH_ART","0x514d":"SET_SPIRITUAL_FIRE_ART","0x614d":"SET_SPIRITUAL_WATER_ART","0xa14d":"SET_SPIRITUAL_WIND_ART","0x14e":"SET_DUAL_AVATAR","0x14f":"SET_TRI_BRIGADE","0x150":"SET_VIRTUAL_WORLD","0x1150":"SET_VIRTUAL_WORLD_GATE","0x151":"SET_DRYTRON","0x152":"SET_MAGISTUS","0x153":"SET_KI_SIKIL","0x154":"SET_LIL_LA","0x155":"SET_EVIL_TWIN","0x156":"SET_LIVE_TWIN","0x1157":"SET_SUNAVALON","0x2157":"SET_SUNVINE","0x4157":"SET_SUNSEED","0x158":"SET_SPRINGANS","0x159":"SET_MYUTANT","0x15a":"SET_S_FORCE","0x15b":"SET_STARRY_KNIGHT","0x15c":"SET_DOLL_MONSTER","0x15d":"SET_RANK_DOWN_MAGIC","0x15e":"SET_AMAZEMENT","0x15f":"SET_ATTRACTION","0x160":"SET_BRANDED","0x161":"SET_WAR_ROCK","0x162":"SET_MATERIACTOR","0x163":"SET_OGDOADIC","0x164":"SET_SOLFACHORD","0x1164":"SET_GRANSOLFACHORD","0x165":"SET_URSARCTIC","0x166":"SET_DESPIA","0x167":"SET_MAGIKEY","0x168":"SET_GUNKAN","0x1169":"SET_MYSTICAL_BEAST_OF_THE_FOREST","0x2169":"SET_MYSTICAL_SPIRIT_OF_THE_FOREST","0x16a":"SET_STEALTH_KRAGEN","0x16b":"SET_NUMEROUNIOUS","0x16c":"SET_NUMBER_SPELL_TRAP","0x16d":"SET_SWORDSOUL","0x16e":"SET_ICEJADE","0x16f":"SET_FLOOWANDEREEZE","0x170":"SET_TOPOLOGIC","0x171":"SET_HYPERION","0x172":"SET_BEETROOPER","0x173":"SET_PUNK","0x174":"SET_EXOSISTER","0x175":"SET_DINOMORPHIA","0x176":"SET_LADY_OF_LAMENT","0x177":"SET_SEVENTH","0x1178":"SET_BARIANS","0x2178":"SET_BATTLEGUARD","0x179":"SET_KAIRYU_SHIN","0x17a":"SET_SEA_STEALTH","0x17b":"SET_THERION","0x17c":"SET_SCARECLAW","0x17d":"SET_LIBROMANCER","0x17e":"SET_VAYLANTZ","0x17f":"SET_LABRYNTH","0x117f":"SET_WELCOME_LABRYNTH","0x180":"SET_RUNICK","0x181":"SET_SPRIGHT","0x182":"SET_TEARLAMENTS","0x183":"SET_VERNUSYLPH","0x184":"SET_MOKEY_MOKEY","0x185":"SET_WINGMAN","0x1186":"SET_DOODLE_BEAST","0x2186":"SET_DOODLEBOOK","0x187":"SET_G_GOLEM","0x188":"SET_RAINBOW_BRIDGE","0x189":"SET_BYSTIAL","0x18b":"SET_GHOTI","0x18a":"SET_KASHTIRA","0x193":"SET_GOLD_PRIDE","0x67":"SET_KOALA","0x68":"SET_KANGAROO","0x18c":"SET_RESCUE_ACE","0x18d":"SET_PURRELY","0x18e":"SET_MIKANKO","0x18f":"SET_AQUAMIRROR","0x190":"SET_FIREWALL","0x191":"SET_MANNADIUM","0x192":"SET_NEMLERIA","0x194":"SET_LABYRINTH_WALL","0x195":"SET_FAVORITE","0x196":"SET_VANQUISH_SOUL","0x197":"SET_NOUVELLES","0x198":"SET_RECIPE","0x199":"SET_VISAS","0x19a":"SET_MEMENTO","0x19b":"SET_CENTURION","0x19c":"SET_VAALMONICA","0x19d":"SET_YUBEL","0x19e":"SET_VOICELESS_VOICE","0x1a0":"SET_TOY","0x1a1":"SET_TENPAI_DRAGON","0x1a2":"SET_SANGEN","0x1a3":"SET_RAGNARAIKA","0x1a6":"SET_MILLENNIUM","0x1a7":"SET_EXODD","0x1a8":"SET_FIENDSMITH","0x1aa":"SET_WHITE_FOREST","0x1ac":"SET_MULCHARMY","0x1ad":"SET_EMBLEMA","0x200":"SET_COUNTER","0x201":"SET_BATTLIN_BOXING","0x202":"SET_VEDA","0x203":"SET_DIABELL","0x1203":"SET_DIABELLESTARR","0x204":"SET_SINFUL_SPOILS","0x205":"SET_SNAKE_EYE","0x206":"SET_PATISSCIEL","0x207":"SET_HEART","0x208":"SET_TISTINA","0x119f":"SET_WHITE_AURA","0x1a4":"SET_SALAMANDRA","0x1a5":"SET_ASHENED","0x1a9":"SET_BLUE_TEARS","0x1ab":"SET_TACHYON","0x1ae":"SET_SHARK","0x11ae":"SET_SHARK_DRAKE","0x1af":"SET_WEDJU","0x1b0":"SET_PRIMITE","0x1b1":"SET_SIX_STRIKE","0x1b2":"SET_METALMORPH","0x1b3":"SET_MORGANITE","0x1b4":"SET_AZAMINA","0x1b5":"SET_MIMIGHOUL","0x1b6":"SET_RYZEAL","0x1b7":"SET_SCHOOLWORK","0x1b8":"SET_RYU_GE","0x1b9":"SET_MALISS","0x1ba":"SET_ARGOSTARS","0x1bb":"SET_AQUA_JET","0x1bc":"SET_DRAGON_RULER","0x1bd":"SET_MITSURUGI","0x1bf":"SET_DOMINUS","0x1c2":"SET_APOPHIS","0x1c3":"SET_SERKET","0x1be":"SET_REGENESIS","0x1c0":"SET_DRAGONTAIL","0x1c1":"SET_YUMMY","0x1c4":"SET_K9","0x1c5":"SET_TELEPORT","0x1c6":"SET_IMPRISONED_DEITY","0x1c7":"SET_ARTMEGIA"};
+const setRef = h => SET_NAMES[String(h).toLowerCase()] || h;
+
 /* ===== LOGIQUE ===== */
 /* ================= STATE ================= */
 let cardType = "MONSTER";
@@ -389,6 +432,8 @@ document.addEventListener('DOMContentLoaded', function(){
   populateSelect('m-race', RACES.map(r=>[r, RACE_LABELS_FR[r]]), 'DRAGON');
   buildMonsterFlagPills();
   buildLinkMarkerPills();
+  initWidgets();
+  addFusionMat(); addFusionMat();
   rebuildArchetypes();
   renderStatus();
   loadCardinfo();
@@ -403,7 +448,7 @@ function populateSelect(id, pairs, selected){
 
 /* ================= BASES DE DONNÉES (cardinfo, cards-db, yugipedia-db) ================= */
 const $ = YGO.$;
-const DATA_DIR = './data/';   /* dossier data/ du dépôt/ */
+const DATA_DIR = '../data/';   /* dossier data/ du dépôt, vu depuis random/ */
 const SRC = {
   fr:    {label:'cardinfo FR',  file:'cardinfo_fr.txt',      json:false},
   en:    {label:'cardinfo EN',  file:'cardinfo_english.txt', json:false},
@@ -473,12 +518,14 @@ function onArchetypeSearch(input){
   if(a){
     if(!setcodes.find(s=>s.h===a.h)) setcodes.push({n:a.en||a.fr, h:a.h});
     input.value = '';
+    refreshSetWidgets();
     render();
   }
 }
 
 function removeSetcode(h){
   setcodes = setcodes.filter(s=>s.h!==h);
+  refreshSetWidgets();
   render();
 }
 
@@ -670,6 +717,7 @@ function pickCard(i){
     else $('t-sub').value = d.sub;
   }
   d.archs.forEach(a=>{ if(!setcodes.find(s=>s.h===a.h)) setcodes.push({n:a.en||a.fr, h:a.h}); });
+  refreshSetWidgets();
   $('card-results').style.display = 'none';
   $('card-search').value = '';
   render();
@@ -864,7 +912,7 @@ function renderEffects(){
 
         ${e.cond==='CUSTOM' ? `<div class="field"><label>Corps de s.conN (raw)</label><textarea placeholder="return Duel...(...)" oninput="updateEff(${e.id},'condRaw',this.value)">${e.condRaw}</textarea></div>` : ''}
 
-        ${(e.typeMain==='CONTINUOUS'||e.typeMain==='SINGLE'||e.typeMain==='FIELD') ? `
+        ${isPassive(e) ? `
         <div class="field">
           <label>Lignes ajoutées dans initial_effect (SetCode / SetValue / SetOperation…)</label>
           <textarea placeholder="e${n}:SetCode(EFFECT_CANNOT_BE_BATTLE_TARGET)" oninput="updateEff(${e.id},'continuousRaw',this.value)">${e.continuousRaw}</textarea>
@@ -893,6 +941,110 @@ function renderEffects(){
     </div>
   `; }).join('');
 }
+
+
+/* ================= FILTRES & PROCÉDURES D'INVOCATION ================= */
+/* Un « widget » = choix du type de filtre (nom précis / race / attribut / archétype) + sa valeur. */
+function widgetHTML(p, opts){
+  opts = opts || {};
+  const kinds = (opts.code ? [['code','Nom précis (passcode)']] : []).concat([['race','Type (Race)'],['attr','Attribut'],['set','Archétype (parmi ceux ajoutés)']]);
+  return `<div class="row" style="gap:8px;flex-wrap:nowrap">
+    <select id="${p}-k" data-w="${p}" onchange="wKind('${p}')" style="max-width:230px">
+      <option value="none">${esc(opts.none||'Aucun filtre')}</option>
+      ${kinds.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+    </select>
+    <span id="${p}-v" style="flex:1"></span>
+  </div>`;
+}
+function initWidgets(){
+  document.querySelectorAll('[data-widget]').forEach(el=>{
+    el.innerHTML = widgetHTML(el.dataset.widget, {none:el.dataset.none, code:el.dataset.code==='1'});
+  });
+}
+function fillW(p){
+  const k = $(p+'-k').value, box = $(p+'-v');
+  const old = $(p+'-x') ? $(p+'-x').value : '';
+  if(k==='none'){ box.innerHTML=''; return; }
+  if(k==='code'){ box.innerHTML = `<input type="number" id="${p}-x" placeholder="passcode" value="${old}" oninput="render()">`; return; }
+  const opts = k==='race' ? RACES.map(r=>[r,RACE_LABELS_FR[r]])
+             : k==='attr' ? ATTRIBUTES.map(a=>[a,ATTR_LABELS_FR[a]])
+             : setcodes.map(s=>[s.h, s.n+' ('+s.h+')']);
+  box.innerHTML = opts.length
+    ? `<select id="${p}-x" onchange="render()">${opts.map(([v,l])=>`<option value="${v}" ${v===old?'selected':''}>${esc(l)}</option>`).join('')}</select>`
+    : '<span class="hint">Ajoute d\'abord un archétype (étape 1).</span>';
+}
+function wKind(p){ fillW(p); render(); }
+function refreshSetWidgets(){
+  document.querySelectorAll('select[data-w]').forEach(s=>{ if(s.value==='set') fillW(s.dataset.w); });
+}
+function readW(p){
+  const k = $(p+'-k'); if(!k || k.value==='none') return null;
+  const x = $(p+'-x'); if(!x || !x.value) return null;
+  return {k:k.value, v:x.value};
+}
+function wParts(w){
+  return w.k==='race' ? ['Card.IsRace','RACE_'+w.v]
+       : w.k==='attr' ? ['Card.IsAttribute','ATTRIBUTE_'+w.v]
+       : ['Card.IsSetCard', setRef(w.v)];
+}
+/* filtre pour les procédures d'invocation (signature f(c,scard,sumtype,tp)) */
+function exprEx(w){ if(!w) return null; if(w.k==='code') return w.v; const [f,c]=wParts(w); return `aux.FilterBoolFunctionEx(${f},${c})`; }
+/* filtre simple f(c) (Union, Équipement, Rituel) */
+function exprPlain(w){ if(!w || w.k==='code') return null; const [f,c]=wParts(w); return `aux.FilterBoolFunction(${f},${c})`; }
+function exprNonTuner(w){ if(!w || w.k==='code') return 'Synchro.NonTuner(nil)'; const [f,c]=wParts(w); return `Synchro.NonTunerEx(${f},${c})`; }
+
+let fusionSeq = 0;
+function addFusionMat(){
+  const p = 'fm'+(fusionSeq++);
+  const row = document.createElement('div');
+  row.className = 'row'; row.style.cssText = 'gap:8px;flex-wrap:nowrap;margin-bottom:8px'; row.dataset.p = p;
+  row.innerHTML = `<div style="flex:1">${widgetHTML(p,{code:true,none:'Monstre quelconque'})}</div>
+    <button class="btn btn-sm btn-danger" type="button" title="Retirer" aria-label="Retirer ce matériau" onclick="removeFusionMat(this)"><i class="fa-solid fa-xmark"></i></button>`;
+  $('fusion-mats').appendChild(row);
+  render();
+}
+function removeFusionMat(btn){
+  if($('fusion-mats').children.length<=2){ YGO.toast('Une Fusion demande au moins 2 matériaux','err'); return; }
+  btn.closest('[data-p]').remove(); render();
+}
+
+/* Lignes de procédure ajoutées au début de initial_effect */
+function genProcedures(){
+  let out = '';
+  if(cardType==='MONSTER'){
+    const main = $('m-main').value, fl = id => $('flag-'+id).checked;
+    if(['RITUAL','FUSION','SYNCHRO','XYZ','LINK'].includes(main)) out += '\tc:EnableReviveLimit()\n';
+    if(fl('pendulum')) out += '\tPendulum.AddProcedure(c)\n';
+    if(fl('gemini'))   out += '\tGemini.AddProcedure(c)\n';
+    if(fl('spirit'))   out += '\tSpirit.AddProcedure(c,EVENT_SUMMON_SUCCESS,EVENT_FLIP)\n';
+    if(fl('union'))    out += `\taux.AddUnionProcedure(c,${exprPlain(readW('uf'))||'nil'})\n`;
+    if(main==='FUSION'){
+      const mats = [...$('fusion-mats').children].map(d=>exprEx(readW(d.dataset.p)) || 'aux.FilterBoolFunctionEx(Card.IsMonster)');
+      out += mats.length>=2 ? `\tFusion.AddProcMix(c,true,true,${mats.join(',')})\n` : '\t-- Fusion : ajoute au moins 2 matériaux\n';
+    } else if(main==='SYNCHRO'){
+      const mn = +$('s-nmin').value||1, mx = +$('s-nmax').value||99;
+      out += `\tSynchro.AddProcedure(c,${exprEx(readW('st'))||'nil'},1,1,${exprNonTuner(readW('sn'))},${mn},${mx})\n`;
+    } else if(main==='XYZ'){
+      const f = exprEx(readW('xf'))||'nil', lv = $('m-rank').value||4, ct = +$('x-min').value||2, mx = $('x-max').value;
+      out += mx ? `\tXyz.AddProcedure(c,${f},${lv},${ct},nil,nil,${mx})\n` : `\tXyz.AddProcedure(c,${f},${lv},${ct})\n`;
+    } else if(main==='LINK'){
+      const f = exprEx(readW('lf'))||'nil', mn = +$('l-min').value||2, mx = $('l-max').value;
+      out += mx ? `\tLink.AddProcedure(c,${f},${mn},${mx})\n` : `\tLink.AddProcedure(c,${f},${mn})\n`;
+    }
+  } else if(cardType==='SPELL'){
+    const sub = $('s-sub').value, f = exprPlain(readW('sf'));
+    if(sub==='EQUIP')  out += `\taux.AddEquipProcedure(c,0${f?','+f:''})\n`;
+    if(sub==='RITUAL') out += `\tRitual.AddProcGreater(c,${f||'nil'})\n`;
+  }
+  return out ? out+'\n' : '';
+}
+/* Magie/Piège Continue ou Terrain : l'activation est une coquille vide */
+function needsActivationShell(){
+  if(cardType==='MONSTER') return false;
+  const sub = cardType==='SPELL' ? $('s-sub').value : $('t-sub').value;
+  return (sub==='CONTINUOUS' || (cardType==='SPELL' && sub==='FIELD')) && !effects.some(e=>e.typeMain==='ACTIVATE');
+}
+const isPassive = e => ['CONTINUOUS','SINGLE','FIELD','EQUIP'].includes(e.typeMain);
 
 /* ================= CODE GENERATION ================= */
 function esc(s){ return (s||'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
@@ -928,7 +1080,7 @@ function genCondition(e, n){
   else if(e.cond==='OPP_CONTROL_MONSTER') body = `function s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\treturn Duel.IsExistingMatchingCard(nil,1-tp,LOCATION_MZONE,0,1,nil)\nend\n\n`;
   else if(e.cond==='GY_HAS_MONSTER') body = `function s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\treturn Duel.IsExistingMatchingCard(Card.IsMonster,tp,LOCATION_GRAVE,0,1,nil)\nend\n\n`;
   else if(e.cond==='CONTROL_ARCHETYPE'){
-    const hex = setcodes[0] ? setcodes[0].h : '0x0';
+    const hex = setcodes[0] ? setRef(setcodes[0].h) : '0x0';
     body = `function s.cfilter${n}(c)\n\treturn c:IsFaceup() and c:IsSetCard(${hex})\nend\nfunction s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\treturn Duel.IsExistingMatchingCard(s.cfilter${n},tp,LOCATION_MZONE,0,1,nil)\nend\n\n`;
   } else if(e.cond==='CUSTOM'){
     body = `function s.con${n}(e,tp,eg,ep,ev,re,r,rp)\n\t${(e.condRaw||'return true').split('\n').join('\n\t')}\nend\n\n`;
@@ -941,7 +1093,7 @@ function genCost(e, n){
   if(e.cost==='LP') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.CheckLPCost(tp,${e.costAmount}) end\n\tDuel.PayLPCost(tp,${e.costAmount})\nend\n\n`;
   if(e.cost==='DISCARD') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsDiscardable,tp,LOCATION_HAND,0,${e.costAmount},e:GetHandler()) end\n\tDuel.DiscardHand(tp,Card.IsDiscardable,${e.costAmount},${e.costAmount},REASON_COST+REASON_DISCARD,e:GetHandler())\nend\n\n`;
   if(e.cost==='BANISH_GY') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,${e.costAmount},nil) end\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,${e.costAmount},${e.costAmount},nil)\n\tDuel.Remove(g,POS_FACEUP,REASON_COST)\nend\n\n`;
-  if(e.cost==='TRIBUTE') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsReleasable,tp,LOCATION_MZONE,0,${e.costAmount},e:GetHandler()) end\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_RELEASE)\n\tlocal g=Duel.SelectReleaseGroup(tp,Card.IsReleasable,tp,LOCATION_MZONE,0,${e.costAmount},${e.costAmount},e:GetHandler())\n\tDuel.Release(g,REASON_COST)\nend\n\n`;
+  if(e.cost==='TRIBUTE') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.CheckReleaseGroupCost(tp,nil,${e.costAmount},false,nil,e:GetHandler()) end\n\tlocal g=Duel.SelectReleaseGroupCost(tp,nil,${e.costAmount},${e.costAmount},false,nil,e:GetHandler())\n\tDuel.Release(g,REASON_COST)\nend\n\n`;
   if(e.cost==='CUSTOM') return `function s.cost${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\t${(e.costRaw||'if chk==0 then return true end').split('\n').join('\n\t')}\nend\n\n`;
   return '';
 }
@@ -967,7 +1119,7 @@ function genTargetOperation(e, n){
 
   if(e.op==='TOHAND_GY') return `function s.thfilter${n}(c)\n\treturn c:IsAbleToHand()\nend\nfunction s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(s.thfilter${n},tp,LOCATION_GRAVE,0,1,nil) end\n\tDuel.SetOperationInfo(0,${cat},nil,${amt},tp,LOCATION_GRAVE)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_RTOHAND)\n\tlocal g=Duel.SelectMatchingCard(tp,s.thfilter${n},tp,LOCATION_GRAVE,0,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.SendtoHand(g,nil,REASON_EFFECT)\n\tend\nend\n\n`;
 
-  if(e.op==='DESTROY_FIELD') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsDestructible,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil) end\n\tlocal g=Duel.GetMatchingGroup(Card.IsDestructible,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,nil)\n\tDuel.SetOperationInfo(0,${cat},g,${amt},0,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_DESTROY)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsDestructible,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.Destroy(g,REASON_EFFECT)\n\tend\nend\n\n`;
+  if(e.op==='DESTROY_FIELD') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsDestructable,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil) end\n\tlocal g=Duel.GetMatchingGroup(Card.IsDestructable,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,nil)\n\tDuel.SetOperationInfo(0,${cat},g,${amt},0,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_DESTROY)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsDestructable,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.Destroy(g,REASON_EFFECT)\n\tend\nend\n\n`;
 
   if(e.op==='BANISH_FIELD') return `function s.tg${n}(e,tp,eg,ep,ev,re,r,rp,chk)\n\tif chk==0 then return Duel.IsExistingMatchingCard(Card.IsAbleToRemove,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil) end\n\tlocal g=Duel.GetMatchingGroup(Card.IsAbleToRemove,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,nil)\n\tDuel.SetOperationInfo(0,${cat},g,${amt},0,0)\nend\n\nfunction s.op${n}(e,tp,eg,ep,ev,re,r,rp)\n\tDuel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)\n\tlocal g=Duel.SelectMatchingCard(tp,Card.IsAbleToRemove,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,${amt},${amt},nil)\n\tif #g>0 then\n\t\tDuel.Remove(g,POS_FACEUP,REASON_EFFECT)\n\tend\nend\n\n`;
 
@@ -1003,6 +1155,12 @@ function generateScript(){
   let code = cardName ? `-- ${cardName}\n` : `-- Script généré — Kartouche\n`;
   code += `local s,id=GetID()\n`;
   code += `function s.initial_effect(c)\n`;
+  const zone = (cardType==='SPELL' && $('s-sub').value==='FIELD') ? 'LOCATION_FZONE' : 'LOCATION_SZONE';
+  code += genProcedures();
+  if(needsActivationShell()){
+    code += `\t-- Activation\n\tlocal e0=Effect.CreateEffect(c)\n\te0:SetType(EFFECT_TYPE_ACTIVATE)\n\te0:SetCode(EVENT_FREE_CHAIN)\n\tc:RegisterEffect(e0)\n\n`;
+  }
+  const isGemini = cardType==='MONSTER' && $('flag-gemini').checked;
 
   effects.forEach((e,idx) => {
     const n = idx+1;
@@ -1024,13 +1182,12 @@ function generateScript(){
         code += `\te${n}:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F)\n\te${n}:SetCode(${ev})\n`;
       }
       else if(e.typeMain==='FLIP'){ code += `\te${n}:SetType(EFFECT_TYPE_FLIP+EFFECT_TYPE_TRIGGER_O)\n\te${n}:SetCode(EVENT_FLIP)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
-      else if(e.typeMain==='CONTINUOUS'){ code += `\te${n}:SetType(EFFECT_TYPE_SINGLE)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
-      else if(e.typeMain==='SINGLE'){ code += `\te${n}:SetType(EFFECT_TYPE_SINGLE)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
+      else if(e.typeMain==='CONTINUOUS' || e.typeMain==='SINGLE'){ code += `\te${n}:SetType(EFFECT_TYPE_SINGLE)\n\te${n}:SetProperty(EFFECT_FLAG_SINGLE_RANGE)\n\te${n}:SetRange(LOCATION_MZONE)\n`; }
       else if(e.typeMain==='FIELD'){ code += `\te${n}:SetType(EFFECT_TYPE_FIELD)\n\te${n}:SetRange(LOCATION_MZONE)\n\te${n}:SetTargetRange(1,0)\n`; }
     } else {
       if(e.typeMain==='ACTIVATE'){ code += `\te${n}:SetType(EFFECT_TYPE_ACTIVATE)\n\te${n}:SetCode(EVENT_FREE_CHAIN)\n`; }
-      else if(e.typeMain==='CONTINUOUS'){ code += `\te${n}:SetType(EFFECT_TYPE_SINGLE)\n`; }
-      else if(e.typeMain==='FIELD'){ code += `\te${n}:SetType(EFFECT_TYPE_FIELD)\n\te${n}:SetTargetRange(0,1)\n`; }
+      else if(e.typeMain==='CONTINUOUS'){ code += `\te${n}:SetType(EFFECT_TYPE_SINGLE)\n\te${n}:SetProperty(EFFECT_FLAG_SINGLE_RANGE)\n\te${n}:SetRange(${zone})\n`; }
+      else if(e.typeMain==='FIELD'){ code += `\te${n}:SetType(EFFECT_TYPE_FIELD)\n\te${n}:SetRange(${zone})\n\te${n}:SetTargetRange(0,1)\n`; }
       else if(e.typeMain==='EQUIP'){ code += `\te${n}:SetType(EFFECT_TYPE_EQUIP)\n`; }
       else if(e.typeMain==='QUICK_O'){ code += `\te${n}:SetType(EFFECT_TYPE_QUICK_O)\n\te${n}:SetCode(EVENT_FREE_CHAIN)\n`; }
     }
@@ -1049,8 +1206,9 @@ function generateScript(){
     }
 
     if(e.cond!=='NONE') code += `\te${n}:SetCondition(s.con${n})\n`;
+    else if(isGemini) code += `\te${n}:SetCondition(Gemini.EffectStatusCondition)\n`;
     if(e.cost!=='NONE') code += `\te${n}:SetCost(s.cost${n})\n`;
-    if(e.typeMain==='CONTINUOUS' || e.typeMain==='SINGLE' || e.typeMain==='FIELD'){
+    if(isPassive(e)){
       if(e.continuousRaw && e.continuousRaw.trim()) code += e.continuousRaw.split('\n').map(l=>'\t'+l).join('\n') + '\n';
     } else {
       code += `\te${n}:SetTarget(s.tg${n})\n`;
@@ -1065,7 +1223,7 @@ function generateScript(){
 
   code += `end\n\n`;
 
-  if(setcodes.length) code += `s.listed_series={${setcodes.map(s=>s.h).join(',')}}\n`;
+  if(setcodes.length) code += `s.listed_series={${setcodes.map(s=>setRef(s.h)).join(',')}}\n`;
   if(listedRaw) code += `s.listed_names={${listedRaw}}\n`;
   if(setcodes.length || listedRaw) code += `\n`;
 
@@ -1073,7 +1231,7 @@ function generateScript(){
     const n = idx+1;
     code += genCondition(e, n);
     code += genCost(e, n);
-    if(e.typeMain!=='CONTINUOUS' && e.typeMain!=='SINGLE' && e.typeMain!=='FIELD'){
+    if(!isPassive(e)){
       code += genTargetOperation(e, n);
     }
     if(e.extraFunctions && e.extraFunctions.trim()){
@@ -1089,8 +1247,8 @@ function highlightLua(code){
   return esc(code)
     .replace(/(--.*)/g, '<span class="tok-cm">$1</span>')
     .replace(/\b(local|function|end|return|if|then|else|elseif|for|do|not|and|or|nil|true|false)\b/g, '<span class="tok-kw">$1</span>')
-    .replace(/\b(GetID|Effect|Duel|Card|CreateEffect|RegisterEffect|SetType|SetCategory|SetCode|SetProperty|SetCountLimit|SetCondition|SetCost|SetTarget|SetOperation|SetReset|SetValue|IsExistingMatchingCard|GetMatchingGroup|SelectMatchingCard|SelectReleaseGroup|GetDecktopGroup|SpecialSummon|SendtoHand|SendtoGrave|Destroy|Draw|Damage|Recover|Remove|Release|CreateToken|ConfirmCards|NegateActivation|GetFirstTarget|IsRelateToEffect|SetOperationInfo|SetTargetPlayer|SetTargetParam|GetChainInfo|GetLocationCount|CheckLPCost|PayLPCost|DiscardHand|Hint|GetHandler|IsFaceup|IsCanBeSpecialSummoned|IsAbleToHand|IsAbleToRemove|IsAbleToRemoveAsCost|IsDiscardable|IsDestructible|IsReleasable|IsMonster|IsSetCard|IsPlayerCanDraw)\b/g, '<span class="tok-fn">$1</span>')
-    .replace(/\b(EFFECT_TYPE_\w+|EVENT_\w+|LOCATION_\w+|CATEGORY_\w+|REASON_\w+|POS_\w+|EFFECT_COUNT_CODE_\w+|HINT_\w+|HINTMSG_\w+|CHAININFO_\w+|EFFECT_\w+|RESET_\w+|RESETS_\w+|TOKEN_\w+)\b/g, '<span class="tok-const">$1</span>')
+    .replace(/\b(GetID|Effect|Duel|Card|Fusion|Synchro|Xyz|Link|Ritual|Pendulum|Spirit|Gemini|aux|CreateEffect|RegisterEffect|SetType|SetCategory|SetCode|SetProperty|SetCountLimit|SetCondition|SetCost|SetTarget|SetOperation|SetReset|SetValue|IsExistingMatchingCard|GetMatchingGroup|SelectMatchingCard|SelectReleaseGroup|GetDecktopGroup|SpecialSummon|SendtoHand|SendtoGrave|Destroy|Draw|Damage|Recover|Remove|Release|CreateToken|ConfirmCards|NegateActivation|GetFirstTarget|IsRelateToEffect|SetOperationInfo|SetTargetPlayer|SetTargetParam|GetChainInfo|GetLocationCount|CheckLPCost|PayLPCost|DiscardHand|Hint|GetHandler|IsFaceup|IsCanBeSpecialSummoned|IsAbleToHand|IsAbleToRemove|IsAbleToRemoveAsCost|IsDiscardable|IsDestructable|IsReleasable|IsMonster|IsSetCard|IsPlayerCanDraw)\b/g, '<span class="tok-fn">$1</span>')
+    .replace(/\b(EFFECT_TYPE_\w+|EVENT_\w+|LOCATION_\w+|CATEGORY_\w+|REASON_\w+|POS_\w+|EFFECT_COUNT_CODE_\w+|HINT_\w+|HINTMSG_\w+|CHAININFO_\w+|EFFECT_\w+|RESET_\w+|RESETS_\w+|TOKEN_\w+|SET_\w+)\b/g, '<span class="tok-const">$1</span>')
     .replace(/\b(\d+|0x[0-9a-fA-F]+)\b/g, '<span class="tok-num">$1</span>');
 }
 
@@ -1105,6 +1263,17 @@ function render(){
     document.getElementById('m-linkmarkers-field').style.display = main==='LINK' ? 'flex' : 'none';
     document.getElementById('m-def-field').style.display = main==='LINK' ? 'none' : 'flex';
     document.getElementById('m-scale-field').style.display = document.getElementById('flag-pendulum').checked ? 'flex' : 'none';
+    const show = (id,on)=>{ $(id).style.display = on ? 'block' : 'none'; };
+    show('proc-fusion',  main==='FUSION');
+    show('proc-synchro', main==='SYNCHRO');
+    show('proc-xyz',     main==='XYZ');
+    show('proc-link',    main==='LINK');
+    show('proc-union',   $('flag-union').checked);
+  }
+  if(cardType==='SPELL'){
+    const sub = $('s-sub').value;
+    $('spell-filter-field').style.display = (sub==='EQUIP' || sub==='RITUAL') ? 'flex' : 'none';
+    $('spell-filter-label').textContent = sub==='EQUIP' ? 'Monstres que la carte peut équiper' : 'Monstres Rituel invocables';
   }
 
   // setcode pills
