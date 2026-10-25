@@ -72,15 +72,16 @@
         </div>
 
         <div class="field">
-            <label for="cdbOfficial">CDB officiels (plusieurs fichiers) *</label>
+            <label for="cdbOfficial">CDB officiels (plusieurs fichiers) <small>(optionnel)</small></label>
             <input type="file" id="cdbOfficial" accept=".cdb" multiple>
-            <span class="hint" id="cdbOfficialHint"></span>
+            <span class="hint" id="cdbOfficialHint">Vide = tous les CDB de data/cdb/en du dépôt GitHub.</span>
         </div>
 
         <div class="field">
-            <label for="luaFolder">Dossier des scripts officiels (.lua) *</label>
+            <label for="luaFolder">Dossier des scripts officiels (.lua) <small>(optionnel)</small></label>
             <input type="file" id="luaFolder" webkitdirectory directory multiple>
             <span class="hint" id="luaHint">Un script d'un sous-dossier officiel est prioritaire sur les variantes (goat, rush…).</span>
+            <span class="hint">Vide = scripts de data/script du dépôt GitHub.</span>
         </div>
 
         <div class="grid-2">
@@ -88,6 +89,7 @@
                 <label for="existingFolder">Dossier « script » existant <small>(optionnel)</small></label>
                 <input type="file" id="existingFolder" webkitdirectory directory multiple>
                 <span class="hint" id="existingHint">Utilisé seulement avec « Ignorer les cartes qui ont déjà un script ».</span>
+                <span class="hint">Vide = data/script du dépôt GitHub.</span>
             </div>
             <div class="field" data-only="mod both">
                 <label for="outFolder">Dossier de sortie existant <small>(optionnel)</small></label>
@@ -138,9 +140,10 @@ YGO.initSql()
     .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
     .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
 
+const DEFAULT_OFFICIAL_HINT = 'Vide = tous les CDB de data/cdb/en du dépôt GitHub.';
 $('cdbOfficial').addEventListener('change', (e) => {
     const n = e.target.files.length;
-    $('cdbOfficialHint').textContent = n ? `${n} fichier(s) CDB sélectionné(s)` : '';
+    $('cdbOfficialHint').textContent = n ? `${n} fichier(s) CDB sélectionné(s)` : DEFAULT_OFFICIAL_HINT;
 });
 
 // ============================================================
@@ -205,6 +208,51 @@ setMode('plain');
 // ============================================================
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 const tick = () => new Promise((r) => setTimeout(r, 0));
+
+/** Exécute fn sur chaque item avec au plus `limit` appels en parallèle. */
+async function pool(items, limit, fn) {
+    let i = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (i < items.length) await fn(items[i++]);
+    });
+    await Promise.all(workers);
+}
+
+// ---- Dépôt GitHub (source par défaut des CDB officiels et scripts) ----
+const REPO = { owner: 'kevinraphael95', repo: 'ygo_outil_fr', branch: 'main' };
+const RAW = `https://raw.githubusercontent.com/${REPO.owner}/${REPO.repo}/${REPO.branch}/`;
+let treeCache = null;
+
+/** Liste (une seule requête API) tous les fichiers du dépôt. */
+async function loadRepoTree() {
+    if (treeCache) return treeCache;
+    const r = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.repo}/git/trees/${REPO.branch}?recursive=1`);
+    if (!r.ok) {
+        throw new Error(r.status === 403
+            ? "limite de l'API GitHub atteinte, réessaie plus tard ou sélectionne les fichiers à la main"
+            : `API GitHub : HTTP ${r.status}`);
+    }
+    const j = await r.json();
+    if (j.truncated) out.log("ATTENTION : arborescence tronquée par GitHub, liste incomplète.", 'warn');
+    treeCache = j.tree.filter((t) => t.type === 'blob').map((t) => t.path);
+    return treeCache;
+}
+
+/** Fichier distant avec la même interface que File (name, webkitRelativePath, arrayBuffer, text). */
+function remoteFile(path) {
+    const url = RAW + path.split('/').map(encodeURIComponent).join('/');
+    let buf = null;
+    const check = (r) => { if (!r.ok) throw new Error(`HTTP ${r.status} (${path})`); return r; };
+    return {
+        name: path.split('/').pop(),
+        webkitRelativePath: path,
+        arrayBuffer() {
+            if (!buf) buf = fetch(url).then(check).then((r) => r.arrayBuffer()).catch((e) => { buf = null; throw e; });
+            return buf;
+        },
+        text() { return fetch(url).then(check).then((r) => r.text()); },
+    };
+}
 
 /** Lit un CDB -> [{id, name, desc}] */
 async function readCdb(file) {
@@ -332,8 +380,8 @@ btn.addEventListener('click', async () => {
     const needTag = isMod || isBoth;
     const fileEn = $('cdbEn').files[0];
     const fileFr = $('cdbFr').files[0] || null;
-    const officialCdbs = [...$('cdbOfficial').files];
-    const luaFiles = [...$('luaFolder').files];
+    let officialCdbs = [...$('cdbOfficial').files];
+    let luaFiles = [...$('luaFolder').files];
     const tags = $('customTag').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
     const addCode = $('optAddCode').checked;
     const header = needTag && $('optHeader').checked;
@@ -342,8 +390,6 @@ btn.addEventListener('click', async () => {
     const dry = $('optDry').checked;
 
     if (!fileEn) return YGO.toast('Sélectionne le CDB custom (anglais).', 'err');
-    if (!officialCdbs.length) return YGO.toast('Sélectionne les CDB officiels.', 'err');
-    if (!luaFiles.length) return YGO.toast('Sélectionne le dossier des scripts officiels.', 'err');
     if (needTag && !tags.length) return YGO.toast('Indique le tag des cartes modifiées.', 'err');
 
     const headerLabel = header ? tags[0].replace(/^\[|\]$/g, '').toUpperCase() : '';
@@ -356,19 +402,44 @@ btn.addEventListener('click', async () => {
         const { custom, descs } = await loadCustom(fileEn, fileFr);
         out.log(`→ ${custom.size} cartes custom.`);
 
+        // Sources par défaut : dépôt GitHub si rien n'est sélectionné
+        const existingFiles = [...$('existingFolder').files];
+        let repoScripts = [];
+        if (!officialCdbs.length || !luaFiles.length || (skipExisting && !existingFiles.length)) {
+            out.log('🌐 Lecture du dépôt GitHub…');
+            const paths = await loadRepoTree();
+            repoScripts = paths
+                .filter((p) => p.startsWith('data/script/') && LUA_RE.test(p.split('/').pop()))
+                .map(remoteFile);
+            if (!officialCdbs.length) {
+                officialCdbs = paths.filter((p) => /^data\/cdb\/en\/[^/]+\.cdb$/i.test(p)).map(remoteFile);
+                if (!officialCdbs.length) throw new Error('aucun CDB officiel trouvé dans data/cdb/en du dépôt');
+                out.log(`→ ${officialCdbs.length} CDB officiels du dépôt (data/cdb/en), téléchargement…`);
+                await pool(officialCdbs, 4, async (f) => {
+                    try { await f.arrayBuffer(); } catch (e) { out.log(`échec ${f.name} : ${e.message}`, 'warn'); }
+                });
+            }
+            if (!luaFiles.length) {
+                luaFiles = repoScripts;
+                if (!luaFiles.length) throw new Error('aucun script trouvé dans data/script du dépôt');
+                out.log(`→ ${luaFiles.length} scripts du dépôt (data/script).`);
+            }
+        }
+
         out.log('📂 Lecture des CDB officiels…');
         const official = await loadOfficialNames(officialCdbs, custom);
         out.log(`→ ${official.size} noms de cartes officielles.`);
 
         out.log('📂 Indexation des scripts…');
         const lua = indexLua(luaFiles);
-        const hasScript = indexIds([...$('existingFolder').files]);
+        const hasScript = existingFiles.length ? indexIds(existingFiles) : (skipExisting ? indexIds(repoScripts) : new Set());
         const hasOut = needTag ? indexIds([...$('outFolder').files]) : new Set();
         out.log(`→ ${lua.size} scripts officiels, ${hasScript.size} scripts déjà présents` + (needTag ? `, ${hasOut.size} dans le dossier de sortie.` : '.'));
 
         out.log(dry ? '🔄 Simulation…' : '🔄 Génération des scripts…');
         const zip = new JSZip();
         const rapport = [];
+        const jobs = [];
         let ok = 0, okMod = 0, okPlain = 0, tagSkipped = 0, existing = 0, noInject = 0;
         const ids = [...custom.keys()].sort((a, b) => a - b);
 
@@ -407,18 +478,32 @@ btn.addEventListener('click', async () => {
 
             const oid = cands[0];
             out.log(`${cid} ${name}${tagLog}  <-  c${oid}.lua`);
-            if (!dry) {
-                const src = await lua.get(oid).text();
-                const { code, injected } = build(src, cid, oid, name, addCode, kind === 'mod' ? headerLabel : '');
-                if (addCode && !injected) {
-                    noInject++;
-                    out.log('  ATTENTION : initial_effect introuvable, EFFECT_ADD_CODE non injecté', 'warn');
+            jobs.push({ cid, oid, name, kind });
+        }
+
+        // Génération (téléchargements en parallèle si les scripts viennent du dépôt)
+        if (dry) {
+            for (const j of jobs) { ok++; if (j.kind === 'mod') okMod++; else okPlain++; }
+        } else if (jobs.length) {
+            out.log(`⬇️ Génération de ${jobs.length} scripts…`);
+            let done = 0;
+            await pool(jobs, 8, async (j) => {
+                try {
+                    const src = await lua.get(j.oid).text();
+                    const { code, injected } = build(src, j.cid, j.oid, j.name, addCode, j.kind === 'mod' ? headerLabel : '');
+                    if (addCode && !injected) {
+                        noInject++;
+                        out.log(`  ATTENTION : initial_effect introuvable pour c${j.cid}, EFFECT_ADD_CODE non injecté`, 'warn');
+                    }
+                    const folder = isBoth ? (j.kind === 'mod' ? 'modifies/' : 'non_modifies/') : '';
+                    zip.file(`${folder}c${j.cid}.lua`, code);
+                    ok++;
+                    if (j.kind === 'mod') okMod++; else okPlain++;
+                } catch (e) {
+                    rapport.push(`${j.cid} | ${j.name} | erreur : ${e.message}`);
                 }
-                const folder = isBoth ? (kind === 'mod' ? 'modifies/' : 'non_modifies/') : '';
-                zip.file(`${folder}c${cid}.lua`, code);
-            }
-            if (kind === 'mod') okMod++; else okPlain++;
-            ok++;
+                if (++done % 100 === 0) out.log(`   ${done}/${jobs.length}…`);
+            });
         }
 
         if (!dry) zip.file('rapport_scripts.txt', rapport.join('\n'));
