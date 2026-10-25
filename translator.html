@@ -91,9 +91,9 @@
                     <span>Utiliser le cache Yugipedia<small>Pour les cartes absentes de YGOPRODeck (anime, TCG récent…).</small></span></label>
             </div>
             <div class="field">
-                <label for="tag">Tag ajouté aux cartes modifiées</label>
+                <label for="tag">Tag ajouté aux cartes modifiées et non traduites</label>
                 <input type="text" id="tag" value="[CUSTOM]" autocomplete="off">
-                <span class="hint">Vide = aucun tag. Ignoré dans la comparaison des descriptions.</span>
+                <span class="hint">Vide = aucun tag. Mis au début de la description des cartes modifiées ET de celles qui ne sont pas traduites (inconnues des bases, ou sans traduction FR). Ignoré dans la comparaison des descriptions.</span>
             </div>
         </div>
 
@@ -291,7 +291,8 @@ async function runCdb() {
     if (!f) return YGO.toast('Sélectionne un .cdb.', 'err');
     if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
     const keep = $('optKeep').checked, modName = keep && $('optModName').checked, yugi = $('optYugi').checked;
-    const tag = keep ? $('tag').value.trim() : '';
+    // Le tag sert pour les cartes modifiées ET pour toutes celles qui ne sont pas traduites
+    const tag = $('tag').value.trim();
 
     const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
     try {
@@ -303,7 +304,7 @@ async function runCdb() {
         prog.show(); prog.set(0, 'Analyse…');
 
         const upd = [];
-        let done = 0, modified = 0;
+        let done = 0, modified = 0, tagged = 0;
         for (let i = 0; i < rows.length; i++) {
             const [id, name, desc] = rows[i];
             const d = desc || '';
@@ -312,15 +313,17 @@ async function runCdb() {
             if (!m && tilde) m = lookup(tilde.trim(), yugi);
 
             if (!m) {
-                // Carte inconnue des bases : on ne touche à rien
+                // Carte inconnue des bases = custom : nom et effet intacts, mais taguée
                 missing.push(tilde ? tilde.trim() : name);
+                if (tag) { upd.push([name, tagDesc(d, tag), id]); tagged++; }
             } else if (keep && isModified(d, tag, m.dFr, m.dEn)) {
                 // Testé AVANT le « pas de FR » : une custom trouvée sans nom/effet FR est bien taguée
                 upd.push([modName && m.fr ? m.fr : name, tagDesc(d, tag), id]);
                 modified++;
             } else if (!m.fr && !m.dFr) {
-                // Trouvée mais rien de FR à appliquer
+                // Trouvée mais rien de FR à appliquer : intacte, mais taguée
                 missing.push(tilde ? tilde.trim() : name);
+                if (tag) { upd.push([name, tagDesc(d, tag), id]); tagged++; }
             } else {
                 upd.push([m.fr || name, m.dFr || d, id]);
                 done++;
@@ -335,7 +338,8 @@ async function runCdb() {
         finally { stmt.free(); }
 
         prog.set(100, 'Terminé !');
-        out.log(`✅ ${done} traduite(s)` + (modified ? `, ${modified} custom conservée(s)${tag ? ' (tag ' + tag + ')' : ''}` : '') + `, ${missing.length} sans trad. FR.`, 'ok');
+        out.log(`✅ ${done} traduite(s)` + (modified ? `, ${modified} custom conservée(s)` : '') +
+            `, ${missing.length} sans trad. FR` + (tag ? ` — ${modified + tagged} carte(s) taguée(s) ${tag}` : '') + '.', 'ok');
         missing.slice(0, 250).forEach((n) => out.log('Non traduit : ' + n, 'warn'));
         if (missing.length > 250) out.log(`… et ${missing.length - 250} autres (voir le .txt).`, 'warn');
         showResult({ bytes: db.export(), name: f.name.replace(/\.cdb$/i, '') + '_fr.cdb' });
