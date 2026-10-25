@@ -51,6 +51,7 @@
         <div class="tabs" id="modes">
             <button class="tab active" type="button" data-mode="plain"><i class="fa-solid fa-equals"></i> Cartes non modifiées</button>
             <button class="tab" type="button" data-mode="mod"><i class="fa-solid fa-file-pen"></i> Cartes modifiées</button>
+            <button class="tab" type="button" data-mode="both"><i class="fa-solid fa-layer-group"></i> Les deux</button>
         </div>
 
         <div class="field">
@@ -88,16 +89,16 @@
                 <input type="file" id="existingFolder" webkitdirectory directory multiple>
                 <span class="hint" id="existingHint">Utilisé seulement avec « Ignorer les cartes qui ont déjà un script ».</span>
             </div>
-            <div class="field" data-only="mod">
+            <div class="field" data-only="mod both">
                 <label for="outFolder">Dossier de sortie existant <small>(optionnel)</small></label>
                 <input type="file" id="outFolder" webkitdirectory directory multiple>
-                <span class="hint" id="outHint">Les cartes déjà générées sont ignorées (sauf si écrasement forcé).</span>
+                <span class="hint" id="outHint">Les cartes modifiées déjà générées sont ignorées (sauf si écrasement forcé).</span>
             </div>
         </div>
 
         <div class="opts">
-            <label class="opt" data-only="mod"><input type="checkbox" id="optHeader" checked>
-                <span>Ajouter le commentaire d'origine en 1re ligne<small>Décoché : copie du script officiel tel quel.</small></span></label>
+            <label class="opt" data-only="mod both"><input type="checkbox" id="optHeader" checked>
+                <span>Ajouter le commentaire d'origine en 1re ligne<small>Cartes modifiées uniquement. Décoché : copie du script officiel tel quel.</small></span></label>
             <label class="opt"><input type="checkbox" id="optAddCode" checked>
                 <span>Injecter <code>EFFECT_ADD_CODE</code><small id="addCodeHint"></small></span></label>
             <label class="opt"><input type="checkbox" id="optSkipExisting" checked>
@@ -147,6 +148,7 @@ $('cdbOfficial').addEventListener('change', (e) => {
 // ============================================================
 const MODES = {
     plain: {
+        label: 'cartes non modifiées (sans tag)',
         hero: "Pour chaque carte custom identique à l'officielle (non taguée) : trouve la carte officielle du même nom dans les CDB officiels, prend son script en remplaçant l'ID par l'ID custom.",
         tagLabel: "Tag d'exclusion (cartes modifiées à ignorer)",
         tagHint: "Plusieurs tags possibles, séparés par « ; ». Cherchés dans la description EN et FR, insensible à la casse. Vide = aucune carte exclue.",
@@ -156,6 +158,7 @@ const MODES = {
         zip: 'scripts_non_modifies.zip',
     },
     mod: {
+        label: 'cartes modifiées (taguées)',
         hero: "Pour chaque carte custom taguée (effet modifié) : cherche la carte officielle du même nom, copie son script en remplaçant l'ID par l'ID custom, pour avoir une base de script à modifier.",
         tagLabel: "Tag des cartes modifiées à isoler",
         tagHint: "Plusieurs tags possibles, séparés par « ; ». Cherchés dans la description EN et FR, insensible à la casse. Obligatoire.",
@@ -163,6 +166,16 @@ const MODES = {
         addCodeHint: "La carte modifiée est aussi considérée comme la carte officielle (soutiens, conditions sur le nom). Décoché : copie du script tel quel.",
         forceHint: "Régénère aussi les scripts déjà présents dans le dossier de sortie et dans « script ».",
         zip: 'scripts_modifies.zip',
+    },
+    both: {
+        label: 'les deux (modifiées + non modifiées)',
+        hero: "Traite toutes les cartes custom en une passe : les cartes taguées vont dans modifies/ (base à modifier), les autres dans non_modifies/ (copie directe du script officiel).",
+        tagLabel: "Tag des cartes modifiées (sert à trier)",
+        tagHint: "Plusieurs tags possibles, séparés par « ; ». Cherchés dans la description EN et FR, insensible à la casse. Obligatoire.",
+        addCode: true,
+        addCodeHint: "Appliqué aux deux catégories : la carte custom est considérée comme la carte officielle. Décoché : copie du script tel quel.",
+        forceHint: "Régénère aussi les scripts déjà présents dans le dossier de sortie (modifiées) et dans « script ».",
+        zip: 'scripts_les_deux.zip',
     },
 };
 let mode = 'plain';
@@ -177,7 +190,9 @@ function setMode(m) {
     $('addCodeHint').textContent = c.addCodeHint;
     $('forceHint').textContent = c.forceHint;
     $('optAddCode').checked = c.addCode;
-    document.querySelectorAll('[data-only]').forEach((el) => el.classList.toggle('hidden', el.dataset.only !== m));
+    document.querySelectorAll('[data-only]').forEach((el) => {
+        el.classList.toggle('hidden', !el.dataset.only.split(/\s+/).includes(m));
+    });
 }
 $('modes').addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
@@ -313,13 +328,15 @@ btn.addEventListener('click', async () => {
     if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
 
     const isMod = mode === 'mod';
+    const isBoth = mode === 'both';
+    const needTag = isMod || isBoth;
     const fileEn = $('cdbEn').files[0];
     const fileFr = $('cdbFr').files[0] || null;
     const officialCdbs = [...$('cdbOfficial').files];
     const luaFiles = [...$('luaFolder').files];
     const tags = $('customTag').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
     const addCode = $('optAddCode').checked;
-    const header = isMod && $('optHeader').checked;
+    const header = needTag && $('optHeader').checked;
     const skipExisting = $('optSkipExisting').checked;
     const force = $('optForce').checked;
     const dry = $('optDry').checked;
@@ -327,14 +344,14 @@ btn.addEventListener('click', async () => {
     if (!fileEn) return YGO.toast('Sélectionne le CDB custom (anglais).', 'err');
     if (!officialCdbs.length) return YGO.toast('Sélectionne les CDB officiels.', 'err');
     if (!luaFiles.length) return YGO.toast('Sélectionne le dossier des scripts officiels.', 'err');
-    if (isMod && !tags.length) return YGO.toast('Indique le tag des cartes modifiées.', 'err');
+    if (needTag && !tags.length) return YGO.toast('Indique le tag des cartes modifiées.', 'err');
 
     const headerLabel = header ? tags[0].replace(/^\[|\]$/g, '').toUpperCase() : '';
 
     btn.disabled = true;
     out.clear();
     try {
-        out.log(`Mode : ${isMod ? 'cartes modifiées (taguées)' : 'cartes non modifiées (sans tag)'}`);
+        out.log(`Mode : ${MODES[mode].label}`);
         out.log('📂 Lecture des CDB custom…');
         const { custom, descs } = await loadCustom(fileEn, fileFr);
         out.log(`→ ${custom.size} cartes custom.`);
@@ -346,13 +363,13 @@ btn.addEventListener('click', async () => {
         out.log('📂 Indexation des scripts…');
         const lua = indexLua(luaFiles);
         const hasScript = indexIds([...$('existingFolder').files]);
-        const hasOut = isMod ? indexIds([...$('outFolder').files]) : new Set();
-        out.log(`→ ${lua.size} scripts officiels, ${hasScript.size} scripts déjà présents` + (isMod ? `, ${hasOut.size} dans le dossier de sortie.` : '.'));
+        const hasOut = needTag ? indexIds([...$('outFolder').files]) : new Set();
+        out.log(`→ ${lua.size} scripts officiels, ${hasScript.size} scripts déjà présents` + (needTag ? `, ${hasOut.size} dans le dossier de sortie.` : '.'));
 
         out.log(dry ? '🔄 Simulation…' : '🔄 Génération des scripts…');
         const zip = new JSZip();
         const rapport = [];
-        let ok = 0, tagSkipped = 0, existing = 0, noInject = 0;
+        let ok = 0, okMod = 0, okPlain = 0, tagSkipped = 0, existing = 0, noInject = 0;
         const ids = [...custom.keys()].sort((a, b) => a - b);
 
         let n = 0;
@@ -361,9 +378,13 @@ btn.addEventListener('click', async () => {
             const name = custom.get(cid);
             const tagged = tags.length > 0 && descs.get(cid).some((d) => { const l = d.toLowerCase(); return tags.some((t) => l.includes(t)); });
 
-            // Sélection selon le mode
-            if (isMod) { if (!tagged) continue; }
-            else if (tagged && !force) { tagSkipped++; continue; }
+            // Catégorie de la carte selon le mode
+            let kind; // 'mod' | 'plain'
+            if (isBoth) kind = tagged ? 'mod' : 'plain';
+            else if (isMod) { if (!tagged) continue; kind = 'mod'; }
+            else { if (tagged && !force) { tagSkipped++; continue; } kind = 'plain'; }
+
+            const tagLog = isBoth ? ` [${kind === 'mod' ? 'modifiée' : 'non modifiée'}]` : '';
 
             // Script déjà présent
             if (skipExisting && hasScript.has(cid) && !force) {
@@ -371,7 +392,7 @@ btn.addEventListener('click', async () => {
                 out.log(`${cid} ${name} : script existant (ignoré)`);
                 continue;
             }
-            if (isMod && hasOut.has(cid) && !force) {
+            if (kind === 'mod' && needTag && hasOut.has(cid) && !force) {
                 existing++;
                 out.log(`${cid} ${name} : déjà dans le dossier de sortie (ignoré)`);
                 continue;
@@ -380,30 +401,33 @@ btn.addEventListener('click', async () => {
             // Aucun équivalent officiel
             const cands = [...(official.get(norm(name)) || [])].filter((o) => lua.has(o)).sort((a, b) => a - b);
             if (!cands.length) {
-                rapport.push(`${cid} | ${name} | aucun script officiel trouvé`);
+                rapport.push(`${cid} | ${name}${isBoth ? ' | ' + kind : ''} | aucun script officiel trouvé`);
                 continue;
             }
 
             const oid = cands[0];
-            out.log(`${cid} ${name}  <-  c${oid}.lua`);
+            out.log(`${cid} ${name}${tagLog}  <-  c${oid}.lua`);
             if (!dry) {
                 const src = await lua.get(oid).text();
-                const { code, injected } = build(src, cid, oid, name, addCode, headerLabel);
+                const { code, injected } = build(src, cid, oid, name, addCode, kind === 'mod' ? headerLabel : '');
                 if (addCode && !injected) {
                     noInject++;
                     out.log('  ATTENTION : initial_effect introuvable, EFFECT_ADD_CODE non injecté', 'warn');
                 }
-                zip.file(`c${cid}.lua`, code);
+                const folder = isBoth ? (kind === 'mod' ? 'modifies/' : 'non_modifies/') : '';
+                zip.file(`${folder}c${cid}.lua`, code);
             }
+            if (kind === 'mod') okMod++; else okPlain++;
             ok++;
         }
 
         if (!dry) zip.file('rapport_scripts.txt', rapport.join('\n'));
 
         out.log('');
-        if (!isMod) out.log(`${tagSkipped} cartes taguées ignorées`);
+        if (mode === 'plain') out.log(`${tagSkipped} cartes taguées ignorées`);
         if (existing) out.log(`${existing} cartes avec script déjà présent ignorées`);
         out.log(`${ok} scripts ${dry ? 'à générer' : 'générés'}, ${rapport.length} sans correspondance`);
+        if (isBoth) out.log(`   dont ${okMod} modifiés (modifies/) et ${okPlain} non modifiés (non_modifies/)`);
         if (addCode && !dry) out.log(`${noInject} script(s) sans injection EFFECT_ADD_CODE`);
 
         if (rapport.length) {
