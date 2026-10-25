@@ -18,6 +18,7 @@
     .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
     .opt input { margin-top: 4px; }
     .opt small { display: block; opacity: .7; }
+    .console { white-space: pre-wrap; word-break: break-word; }
     @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -101,8 +102,7 @@ const out = YGO.console($('console'));
 const progress = YGO.progress($('progress'));
 const btn = $('compare-btn');
 const tick = () => new Promise((r) => setTimeout(r, 0));
-const MAX_LINES = 250;      // lignes affichées par section dans la console
-const MAX_CHANGES = 12;     // champs modifiés affichés par entrée dans la console
+const MAX_NAMES = 300;      // noms affichés par section dans la console
 let SQL = null;
 let report = '';
 
@@ -317,10 +317,11 @@ function buildReport(f1, f2, n1, n2, r) {
     return L.join('\n');
 }
 
-function logSection(title, items, kind, render) {
+function logSection(title, items, kind, sym) {
     out.log(`${title} : ${items.length}`, items.length ? kind : 'ok');
-    items.slice(0, MAX_LINES).forEach((x) => out.log(render(x), ''));
-    if (items.length > MAX_LINES) out.log(`… et ${items.length - MAX_LINES} autres (voir le rapport .txt).`, 'warn');
+    if (!items.length) return;
+    out.log(items.slice(0, MAX_NAMES).map((x) => `${sym} ${x.key}${x.label}`).join(' ; '));
+    if (items.length > MAX_NAMES) out.log(`… et ${items.length - MAX_NAMES} autres (voir le rapport .txt).`, 'warn');
 }
 
 // ============================================================
@@ -366,14 +367,13 @@ btn.addEventListener('click', async () => {
 
         progress.set(100, 'Terminé !');
         out.log(`=== RAPPORT DE COMPARAISON .${e1.toUpperCase()} ===`, 'ok');
-        out.log(`Fichier 1 : ${a.map.size} entrées · Fichier 2 : ${b.map.size} entrées · identiques : ${same}`);
-        logSection('Uniquement dans le fichier 1', r.removed, 'warn', (x) => `  - ${x.key}${x.label}`);
-        logSection('Uniquement dans le fichier 2', r.added, 'warn', (x) => `  + ${x.key}${x.label}`);
-        logSection('Modifiées', r.modified, 'warn', (x) => {
-            const lines = x.changes.slice(0, MAX_CHANGES).map((c) => `      ${c}`);
-            if (x.changes.length > MAX_CHANGES) lines.push(`      … +${x.changes.length - MAX_CHANGES} autres champs`);
-            return `  ~ ${x.key}${x.label}\n${lines.join('\n')}`;
-        });
+        out.log(`Fichier 1 : ${a.map.size} entrées · Fichier 2 : ${b.map.size} entrées`);
+        out.log(`Résumé : − ${r.removed.length} seulement dans 1 · + ${r.added.length} seulement dans 2 · ~ ${r.modified.length} modifiées · = ${same} identiques`, 'ok');
+
+        logSection('Uniquement dans le fichier 1', r.removed, 'warn', '-');
+        logSection('Uniquement dans le fichier 2', r.added, 'warn', '+');
+        logSection('Modifiées', r.modified, 'warn', '~');
+        if (r.modified.length) out.log('ℹ️ Le détail des champs modifiés est dans le rapport (.txt).');
 
         report = buildReport(f1, f2, a.map.size, b.map.size, r);
         $('copyBtn').classList.remove('hidden'); $('dlBtn').classList.remove('hidden');
