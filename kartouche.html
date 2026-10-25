@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="utils/ygo.css">
 <script src="utils/ygo.js"></script>
+<script src="utils/kartouche_lua.js"></script>
 <style>
 /* Seule addition : couleurs de la coloration Lua (le reste vient de ygo.css) */
 .tok-cm{color:var(--text-dim);font-style:italic}
@@ -76,6 +77,19 @@
                         <label for="card-search">Remplir depuis une carte (nom FR/EN ou passcode)</label>
                         <input type="text" id="card-search" placeholder="ex : Blue-Eyes, Dragon Blanc, 89631139…" autocomplete="off" onfocus="ensureBases()" oninput="onCardSearch()">
                         <ul class="result-list" id="card-results" style="display:none"></ul>
+                        
+                        <div class="row" style="gap:10px;margin-top:10px;align-items:center">
+                            <label class="check"><input type="checkbox" id="opt-script" checked> Charger aussi les effets (script Lua)</label>
+                            <span class="chip" id="script-status">scripts · à la demande</span>
+                        </div>
+                        <div class="row" style="gap:8px;margin-top:8px">
+                            <button class="btn btn-sm" type="button" onclick="document.getElementById('script-folder').click()"><i class="fa-solid fa-folder-open"></i> Dossier des scripts</button>
+                            <button class="btn btn-sm" type="button" onclick="document.getElementById('script-one').click()"><i class="fa-solid fa-file-code"></i> Importer un .lua</button>
+                            <input type="file" id="script-folder" webkitdirectory multiple style="display:none" onchange="onScriptFolder(this.files)">
+                            <input type="file" id="script-one" accept=".lua" style="display:none" onchange="importLuaFile(this.files[0]); this.value=''">
+                        </div>
+                        <span class="hint">Cherche <code>data/script/c&lt;passcode&gt;.lua</code> (puis official/, pre-release/, unofficial/…). Si la page est ouverte en local, choisis le dossier à la main.</span>
+                        
                     </div>
                     <div class="grid-2">
                         <div class="field">
@@ -219,6 +233,19 @@
                     <div id="effects-container" style="margin-top:14px"></div>
                     <div id="effects-empty" class="empty">Aucun effet pour l'instant — ajoutes-en un ci-dessous, ou laisse vide pour un Normal Monster / Terrain vierge.</div>
                     <div class="actions"><button class="btn" type="button" onclick="addEffect()"><i class="fa-solid fa-plus"></i> Ajouter un effet</button></div>
+                    
+                    <details class="field" id="imp-box" style="margin-top:14px">
+                        <summary>Code importé du script (procédures + fonctions d'aide)</summary>
+                        <div class="field">
+                            <label for="imp-init">Lignes ajoutées au début de initial_effect</label>
+                            <textarea id="imp-init" class="mono" rows="5" oninput="render()" placeholder="c:EnableReviveLimit()"></textarea>
+                        </div>
+                        <div class="field">
+                            <label for="imp-funcs">Fonctions d'aide et autres lignes du script</label>
+                            <textarea id="imp-funcs" class="mono" rows="8" oninput="render()"></textarea>
+                        </div>
+                    </details>
+                    
                 </section>
             </div>
 
@@ -721,6 +748,7 @@ function pickCard(i){
   $('card-results').style.display = 'none';
   $('card-search').value = '';
   render();
+  if(rec.id && $('opt-script') && $('opt-script').checked) loadScriptFor(rec.id);
   YGO.toast('Fiche remplie : '+(rec.en||rec.fr)+(d.archs.length ? ` (+${d.archs.length} archétype${d.archs.length>1?'s':''})` : ''));
 }
 function addListed(i){
