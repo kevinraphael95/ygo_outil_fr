@@ -90,7 +90,7 @@
             <label for="jlang">Langue du nom et de l'effet dans le JSON</label>
             <select id="jlang"></select>
         </div>
-        <label class="check"><input type="checkbox" id="wImg" checked> Inclure l'image dans le JSON (champ « image » en base64, même image que le CSV du Transformeur)</label>
+        <label class="check"><input type="checkbox" id="wImg" checked> Inclure l'image dans le JSON (champ « image » = lien, même URL que le CSV du Transformeur)</label>
         <p class="hint" id="jnote"></p>
         <textarea id="json" readonly></textarea>
         <div class="actions">
@@ -276,7 +276,7 @@ function linkMarkers(list) {
     return b;
 }
 
-function toJson(f, lang) {
+function toJson(f, lang, withImage) {
     const name = f.names[lang] || f.names.en || Object.values(f.names)[0];
     const desc = f.descs[lang] || f.descs.en || '';
     const st = f.type === 'Spell Card' || f.type === 'Trap Card';
@@ -293,7 +293,7 @@ function toJson(f, lang) {
     }
     const effect = oneLine(cleanPend(mon || desc));
     const fr = lang === 'fr';
-    return {
+    const json = {
         version: '1.0.0', name, level: String(f.level || f.linkval || 0), type: typeLine(f, fr),
         icon: st ? ICON[f.race] || 'None' : 'None', effect: mat ? mat + '\n' + effect : effect,
         atk: st ? '' : String(f.atk ?? '0'), def: st || link ? '' : String(f.def ?? '0'),
@@ -304,24 +304,8 @@ function toJson(f, lang) {
         variant: 'Normal', link: linkMarkers(f.linkmarkers), layout: LAYOUT[base] || 'Effect',
         boxSize: desc.length > 300 ? 'Small' : 'Normal',
     };
-}
-
-// Image -> data URI base64 (format attendu par ygopro.org). Vérifie que c'est bien une image (pas une page 404).
-const IMG_CACHE = new Map();
-function artDataUri(a) {
-    if (!a) return Promise.resolve(null);
-    if (IMG_CACHE.has(a)) return IMG_CACHE.get(a);
-    const p = (async () => {
-        try {
-            const r = await fetch(artUrl(a));
-            if (!r.ok) return null;
-            const b = await r.blob();
-            if (!/^image\//i.test(b.type)) return null;
-            return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
-        } catch (e) { return null; }
-    })();
-    IMG_CACHE.set(a, p);
-    return p;
+    if (withImage && f.art) json.image = artUrl(f.art);
+    return json;
 }
 
 // ============================================================
@@ -374,25 +358,14 @@ function renderDesc() {
     $('desc').value = d || `(Pas de description en ${LABEL[curLang]}. Pour l'avoir, régénère yugipedia-db.json avec cette langue cochée.)`;
 }
 
-let jtoken = 0;
-async function renderJson() {
-    const tk = ++jtoken, wi = $('wImg').checked;
-    const obj = toJson(cur, curLang);
-    $('json').value = JSON.stringify(obj, null, 2);
+function renderJson() {
+    const wi = $('wImg').checked;
+    $('json').value = JSON.stringify(toJson(cur, curLang, wi), null, 2);
     const noDesc = !cur.descs[curLang];
     const fb = noDesc ? (cur.descs.en ? 'anglais' : 'vide') : '';
-    const base = (noDesc ? `Pas de description en ${LABEL[curLang]} : l'effet du JSON est en ${fb}. ` : '')
-        + (curLang !== 'fr' ? 'Le type (race / catégorie) est écrit en anglais. ' : '');
-    $('jnote').textContent = base;
-    if (!wi) return;
-    if (!cur.art) { $('jnote').textContent = base + 'Aucune image trouvée pour cette carte : JSON sans image.'; return; }
-    $('jnote').textContent = base + 'Chargement de l\'image…';
-    ['copyJson', 'dlJson'].forEach((i) => { $(i).disabled = true; });
-    const uri = await artDataUri(cur.art);
-    if (tk !== jtoken) return;                       // l'utilisateur a changé de langue / carte / case entre-temps
-    ['copyJson', 'dlJson'].forEach((i) => { $(i).disabled = false; });
-    if (uri) { obj.image = uri; $('json').value = JSON.stringify(obj, null, 2); $('jnote').textContent = base + 'Image incluse (base64).'; }
-    else $('jnote').textContent = base + 'Image introuvable ou illisible : JSON sans image.';
+    $('jnote').textContent = (noDesc ? `Pas de description en ${LABEL[curLang]} : l'effet du JSON est en ${fb}. ` : '')
+        + (curLang !== 'fr' ? 'Le type (race / catégorie) est écrit en anglais. ' : '')
+        + (wi && !cur.art ? 'Aucune image trouvée pour cette carte : pas de champ image.' : '');
 }
 
 // ============================================================
