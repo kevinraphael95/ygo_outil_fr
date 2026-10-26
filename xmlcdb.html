@@ -50,7 +50,7 @@
         <div class="field">
             <label for="xmlFile">Fichiers XML (ou CSV / TSV) *</label>
             <input type="file" id="xmlFile" accept=".xml,.csv,.tsv,.txt" multiple>
-            <span class="hint">Plusieurs fichiers possibles : ils sont fusionnés dans l'ordre de sélection, et une carte présente plusieurs fois (même <code>id</code>) n'est gardée qu'une fois. Colonnes reconnues : <code>id</code>, <code>passcode</code> (ou <code>password</code>), <code>card</code> (ou <code>name</code>), en balises, en attributs ou en tableau Row/Cell.</span>
+            <span class="hint">Plusieurs fichiers possibles : ils sont fusionnés dans l'ordre de sélection, et une carte présente plusieurs fois (même <code>id</code>, ou même nom si l'option ci-dessous est cochée) n'est gardée qu'une fois. Colonnes reconnues : <code>id</code>, <code>passcode</code> (ou <code>password</code>), <code>card</code> (ou <code>name</code>), en balises, en attributs ou en tableau Row/Cell.</span>
         </div>
 
         <div class="field">
@@ -72,12 +72,16 @@
         </div>
 
         <div class="opts">
+            <label class="opt"><input type="checkbox" id="optDedupName" checked>
+                <span>Supprimer les doublons de nom dans les fichiers donnés<small>Deux lignes avec le même nom (casse et espaces ignorés) mais des <code>id</code> différents : seule la première est gardée, les autres sont listées dans le rapport. Les doublons d'<code>id</code> sont toujours supprimés.</small></span></label>
             <label class="opt"><input type="checkbox" id="optXmlName">
                 <span>Utiliser le nom de la colonne <code>card</code> comme nom de carte<small>Décoché : le nom officiel est gardé (ex. « Gold Gadget » au lieu de « Gold Gadget (Buff) »).</small></span></label>
             <label class="opt"><input type="checkbox" id="optRenum">
                 <span>Renuméroter les IDs dans l'ordre du fichier<small>Les cartes gardent l'ordre du fichier et les IDs se suivent à partir de la valeur ci-dessous (un CDB est toujours trié par ID, c'est le seul moyen de garder l'ordre). Décoché : IDs de la colonne <code>id</code>, triés.</small></span></label>
             <label class="opt"><input type="checkbox" id="optMissing" checked>
                 <span>Inclure les cartes non trouvées<small>Elles sont ajoutées au CDB avec leur nom, et leur ID / passcode / fichier source dans la description (stats à 0). Elles restent listées dans le rapport.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optCustomOt">
+                <span>Forcer toutes les cartes en tant que Custom (ot = 0x20 / 32)<small>Définit l'origine des cartes sur Custom (0x20).</small></span></label>
         </div>
 
         <div class="field">
@@ -382,9 +386,11 @@ btn.addEventListener('click', async () => {
 
     let officialFiles = [...$('cdbOfficial').files];
     const ignore = $('ignoreTags').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
+    const dedupName = $('optDedupName').checked;
     const useXmlName = $('optXmlName').checked;
     const renum = $('optRenum').checked;
     const useMissing = $('optMissing').checked;
+    const customOt = $('optCustomOt').checked;
     const excludeFiles = [...$('excludeFile').files];
     const startRaw = $('startId').value.trim();
     if (renum && startRaw !== '' && !(parseInt(startRaw, 10) >= 1)) return YGO.toast("ID de la première carte invalide.", 'err');
@@ -396,10 +402,11 @@ btn.addEventListener('click', async () => {
     let official = null;
     try {
         // ---- Source ----
-        const seen = new Map();   // id -> carte déjà retenue (tous fichiers confondus)
+        const seen = new Map();       // id -> carte déjà retenue (tous fichiers confondus)
+        const seenNames = new Map();  // nom normalisé -> carte déjà retenue (tous fichiers confondus)
         const list = [];
         const rapport = [];
-        let dup = 0, totalRows = 0;
+        let dup = 0, dupName = 0, totalRows = 0;
         for (const f of srcFiles) {
             out.log('📄 Lecture de ' + f.name + '…');
             let rows;
@@ -411,7 +418,7 @@ btn.addEventListener('click', async () => {
                 continue;
             }
             totalRows += rows.length;
-            let added = 0, dupHere = 0;
+            let added = 0, dupHere = 0, dupNameHere = 0;
             for (const r of rows) {
                 const cid = parseInt(String(r.id).replace(/\s/g, ''), 10);
                 const card = String(r.card || '').trim();
@@ -423,21 +430,37 @@ btn.addEventListener('click', async () => {
                     else rapport.push(`${cid} | conflit : « ${p.card} » (${p.pc || '-'}, ${p.file}) ≠ « ${card} » (${pc || '-'}, ${f.name}) | première ligne gardée`);
                     continue;
                 }
+                const nk = norm(card);
+                if (dedupName && nk && seenNames.has(nk)) {
+                    const p = seenNames.get(nk);
+                    dupName++; dupNameHere++;
+                    rapport.push(`${cid} | doublon de nom : « ${card} » (${pc || '-'}, ${f.name}) déjà présente avec l'id ${p.cid} (${p.pc || '-'}, ${p.file}) | première ligne gardée`);
+                    continue;
+                }
                 const e = { cid, pc, card, file: f.name };
                 seen.set(cid, e);
+                if (nk) seenNames.set(nk, e);
                 list.push(e);
                 added++;
             }
-            out.log(`→ ${rows.length} lignes, ${added} nouvelle(s) carte(s)` + (dupHere ? `, ${dupHere} déjà présente(s)` : '') + '.');
+            out.log(`→ ${rows.length} lignes, ${added} nouvelle(s) carte(s)`
+                + (dupHere ? `, ${dupHere} id déjà présent(s)` : '')
+                + (dupNameHere ? `, ${dupNameHere} nom(s) déjà présent(s)` : '') + '.');
         }
         if (!list.length) throw new Error('aucune carte lue dans les fichiers sélectionnés');
-        out.log(`→ ${list.length} cartes distinctes sur ${totalRows} lignes` + (dup ? `, ${dup} doublon(s) identique(s) ignoré(s).` : '.'));
+        out.log(`→ ${list.length} cartes distinctes sur ${totalRows} lignes`
+            + (dup ? `, ${dup} doublon(s) d'id ignoré(s)` : '')
+            + (dupName ? `, ${dupName} doublon(s) de nom ignoré(s)` : '') + '.');
 
         // ---- Exclusion des cartes déjà présentes dans d'autres fichiers (par nom) ----
         if (excludeFiles.length) {
             out.log('🚫 Lecture des fichiers à exclure…');
             const ex = await loadExcludeNames(excludeFiles);
-            const kept = list.filter((e) => !ex.has(norm(stripParens(e.card))));
+            const kept = [];
+            for (const e of list) {
+                if (ex.has(norm(stripParens(e.card)))) rapport.push(`${e.cid} | ${e.card} | déjà présente dans les fichiers à exclure | ignorée`);
+                else kept.push(e);
+            }
             out.log(`→ ${list.length - kept.length} carte(s) déjà présente(s) ignorée(s), ${kept.length} restante(s).`);
             list.length = 0;
             list.push(...kept);
@@ -543,7 +566,7 @@ btn.addEventListener('click', async () => {
             '',
             '== Trouvées par nom ==', ...byNameLines, '',
             '== Nom différent de l\'officiel ==', ...nameDiffLines, '',
-            '== Non trouvées / problèmes ==', ...rapport,
+            '== Non trouvées / doublons / problèmes ==', ...rapport,
             ...(mapLines.length ? ['', '== Correspondance des IDs (nouvel ID ← ancien ID) ==', ...mapLines] : []),
         ].join('\n');
         $('reportBtn').classList.remove('hidden');
@@ -561,7 +584,12 @@ btn.addEventListener('click', async () => {
         const insT = outDb.prepare(`INSERT OR REPLACE INTO texts (${TEXTS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${TEXTS_COLS.map(() => '?').join(',')})`);
         outDb.run('BEGIN');
         for (const c of found) {
-            insD.run(DATAS_COLS.map((k) => (k === 'id' ? c.cid : k === 'alias' ? 0 : (c.datas[k] == null ? 0 : c.datas[k]))));
+            insD.run(DATAS_COLS.map((k) => {
+                if (k === 'id') return c.cid;
+                if (k === 'alias') return 0;
+                if (k === 'ot' && customOt) return 0x20;
+                return c.datas[k] == null ? 0 : c.datas[k];
+            }));
             insT.run(TEXTS_COLS.map((k) => {
                 if (k === 'id') return c.cid;
                 if (k === 'name' && useXmlName && c.card) return c.card;
@@ -575,7 +603,7 @@ btn.addEventListener('click', async () => {
 
         const base = srcFiles.length === 1
             ? (srcFiles[0].name.replace(/\.[^.]+$/, '').replace(/[^\w.\- ]+/g, '_') || 'cartes')
-            : 'cartes_fusionnees';
+            : 'customcdb';
         const size = await YGO.download(new Blob([bytes], { type: 'application/x-sqlite3' }), base + '.cdb');
         out.log(`✅ ${found.length} cartes dans ${base}.cdb (${YGO.fmtBytes(size)}).`, 'ok');
         YGO.toast(`${found.length} cartes générées !`);
