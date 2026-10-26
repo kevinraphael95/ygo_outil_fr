@@ -68,6 +68,14 @@
         <div class="opts">
             <label class="opt"><input type="checkbox" id="optXmlName">
                 <span>Utiliser le nom de la colonne <code>card</code> comme nom de carte<small>Décoché : le nom officiel est gardé (ex. « Gold Gadget » au lieu de « Gold Gadget (Buff) »).</small></span></label>
+            <label class="opt"><input type="checkbox" id="optRenum">
+                <span>Renuméroter les IDs dans l'ordre du fichier<small>Les cartes gardent l'ordre du fichier et les IDs se suivent à partir de la valeur ci-dessous (un CDB est toujours trié par ID, c'est le seul moyen de garder l'ordre). Décoché : IDs de la colonne <code>id</code>, triés.</small></span></label>
+        </div>
+
+        <div class="field">
+            <label for="startId">ID de la première carte</label>
+            <input type="number" id="startId" min="1" step="1" placeholder="vide = ID de la 1re carte trouvée dans le fichier" autocomplete="off">
+            <span class="hint">Utilisé seulement avec « Renuméroter ». Seules les cartes trouvées sont numérotées, sans trou.</span>
         </div>
 
         <div class="actions">
@@ -100,6 +108,9 @@ $('cdbOfficial').addEventListener('change', (e) => {
     const n = e.target.files.length;
     $('cdbOfficialHint').textContent = n ? `${n} fichier(s) CDB sélectionné(s)` : DEFAULT_OFFICIAL_HINT;
 });
+
+$('startId').disabled = true;
+$('optRenum').addEventListener('change', () => { $('startId').disabled = !$('optRenum').checked; });
 
 let reportText = '';
 $('reportBtn').addEventListener('click', () => {
@@ -335,6 +346,9 @@ btn.addEventListener('click', async () => {
     let officialFiles = [...$('cdbOfficial').files];
     const ignore = $('ignoreTags').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
     const useXmlName = $('optXmlName').checked;
+    const renum = $('optRenum').checked;
+    const startRaw = $('startId').value.trim();
+    if (renum && startRaw !== '' && !(parseInt(startRaw, 10) >= 1)) return YGO.toast("ID de la première carte invalide.", 'err');
 
     btn.disabled = true;
     out.clear();
@@ -421,6 +435,15 @@ btn.addEventListener('click', async () => {
             found.push({ cid: e.cid, card: e.card, datas, texts });
         }
 
+        // ---- Renumérotation (ordre du fichier, IDs qui se suivent) ----
+        let mapLines = [];
+        if (renum && found.length) {
+            const start = startRaw !== '' ? parseInt(startRaw, 10) : found[0].cid;
+            found.forEach((c, i) => { c.oldCid = c.cid; c.cid = start + i; });
+            mapLines = found.map((c) => `${c.cid} ← ${c.oldCid} | ${c.card}`);
+            out.log(`🔢 IDs renumérotés dans l'ordre du fichier : ${start} → ${start + found.length - 1}`);
+        }
+
         // ---- Sortie ----
         out.log('');
         out.log(`${found.length} cartes copiées (${nPass} par passcode, ${nName} par nom), ${rapport.length} remarque(s) dans le rapport.`);
@@ -443,6 +466,7 @@ btn.addEventListener('click', async () => {
             '== Trouvées par nom ==', ...byNameLines, '',
             '== Nom différent de l\'officiel ==', ...nameDiffLines, '',
             '== Non trouvées / problèmes ==', ...rapport,
+            ...(mapLines.length ? ['', '== Correspondance des IDs (nouvel ID ← ancien ID) ==', ...mapLines] : []),
         ].join('\n');
         $('reportBtn').classList.remove('hidden');
 
@@ -452,7 +476,7 @@ btn.addEventListener('click', async () => {
         }
 
         out.log('📦 Création du CDB…');
-        found.sort((a, b) => a.cid - b.cid);
+        if (!renum) found.sort((a, b) => a.cid - b.cid);
         const outDb = new SQL.Database();
         outDb.run(SCHEMA);
         const insD = outDb.prepare(`INSERT OR REPLACE INTO datas (${DATAS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${DATAS_COLS.map(() => '?').join(',')})`);
