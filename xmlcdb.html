@@ -78,6 +78,8 @@
                 <span>Renuméroter les IDs dans l'ordre du fichier<small>Les cartes gardent l'ordre du fichier et les IDs se suivent à partir de la valeur ci-dessous (un CDB est toujours trié par ID, c'est le seul moyen de garder l'ordre). Décoché : IDs de la colonne <code>id</code>, triés.</small></span></label>
             <label class="opt"><input type="checkbox" id="optMissing" checked>
                 <span>Inclure les cartes non trouvées<small>Elles sont ajoutées au CDB avec leur nom, et leur ID / passcode / fichier source dans la description (stats à 0). Elles restent listées dans le rapport.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optCustomOt">
+                <span>Forcer toutes les cartes en tant que Custom (ot = 0x20 / 32)<small>Définit l'origine des cartes sur Custom (0x20).</small></span></label>
         </div>
 
         <div class="field">
@@ -385,6 +387,7 @@ btn.addEventListener('click', async () => {
     const useXmlName = $('optXmlName').checked;
     const renum = $('optRenum').checked;
     const useMissing = $('optMissing').checked;
+    const customOt = $('optCustomOt').checked;
     const excludeFiles = [...$('excludeFile').files];
     const startRaw = $('startId').value.trim();
     if (renum && startRaw !== '' && !(parseInt(startRaw, 10) >= 1)) return YGO.toast("ID de la première carte invalide.", 'err');
@@ -396,7 +399,7 @@ btn.addEventListener('click', async () => {
     let official = null;
     try {
         // ---- Source ----
-        const seen = new Map();   // id -> carte déjà retenue (tous fichiers confondus)
+        const seen = new Map();    // id -> carte déjà retenue (tous fichiers confondus)
         const list = [];
         const rapport = [];
         let dup = 0, totalRows = 0;
@@ -561,7 +564,12 @@ btn.addEventListener('click', async () => {
         const insT = outDb.prepare(`INSERT OR REPLACE INTO texts (${TEXTS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${TEXTS_COLS.map(() => '?').join(',')})`);
         outDb.run('BEGIN');
         for (const c of found) {
-            insD.run(DATAS_COLS.map((k) => (k === 'id' ? c.cid : k === 'alias' ? 0 : (c.datas[k] == null ? 0 : c.datas[k]))));
+            insD.run(DATAS_COLS.map((k) => {
+                if (k === 'id') return c.cid;
+                if (k === 'alias') return 0;
+                if (k === 'ot' && customOt) return 0x20;
+                return c.datas[k] == null ? 0 : c.datas[k];
+            }));
             insT.run(TEXTS_COLS.map((k) => {
                 if (k === 'id') return c.cid;
                 if (k === 'name' && useXmlName && c.card) return c.card;
