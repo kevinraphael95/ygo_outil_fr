@@ -75,7 +75,7 @@
             <label class="opt"><input type="checkbox" id="optDedupName" checked>
                 <span>Supprimer les doublons de nom dans les fichiers donnés<small>Deux lignes avec le même nom (casse et espaces ignorés) mais des <code>id</code> différents : seule la première est gardée, les autres sont listées dans le rapport. Les doublons d'<code>id</code> sont toujours supprimés.</small></span></label>
             <label class="opt"><input type="checkbox" id="optDedupContent" checked>
-                <span>Supprimer les cartes identiques (même effet, mêmes stats)<small>Après la copie depuis les CDB officiels, deux cartes avec exactement les mêmes stats et le même texte (le nom est ignoré) ne sont gardées qu'une fois : la première est conservée, les autres sont listées dans le rapport. Les cartes non trouvées ne sont pas concernées.</small></span></label>
+                <span>Supprimer les cartes identiques (même effet, mêmes stats)<small>Après la copie depuis les CDB officiels, deux cartes avec exactement les mêmes stats et le même texte (le nom est ignoré) ne sont gardées qu'une fois : la première est conservée, les autres sont listées dans le rapport. Les cartes non trouvées, et les versions alternatives absentes des CDB (ex. « (Buff) » copiée depuis la carte de base), ne sont jamais supprimées.</small></span></label>
             <label class="opt"><input type="checkbox" id="optXmlName">
                 <span>Utiliser le nom de la colonne <code>card</code> comme nom de carte<small>Décoché : le nom officiel est gardé (ex. « Gold Gadget » au lieu de « Gold Gadget (Buff) »).</small></span></label>
             <label class="opt"><input type="checkbox" id="optRenum">
@@ -513,7 +513,7 @@ btn.addEventListener('click', async () => {
         };
 
         for (const e of list) {
-            let src = null, how = '';
+            let src = null, how = '', stripped = false;
             if (e.pc) {
                 const hit = official.idMap.get(e.pc);
                 if (hit) { src = { id: e.pc, di: hit.di }; how = 'passcode'; }
@@ -521,7 +521,7 @@ btn.addEventListener('click', async () => {
             if (!src && e.card) {
                 const hit = byName(official.nameMap, e.card);
                 if (hit) {
-                    src = { id: hit.id, di: hit.di }; how = 'nom';
+                    src = { id: hit.id, di: hit.di }; how = 'nom'; stripped = hit.stripped;
                     if (e.pc) rapport.push(`${e.cid} | ${e.card} | passcode ${e.pc} introuvable, trouvé par nom (${hit.id})`);
                 }
             }
@@ -540,7 +540,11 @@ btn.addEventListener('click', async () => {
             }
 
             // Carte strictement identique (stats + effet) à une carte déjà gardée : on la saute
-            if (dedupContent) {
+            // Trouvée seulement après avoir retiré la parenthèse (ex. « (Buff) ») : la version alternative n'existe pas dans les CDB,
+            // on ne peut pas savoir si c'est un doublon -> on la garde.
+            if (stripped) {
+                rapport.push(`${e.cid} | ${e.card} | version alternative absente des CDB : stats et effet copiés de « ${texts.name} » (${src.id}) | gardée, à modifier à la main`);
+            } else if (dedupContent) {
                 const key = contentKey(datas, texts);
                 const prev = seenContent.get(key);
                 if (prev) {
