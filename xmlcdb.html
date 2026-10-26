@@ -50,13 +50,19 @@
         <div class="field">
             <label for="xmlFile">Fichiers XML (ou CSV / TSV) *</label>
             <input type="file" id="xmlFile" accept=".xml,.csv,.tsv,.txt" multiple>
-            <span class="hint">Plusieurs fichiers possibles : ils sont fusionnés dans l'ordre de sélection, et une carte présente plusieurs fois (même <code>id</code>) n'est gardée qu'une fois. Colonnes reconnues : <code>id</code>, <code>passcode</code>, <code>card</code> (ou <code>name</code>), en balises, en attributs ou en tableau Row/Cell.</span>
+            <span class="hint">Plusieurs fichiers possibles : ils sont fusionnés dans l'ordre de sélection, et une carte présente plusieurs fois (même <code>id</code>) n'est gardée qu'une fois. Colonnes reconnues : <code>id</code>, <code>passcode</code> (ou <code>password</code>), <code>card</code> (ou <code>name</code>), en balises, en attributs ou en tableau Row/Cell.</span>
         </div>
 
         <div class="field">
             <label for="cdbOfficial">CDB officiels (plusieurs fichiers) <small>(optionnel)</small></label>
             <input type="file" id="cdbOfficial" accept=".cdb" multiple>
             <span class="hint" id="cdbOfficialHint">Vide = tous les CDB de data/cdb/en du dépôt GitHub.</span>
+        </div>
+
+        <div class="field">
+            <label for="excludeFile">Ne pas mettre les cartes déjà présentes dans <small>(optionnel)</small></label>
+            <input type="file" id="excludeFile" accept=".cdb,.csv,.tsv,.txt,.xml" multiple>
+            <span class="hint">CDB, CSV, TSV ou XML. Les cartes dont le <code>nom</code> est déjà dans ces fichiers sont ignorées (comparaison exacte, sans tenir compte des majuscules).</span>
         </div>
 
         <div class="field">
@@ -174,7 +180,7 @@ function remoteFile(path) {
 // ============================================================
 const FIELD = {
     id: ['id', 'cardid', 'customid', 'custom'],
-    passcode: ['passcode', 'code', 'officialcode', 'officialid', 'official'],
+    passcode: ['passcode', 'password', 'code', 'officialcode', 'officialid', 'official'],
     card: ['card', 'name', 'nom', 'cardname'],
 };
 function fieldOf(name) {
@@ -308,6 +314,35 @@ async function loadOfficial(files) {
     return { dbs, idMap, nameMap };
 }
 
+/** Noms (normalisés) des cartes déjà présentes dans les fichiers à exclure (CDB, CSV, TSV, XML). */
+async function loadExcludeNames(files) {
+    const names = new Set();
+    for (const f of files) {
+        try {
+            let n = 0;
+            if (/\.cdb$/i.test(f.name)) {
+                const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+                try {
+                    const t = db.exec('SELECT name FROM texts');
+                    if (t.length) for (const [name] of t[0].values) {
+                        const k = norm(name);
+                        if (k) { names.add(k); n++; }
+                    }
+                } finally { db.close(); }
+            } else {
+                for (const r of parseFile(f.name, await f.text())) {
+                    const k = norm(r.card);
+                    if (k) { names.add(k); n++; }
+                }
+            }
+            out.log(`   ${f.name} : ${n} noms à exclure`);
+        } catch (e) {
+            out.log(`exclusion ignorée ${f.name} : ${e.message}`, 'warn');
+        }
+    }
+    return names;
+}
+
 function byName(nameMap, name) {
     let stripped = false;
     let list = nameMap.get(norm(name));
@@ -350,6 +385,7 @@ btn.addEventListener('click', async () => {
     const useXmlName = $('optXmlName').checked;
     const renum = $('optRenum').checked;
     const useMissing = $('optMissing').checked;
+    const excludeFiles = [...$('excludeFile').files];
     const startRaw = $('startId').value.trim();
     if (renum && startRaw !== '' && !(parseInt(startRaw, 10) >= 1)) return YGO.toast("ID de la première carte invalide.", 'err');
 
@@ -396,6 +432,17 @@ btn.addEventListener('click', async () => {
         }
         if (!list.length) throw new Error('aucune carte lue dans les fichiers sélectionnés');
         out.log(`→ ${list.length} cartes distinctes sur ${totalRows} lignes` + (dup ? `, ${dup} doublon(s) identique(s) ignoré(s).` : '.'));
+
+        // ---- Exclusion des cartes déjà présentes dans d'autres fichiers (par nom) ----
+        if (excludeFiles.length) {
+            out.log('🚫 Lecture des fichiers à exclure…');
+            const ex = await loadExcludeNames(excludeFiles);
+            const kept = list.filter((e) => !ex.has(norm(e.card)));
+            out.log(`→ ${list.length - kept.length} carte(s) déjà présente(s) ignorée(s), ${kept.length} restante(s).`);
+            list.length = 0;
+            list.push(...kept);
+            if (!list.length) throw new Error('toutes les cartes sont déjà dans les fichiers à exclure');
+        }
 
         // ---- CDB officiels ----
         if (!officialFiles.length) {
