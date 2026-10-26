@@ -48,9 +48,9 @@
         <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
 
         <div class="field">
-            <label for="xmlFile">Fichier XML (ou CSV / TSV) *</label>
-            <input type="file" id="xmlFile" accept=".xml,.csv,.tsv,.txt">
-            <span class="hint">Colonnes reconnues : <code>id</code>, <code>passcode</code>, <code>card</code> (ou <code>name</code>), en balises, en attributs ou en tableau Row/Cell.</span>
+            <label for="xmlFile">Fichiers XML (ou CSV / TSV) *</label>
+            <input type="file" id="xmlFile" accept=".xml,.csv,.tsv,.txt" multiple>
+            <span class="hint">Plusieurs fichiers possibles : ils sont fusionnés dans l'ordre de sélection, et une carte présente plusieurs fois (même <code>id</code>) n'est gardée qu'une fois. Colonnes reconnues : <code>id</code>, <code>passcode</code>, <code>card</code> (ou <code>name</code>), en balises, en attributs ou en tableau Row/Cell.</span>
         </div>
 
         <div class="field">
@@ -340,8 +340,8 @@ const GET_TEXTS = 'SELECT * FROM texts WHERE id = ?';
 // ============================================================
 btn.addEventListener('click', async () => {
     if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
-    const srcFile = $('xmlFile').files[0];
-    if (!srcFile) return YGO.toast('Sélectionne le fichier XML.', 'err');
+    const srcFiles = [...$('xmlFile').files];
+    if (!srcFiles.length) return YGO.toast('Sélectionne au moins un fichier XML.', 'err');
 
     let officialFiles = [...$('cdbOfficial').files];
     const ignore = $('ignoreTags').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
@@ -357,30 +357,42 @@ btn.addEventListener('click', async () => {
     let official = null;
     try {
         // ---- Source ----
-        out.log('📄 Lecture de ' + srcFile.name + '…');
-        const rows = parseFile(srcFile.name, await srcFile.text());
-        out.log(`→ ${rows.length} lignes.`);
-
-        const seen = new Map();
+        const seen = new Map();   // id -> carte déjà retenue (tous fichiers confondus)
         const list = [];
         const rapport = [];
-        let dup = 0;
-        for (const r of rows) {
-            const cid = parseInt(String(r.id).replace(/\s/g, ''), 10);
-            const card = String(r.card || '').trim();
-            if (!Number.isFinite(cid) || cid <= 0) { rapport.push(`ligne ignorée | id invalide « ${r.id} » | ${card}`); continue; }
-            const pc = parseInt(String(r.passcode || '').replace(/\D/g, ''), 10) || 0;
-            if (seen.has(cid)) {
-                const p = seen.get(cid);
-                if (p.pc === pc && norm(p.card) === norm(card)) dup++;
-                else rapport.push(`${cid} | conflit : « ${p.card} » (${p.pc || '-'}) ≠ « ${card} » (${pc || '-'}) | première ligne gardée`);
+        let dup = 0, totalRows = 0;
+        for (const f of srcFiles) {
+            out.log('📄 Lecture de ' + f.name + '…');
+            let rows;
+            try {
+                rows = parseFile(f.name, await f.text());
+            } catch (e) {
+                out.log(`ignoré ${f.name} : ${e.message}`, 'warn');
+                rapport.push(`${f.name} | fichier ignoré : ${e.message}`);
                 continue;
             }
-            const e = { cid, pc, card };
-            seen.set(cid, e);
-            list.push(e);
+            totalRows += rows.length;
+            let added = 0, dupHere = 0;
+            for (const r of rows) {
+                const cid = parseInt(String(r.id).replace(/\s/g, ''), 10);
+                const card = String(r.card || '').trim();
+                if (!Number.isFinite(cid) || cid <= 0) { rapport.push(`${f.name} | ligne ignorée : id invalide « ${r.id} » | ${card}`); continue; }
+                const pc = parseInt(String(r.passcode || '').replace(/\D/g, ''), 10) || 0;
+                if (seen.has(cid)) {
+                    const p = seen.get(cid);
+                    if (p.pc === pc && norm(p.card) === norm(card)) { dup++; dupHere++; }
+                    else rapport.push(`${cid} | conflit : « ${p.card} » (${p.pc || '-'}, ${p.file}) ≠ « ${card} » (${pc || '-'}, ${f.name}) | première ligne gardée`);
+                    continue;
+                }
+                const e = { cid, pc, card, file: f.name };
+                seen.set(cid, e);
+                list.push(e);
+                added++;
+            }
+            out.log(`→ ${rows.length} lignes, ${added} nouvelle(s) carte(s)` + (dupHere ? `, ${dupHere} déjà présente(s)` : '') + '.');
         }
-        out.log(`→ ${list.length} cartes distinctes` + (dup ? `, ${dup} doublon(s) identique(s) fusionné(s).` : '.'));
+        if (!list.length) throw new Error('aucune carte lue dans les fichiers sélectionnés');
+        out.log(`→ ${list.length} cartes distinctes sur ${totalRows} lignes` + (dup ? `, ${dup} doublon(s) identique(s) ignoré(s).` : '.'));
 
         // ---- CDB officiels ----
         if (!officialFiles.length) {
@@ -460,7 +472,7 @@ btn.addEventListener('click', async () => {
             rapport.forEach((l) => out.log(l, 'warn'));
         }
         reportText = [
-            `Source : ${srcFile.name}`,
+            `Source : ${srcFiles.map((f) => f.name).join(', ')}`,
             `${found.length} cartes copiées (${nPass} par passcode, ${nName} par nom)`,
             '',
             '== Trouvées par nom ==', ...byNameLines, '',
@@ -495,7 +507,9 @@ btn.addEventListener('click', async () => {
         const bytes = outDb.export();
         outDb.close();
 
-        const base = srcFile.name.replace(/\.[^.]+$/, '').replace(/[^\w.\- ]+/g, '_') || 'cartes';
+        const base = srcFiles.length === 1
+            ? (srcFiles[0].name.replace(/\.[^.]+$/, '').replace(/[^\w.\- ]+/g, '_') || 'cartes')
+            : 'cartes_fusionnees';
         const size = await YGO.download(new Blob([bytes], { type: 'application/x-sqlite3' }), base + '.cdb');
         out.log(`✅ ${found.length} cartes dans ${base}.cdb (${YGO.fmtBytes(size)}).`, 'ok');
         YGO.toast(`${found.length} cartes générées !`);
