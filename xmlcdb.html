@@ -62,7 +62,7 @@
         <div class="field">
             <label for="excludeFile">Ne pas mettre les cartes déjà présentes dans <small>(optionnel)</small></label>
             <input type="file" id="excludeFile" accept=".cdb,.csv,.tsv,.txt,.xml" multiple>
-            <span class="hint">CDB, CSV, TSV ou XML. Les cartes dont le <code>nom</code> est déjà dans ces fichiers sont ignorées (comparaison exacte, sans tenir compte des majuscules).</span>
+            <span class="hint">CDB, CSV, TSV ou XML. Les cartes dont le <code>nom</code> est déjà dans ces fichiers sont ignorées (majuscules et parenthèse finale ignorées : « Gold Gadget (Buff) » = « Gold Gadget »).</span>
         </div>
 
         <div class="field">
@@ -190,19 +190,19 @@ function fieldOf(name) {
 }
 
 /** Tableau (premières ligne = en-têtes) -> [{id, passcode, card}] */
-function rowsFromTable(table) {
+function rowsFromTable(table, needId = true) {
     if (!table.length) throw new Error('tableau vide');
     const map = {};
     table[0].forEach((h, i) => { const f = fieldOf(h); if (f && map[f] === undefined) map[f] = i; });
-    if (map.id === undefined || map.card === undefined) {
+    if ((needId && map.id === undefined) || map.card === undefined) {
         throw new Error('en-têtes introuvables : il faut au moins « id » et « card » (trouvé : ' + table[0].join(' | ') + ')');
     }
     return table.slice(1).map((r) => ({
-        id: r[map.id], passcode: map.passcode === undefined ? '' : r[map.passcode], card: r[map.card],
+        id: map.id === undefined ? '' : r[map.id], passcode: map.passcode === undefined ? '' : r[map.passcode], card: r[map.card],
     })).filter((r) => String(r.id || '').trim() || String(r.card || '').trim());
 }
 
-function parseDelimited(text) {
+function parseDelimited(text, needId = true) {
     const first = text.split(/\r?\n/, 1)[0] || '';
     const counts = { '\t': 0, ';': 0, ',': 0 };
     for (const ch of first) if (ch in counts) counts[ch]++;
@@ -225,10 +225,10 @@ function parseDelimited(text) {
     }
     row.push(cell);
     if (row.some((c) => c.trim())) table.push(row);
-    return rowsFromTable(table.map((r) => r.map((c) => c.trim())));
+    return rowsFromTable(table.map((r) => r.map((c) => c.trim())), needId);
 }
 
-function parseXml(text) {
+function parseXml(text, needId = true) {
     const doc = new DOMParser().parseFromString(text, 'application/xml');
     const err = doc.querySelector('parsererror');
     if (err) throw new Error('XML invalide : ' + err.textContent.slice(0, 140).replace(/\s+/g, ' '));
@@ -247,14 +247,14 @@ function parseXml(text) {
             const own = fieldOf(el.localName);
             if (own && rec[own] === undefined && el.textContent.trim()) rec[own] = el.textContent;
         }
-        if (rec.id !== undefined && rec.card !== undefined) rows.push(rec);
+        if ((!needId || rec.id !== undefined) && rec.card !== undefined) rows.push(rec);
     }
     if (rows.length) return rows;
 
     // 2) Tableur XML : <Row><Cell>… (ou <row><c>… / <tr><td>…)
     const rowEls = [...doc.getElementsByTagName('*')].filter((e) => /^(row|tr)$/i.test(e.localName) && e.children.length);
     if (rowEls.length) {
-        return rowsFromTable(rowEls.map((r) => [...r.children].map((c) => c.textContent.trim())));
+        return rowsFromTable(rowEls.map((r) => [...r.children].map((c) => c.textContent.trim())), needId);
     }
 
     const root = doc.documentElement;
@@ -262,10 +262,10 @@ function parseXml(text) {
     throw new Error(`structure XML non reconnue (racine <${root.localName}>, premier enfant : ${kids[0] || 'aucun'})`);
 }
 
-function parseFile(name, text) {
+function parseFile(name, text, needId = true) {
     text = text.replace(/^\uFEFF/, '');
-    if (/\.(csv|tsv|txt)$/i.test(name) && !/^\s*</.test(text)) return parseDelimited(text);
-    return parseXml(text);
+    if (/\.(csv|tsv|txt)$/i.test(name) && !/^\s*</.test(text)) return parseDelimited(text, needId);
+    return parseXml(text, needId);
 }
 
 // ============================================================
@@ -325,13 +325,13 @@ async function loadExcludeNames(files) {
                 try {
                     const t = db.exec('SELECT name FROM texts');
                     if (t.length) for (const [name] of t[0].values) {
-                        const k = norm(name);
+                        const k = norm(stripParens(name));
                         if (k) { names.add(k); n++; }
                     }
                 } finally { db.close(); }
             } else {
-                for (const r of parseFile(f.name, await f.text())) {
-                    const k = norm(r.card);
+                for (const r of parseFile(f.name, await f.text(), false)) {
+                    const k = norm(stripParens(r.card));
                     if (k) { names.add(k); n++; }
                 }
             }
@@ -437,7 +437,7 @@ btn.addEventListener('click', async () => {
         if (excludeFiles.length) {
             out.log('🚫 Lecture des fichiers à exclure…');
             const ex = await loadExcludeNames(excludeFiles);
-            const kept = list.filter((e) => !ex.has(norm(e.card)));
+            const kept = list.filter((e) => !ex.has(norm(stripParens(e.card))));
             out.log(`→ ${list.length - kept.length} carte(s) déjà présente(s) ignorée(s), ${kept.length} restante(s).`);
             list.length = 0;
             list.push(...kept);
