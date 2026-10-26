@@ -575,7 +575,7 @@ btn.addEventListener('click', async () => {
 
         const base = srcFiles.length === 1
             ? (srcFiles[0].name.replace(/\.[^.]+$/, '').replace(/[^\w.\- ]+/g, '_') || 'cartes')
-            : 'cartes_fusionnees';
+            : 'customcdb';
         const size = await YGO.download(new Blob([bytes], { type: 'application/x-sqlite3' }), base + '.cdb');
         out.log(`✅ ${found.length} cartes dans ${base}.cdb (${YGO.fmtBytes(size)}).`, 'ok');
         YGO.toast(`${found.length} cartes générées !`);
