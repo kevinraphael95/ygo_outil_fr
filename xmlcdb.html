@@ -95,7 +95,7 @@
             <label class="opt"><input type="checkbox" id="optCustomOt">
                 <span>Forcer toutes les cartes en tant que Custom (ot = 0x20 / 32)<small>Définit l'origine des cartes sur Custom.</small></span></label>
             <label class="opt"><input type="checkbox" id="optExcludeEffect">
-                <span>Proposer les cartes similaires pour vérification<small>Si coché, une fenêtre s'affiche pour chaque carte dont le nom de base existe déjà dans les fichiers d'exclusion, afin de choisir manuellement de la garder ou non (avec le fichier XML source et les effets). Décoché : l'exclusion se fait automatiquement sur le nom.</small></span></label>
+                <span>Proposer les cartes similaires pour vérification<small>Si coché, une fenêtre s'affiche pour chaque carte dont le nom de base existe déjà dans les fichiers d'exclusion (avec le fichier XML source, l'ID, et les effets), afin de choisir manuellement de la garder ou non. Décoché : l'exclusion se fait automatiquement sur le nom.</small></span></label>
         </div>
 
         <div class="field">
@@ -477,7 +477,7 @@ btn.addEventListener('click', async () => {
                     continue;
                 }
                 
-                const e = { cid, pc, card, file: f.name };
+                const e = { cid, pc, card, file: f.name, index: list.length };
                 seen.set(cid, e);
                 if (nk) seenNames.set(nk, e);
                 list.push(e);
@@ -611,7 +611,7 @@ btn.addEventListener('click', async () => {
             if (e.card && norm(stripParens(texts.name)) !== norm(stripParens(e.card))) {
                 nameDiffLines.push(`${e.cid} | « ${e.card} » ≠ officiel « ${texts.name} » (${src.id})`);
             }
-            found.push({ cid: e.cid, card: e.card, datas, texts });
+            found.push({ cid: e.cid, card: e.card, datas, texts, index: e.index });
         }
         if (nSame) out.log(`🧹 ${nSame} carte(s) identique(s) (mêmes stats et même effet) ignorée(s).`);
 
@@ -621,11 +621,10 @@ btn.addEventListener('click', async () => {
             const keptCards = await askUserForDuplicates(toVerify);
             
             keptCards.forEach(({ e, datas, texts }) => {
-                // On applique le patch si c'est une carte custom
                 if (norm(e.card) !== norm(texts.name)) { 
                     texts.desc = "[EFFET CUSTOM À REMPLIR]";
                 }
-                found.push({ cid: e.cid, card: e.card, datas, texts });
+                found.push({ cid: e.cid, card: e.card, datas, texts, index: e.index });
             });
             
             out.log(`→ ${keptCards.length} carte(s) gardée(s) sur ${toVerify.length}.`);
@@ -634,6 +633,9 @@ btn.addEventListener('click', async () => {
         // ---- Renumérotation ----
         let mapLines = [];
         if (renum && found.length) {
+            // On trie les cartes selon leur ordre d'apparition dans le XML
+            found.sort((a, b) => a.index - b.index);
+            
             const start = startRaw !== '' ? parseInt(startRaw, 10) : found[0].cid;
             found.forEach((c, i) => { c.oldCid = c.cid; c.cid = start + i; });
             mapLines = found.map((c) => `${c.cid} ← ${c.oldCid} | ${c.card}`);
