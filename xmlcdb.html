@@ -62,7 +62,7 @@
         <div class="field">
             <label for="excludeFile">Ne pas mettre les cartes déjà présentes dans <small>(optionnel)</small></label>
             <input type="file" id="excludeFile" accept=".cdb,.csv,.tsv,.txt,.xml" multiple>
-            <span class="hint">Les cartes dont le nom de base ET l'effet sont déjà dans ces fichiers sont ignorées.</span>
+            <span class="hint">Les cartes dont le nom de base est déjà dans ces fichiers sont ignorées.</span>
         </div>
 
         <div class="field">
@@ -80,6 +80,8 @@
                 <span>Inclure les cartes non trouvées<small>Elles sont ajoutées au CDB avec leur nom et un effet générique.</small></span></label>
             <label class="opt"><input type="checkbox" id="optCustomOt">
                 <span>Forcer toutes les cartes en tant que Custom (ot = 0x20 / 32)<small>Définit l'origine des cartes sur Custom.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optExcludeEffect" checked>
+                <span>Vérifier l'effet pour l'exclusion<small>Si coché, une carte n'est exclue que si son nom ET son effet sont identiques à ceux du fichier d'exclusion. Décoché : l'exclusion se fait uniquement sur le nom.</small></span></label>
         </div>
 
         <div class="field">
@@ -397,6 +399,7 @@ btn.addEventListener('click', async () => {
     const useMissing = $('optMissing').checked;
     const customOt = $('optCustomOt').checked;
     const excludeFiles = [...$('excludeFile').files];
+    const checkExcludeEffect = $('optExcludeEffect').checked; // Nouvelle option
     const startRaw = $('startId').value.trim();
     if (renum && startRaw !== '' && !(parseInt(startRaw, 10) >= 1)) return YGO.toast("ID de la première carte invalide.", 'err');
 
@@ -462,6 +465,13 @@ btn.addEventListener('click', async () => {
             + (dup ? `, ${dup} doublon(s) d'id ignoré(s)` : '')
             + (dupName ? `, ${dupName} doublon(s) de nom ignoré(s)` : '') + '.');
 
+        // ---- Exclusion (On charge les infos, on vérifie plus tard) ----
+        let ex = new Map();
+        if (excludeFiles.length) {
+            out.log('🚫 Lecture des fichiers à exclure…');
+            ex = await loadExcludeNames(excludeFiles);
+        }
+
         // ---- CDB officiels ----
         if (!officialFiles.length) {
             out.log('🌐 Lecture du dépôt GitHub…');
@@ -478,13 +488,6 @@ btn.addEventListener('click', async () => {
         out.log('📂 Lecture des CDB officiels…');
         official = await loadOfficial(officialFiles);
         out.log(`→ ${official.idMap.size} cartes officielles indexées.`);
-
-        // ---- Exclusion ----
-        let ex = new Map();
-        if (excludeFiles.length) {
-            out.log('🚫 Lecture des fichiers à exclure…');
-            ex = await loadExcludeNames(excludeFiles);
-        }
 
         // ---- Recherche et copie ----
         out.log('🔄 Recherche des cartes…');
@@ -531,33 +534,30 @@ btn.addEventListener('click', async () => {
                 continue;
             }
 
-            // --- VÉRIFICATION DE L'EXCLUSION (Nom + Effet) ---
-            if (excludeFiles.length) {
-                const k = norm(stripParens(e.card));
-                const excl = ex.get(k);
-                if (excl) {
-                    // Comparer les effets (on normalise les sauts de ligne et les espaces)
+            // --- 1. VÉRIFICATION DE L'EXCLUSION ---
+            const k = norm(stripParens(e.card));
+            const excl = ex.get(k);
+            
+            if (excl) {
+                if (checkExcludeEffect) {
+                    // Mode strict : on compare l'effet
                     const effetSource = String(texts.desc || '').replace(/\r\n/g, '\n').trim();
                     const effetExclu = String(excl.desc || '').replace(/\r\n/g, '\n').trim();
                     
                     if (effetSource === effetExclu) {
-                        // C'est un vrai doublon (même nom, même effet)
                         rapport.push(`${e.cid} | ${e.card} | déjà présente dans le fichier à exclure (${excl.id} | ${excl.card} dans "${excl.source}") avec le même effet | ignorée`);
                         continue;
                     } else {
-                        // Même nom mais effet différent : on garde
                         rapport.push(`${e.cid} | ${e.card} | même nom que ${excl.card} (${excl.id} dans "${excl.source}") mais effet différent | gardée`);
                     }
+                } else {
+                    // Mode simple : on jette juste si le nom correspond
+                    rapport.push(`${e.cid} | ${e.card} | déjà présente dans le fichier à exclure (${excl.id} | ${excl.card} dans "${excl.source}") | ignorée`);
+                    continue;
                 }
             }
 
-            // --- PATCH : Si c'est une carte custom (trouvée via parenthèses), on met un effet à remplir
-            if (stripped) {
-                texts.desc = "[EFFET CUSTOM À REMPLIR]";
-                rapport.push(`${e.cid} | ${e.card} | version alternative absente des CDB : stats copiées de « ${texts.name} » (${src.id}) | effet remplacé par [EFFET CUSTOM À REMPLIR]`);
-            }
-
-            // --- Dédoublonnage par contenu (toujours actif)
+            // --- 2. DÉDOUBLONNAGE PAR CONTENU (toujours actif) ---
             if (!stripped) {
                 const key = contentKey(datas, texts);
                 const prev = seenContent.get(key);
@@ -567,6 +567,12 @@ btn.addEventListener('click', async () => {
                     continue;
                 }
                 seenContent.set(key, e);
+            }
+
+            // --- 3. PATCH : Si c'est une carte custom, on met l'effet générique ---
+            if (stripped) {
+                texts.desc = "[EFFET CUSTOM À REMPLIR]";
+                rapport.push(`${e.cid} | ${e.card} | version alternative absente des CDB : stats copiées de « ${texts.name} » (${src.id}) | effet remplacé par [EFFET CUSTOM À REMPLIR]`);
             }
 
             if (how === 'passcode') nPass++; else nName++;
