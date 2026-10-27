@@ -597,7 +597,7 @@ btn.addEventListener('click', async () => {
                     rapport.push(`${id} | doublon de nom : « ${c.name} » déjà présente avec l'id ${p.id} (${p.file}) | première gardée`);
                     continue;
                 }
-                const e = { id, card: c, zone, file: f.name, index: list.length, isCustom };
+                const e = { id, card: c, zone, file: f.name, index: list.length, isCustom, originalOrder: list.length };
                 seen.set(id, e);
                 if (nk) seenNames.set(nk, e);
                 list.push(e);
@@ -715,7 +715,7 @@ btn.addEventListener('click', async () => {
             found.push({
                 cid: e.id, index: e.index, datas,
                 ot: (e.isCustom || forceCustom) ? 0x20 : 3,
-                name, desc,
+                name, desc, originalOrder: e.originalOrder,
             });
             lines.push(`${e.id} | ${name} | ${e.card.card_type}/${e.card.type}${e.card.attribute ? '/' + e.card.attribute : ''}`
                 + (e.card.card_type === 'Monster' ? ` | niv ${e.card.level} | ${e.card.atk}/${e.card.def}` : '')
@@ -725,9 +725,16 @@ btn.addEventListener('click', async () => {
         // ---- Renumérotation ----
         const mapLines = [];
         if (renum) {
+            // On trie les cartes selon l'ordre exact où elles ont été lues dans le JSON
+            found.sort((a, b) => a.originalOrder - b.originalOrder);
+            
             const start = startRaw !== '' ? parseInt(startRaw, 10) : found[0].cid;
-            found.forEach((c, i) => { c.oldCid = c.cid; c.cid = start + i; mapLines.push(`${c.cid} ← ${c.oldCid} | ${c.name}`); });
-            out.log(`🔢 IDs renumérotés : ${start} → ${start + found.length - 1}`);
+            found.forEach((c, i) => { 
+                c.oldCid = c.cid; 
+                c.cid = start + i; 
+                mapLines.push(`${c.cid} ← ${c.oldCid} | ${c.name}`); 
+            });
+            out.log(`🔢 IDs renumérotés dans l'ordre du fichier : ${start} → ${start + found.length - 1}`);
         } else {
             found.sort((a, b) => a.cid - b.cid);
         }
