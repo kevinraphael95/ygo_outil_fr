@@ -40,7 +40,7 @@
         <div class="hero-icon"><i class="fa-solid fa-file-import"></i></div>
         <div>
             <h1>DuelingBook vers CDB</h1>
-            <p>Lit tes fichiers JSON DuelingBook, ignore les cartes déjà dans ton fichier d'exclusion, et crée un CDB propre pour EDOPro.</p>
+            <p>Génère un CDB propre avec tes effets DuelingBook. Les infos manquantes (archétype, catégorie) sont cherchées automatiquement dans les CDB officiels.</p>
         </div>
     </section>
 
@@ -101,9 +101,52 @@ YGO.initSql()
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 const stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
 
-const RACE = { 'warrior': 0x1, 'spellcaster': 0x2, 'fairy': 0x4, 'fiend': 0x8, 'zombie': 0x10, 'machine': 0x20, 'aqua': 0x40, 'pyro': 0x80, 'rock': 0x100, 'winged beast': 0x200, 'plant': 0x400, 'insect': 0x800, 'thunder': 0x1000, 'dragon': 0x2000, 'beast': 0x4000, 'beast-warrior': 0x8000, 'dinosaur': 0x10000, 'fish': 0x20000, 'sea serpent': 0x40000, 'reptile': 0x80000, 'psychic': 0x100000, 'divine-beast': 0x200000, 'creator god': 0x400000, 'wyrm': 0x800000, 'cyberse': 0x1000000, 'illusion': 0x2000000 };
-const ATTR = { earth: 0x1, water: 0x2, fire: 0x4, wind: 0x8, light: 0x10, dark: 0x20, divine: 0x40 };
+const RACE = {};
+const ATTR = {};
 const ABILITY = { tuner: 0x1000, spirit: 0x200, union: 0x400, gemini: 0x800, toon: 0x400000 };
+
+// --- CHARGEMENT DES TRADUCTIONS ---
+async function loadTranslations() {
+    out.log('🌐 Téléchargement des traductions…');
+    try {
+        const url = 'https://raw.githubusercontent.com/kevinraphael95/ygo_outil_fr/main/data/cardinfo_fr.txt';
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const text = await resp.text();
+        let section = '';
+        for (const line of text.split('\n')) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('##')) { section = trimmed.substring(2); continue; }
+            if (!section || !trimmed || trimmed.startsWith('#')) continue;
+            const parts = trimmed.split(/\t+/);
+            if (parts.length < 2) continue;
+            const code = parseInt(parts[0], 16);
+            const name = parts[1].trim().toLowerCase();
+            if (section === 'race') RACE[name] = code;
+            else if (section === 'attribute') ATTR[name] = code;
+        }
+        out.log('✅ Traductions chargées.', 'ok');
+    } catch (e) {
+        out.log('❌ Erreur de téléchargement des traductions : ' + e.message, 'err');
+    }
+}
+
+// --- CHARGEMENT DES CDB OFFICIELS EN ARRIÈRE-PLAN ---
+let officialDb = null;
+async function loadOfficialDb() {
+    if (officialDb) return;
+    out.log('📚 Téléchargement des CDB officiels en arrière-plan…');
+    try {
+        const url = 'https://raw.githubusercontent.com/kevinraphael95/ygo_outil_fr/main/data/cdb/en/cards.cdb';
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const buffer = await resp.arrayBuffer();
+        officialDb = new SQL.Database(new Uint8Array(buffer));
+        out.log('✅ CDB officiels chargés.', 'ok');
+    } catch (e) {
+        out.log('❌ Impossible de charger les CDB officiels : ' + e.message, 'warn');
+    }
+}
 
 const num = (v) => {
     if (v == null || v === '') return 0;
@@ -181,6 +224,12 @@ btn.addEventListener('click', async () => {
     btn.disabled = true;
     out.clear();
     try {
+        // Chargement des infos de base et des CDB en parallèle
+        await Promise.all([
+            Object.keys(RACE).length === 0 ? loadTranslations() : Promise.resolve(),
+            loadOfficialDb()
+        ]);
+
         let list = [];
 
         // 1. Lecture des JSON
@@ -206,7 +255,7 @@ btn.addEventListener('click', async () => {
             }
         }
 
-        // 2. Exclusion (Nom + Effet)
+        // 2. Exclusion
         if (excludeFiles.length) {
             out.log('🚫 Lecture du fichier d\'exclusion…');
             const exNames = new Map();
@@ -232,7 +281,27 @@ btn.addEventListener('click', async () => {
             });
         }
 
-        // 3. Renumérotation
+        // 3. Enrichissement & Renumérotation
+        for (const e of list) {
+            const c = e.card;
+            const { datas, desc } = toCdb(c);
+            e.datas = datas;
+            e.desc = desc;
+            e.name = String(c.name).trim();
+            if (strip) e.name = e.name.replace(/\s*\([^)]*\)\s*$/, '');
+            e.ot = forceCustom ? 0x20 : 3;
+
+            // Remplissage automatique des infos manquantes via le CDB officiel
+            if (officialDb) {
+                const baseName = norm(stripParens(c.name));
+                const t = officialDb.exec(`SELECT datas.setcode, datas.category FROM texts JOIN datas ON texts.id = datas.id WHERE LOWER(texts.name) = ? OR LOWER(texts.name) LIKE ?`, [baseName, baseName + ' (%']);
+                if (t.length && t[0].values.length) {
+                    e.datas.setcode = t[0].values[0][0];
+                    e.datas.category = t[0].values[0][1];
+                }
+            }
+        }
+
         if (renum && list.length) {
             const start = startRaw !== '' ? parseInt(startRaw, 10) : 910001000;
             list.forEach((e, i) => { e.id = start + i; });
@@ -248,15 +317,8 @@ btn.addEventListener('click', async () => {
         
         outDb.run('BEGIN');
         for (const e of list) {
-            const c = e.card;
-            const { datas, desc } = toCdb(c);
-            let name = String(c.name).trim();
-            if (strip) name = name.replace(/\s*\([^)]*\)\s*$/, '');
-            
-            const ot = forceCustom ? 0x20 : 3;
-
-            insD.run(DATAS_COLS.map(k => (k === 'id' ? e.id : k === 'ot' ? ot : (datas[k] == null ? 0 : datas[k]))));
-            insT.run(TEXTS_COLS.map(k => (k === 'id' ? e.id : k === 'name' ? name : k === 'desc' ? desc : '')));
+            insD.run(DATAS_COLS.map(k => (k === 'id' ? e.id : k === 'ot' ? e.ot : (e.datas[k] == null ? 0 : e.datas[k]))));
+            insT.run(TEXTS_COLS.map(k => (k === 'id' ? e.id : k === 'name' ? e.name : k === 'desc' ? e.desc : '')));
         }
         outDb.run('COMMIT');
         insD.free(); insT.free();
