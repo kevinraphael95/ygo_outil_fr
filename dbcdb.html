@@ -54,7 +54,7 @@
 
         <div class="field">
             <label for="excludeFile">Fichier d'exclusion <small>(ex: ton VAACT S1.cdb)</small></label>
-            <input type="file" id="excludeFile" accept=".cdb" multiple>
+            <input type="file" id="excludeFile" accept=".cdb, .json, .xml, .csv, .tsv" multiple>
             <span class="hint">Si une carte de ton deck a le même nom de base et le même effet qu'une carte de ce fichier, elle sera ignorée.</span>
         </div>
 
@@ -100,6 +100,7 @@ YGO.initSql()
 
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 const stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
+const statSig = (d) => [d.type, d.atk, d.def, d.level, d.race, d.attribute].map((v) => Number(v) || 0).join('/');
 
 const RACE = {};
 const ATTR = {};
@@ -131,21 +132,47 @@ async function loadTranslations() {
     }
 }
 
-// --- CHARGEMENT DES CDB OFFICIELS EN ARRIÈRE-PLAN ---
-let officialDb = null;
-async function loadOfficialDb() {
-    if (officialDb) return;
-    out.log('📚 Téléchargement des CDB officiels en arrière-plan…');
+// --- CHARGEMENT DES CDB OFFICIELS (TOUS LES CDB DU DEPOT) ---
+const officialDbs = [];
+async function loadOfficialDbs() {
+    out.log('📚 Recherche des CDB officiels sur le dépôt…');
     try {
-        const url = 'https://raw.githubusercontent.com/kevinraphael95/ygo_outil_fr/main/data/cdb/en/cards.cdb';
-        const resp = await fetch(url);
+        const apiUrl = 'https://api.github.com/repos/kevinraphael95/ygo_outil_fr/contents/data/cdb/en';
+        const resp = await fetch(apiUrl);
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const buffer = await resp.arrayBuffer();
-        officialDb = new SQL.Database(new Uint8Array(buffer));
-        out.log('✅ CDB officiels chargés.', 'ok');
+        const files = await resp.json();
+        
+        for (const file of files) {
+            if (!file.name.endsWith('.cdb')) continue;
+            out.log(`   Téléchargement de ${file.name}…`);
+            const dbResp = await fetch(file.download_url);
+            const buffer = await dbResp.arrayBuffer();
+            officialDbs.push(new SQL.Database(new Uint8Array(buffer)));
+        }
+        out.log(`✅ ${officialDbs.length} CDB officiels chargés.`, 'ok');
     } catch (e) {
         out.log('❌ Impossible de charger les CDB officiels : ' + e.message, 'warn');
     }
+}
+
+function findInOfficials(name, serial) {
+    if (!officialDbs.length) return null;
+    
+    // 1. Recherche par passcode
+    if (serial) {
+        for (const db of officialDbs) {
+            const t = db.exec(`SELECT id, setcode, category, name FROM datas JOIN texts USING(id) WHERE id = ?`, [serial]);
+            if (t.length && t[0].values.length) return t[0].values[0];
+        }
+    }
+    
+    // 2. Recherche par nom
+    const baseName = norm(stripParens(name));
+    for (const db of officialDbs) {
+        const t = db.exec(`SELECT id, setcode, category, name FROM datas JOIN texts USING(id) WHERE LOWER(name) = ? OR LOWER(name) LIKE ?`, [baseName, baseName + ' (%']);
+        if (t.length && t[0].values.length) return t[0].values[0];
+    }
+    return null;
 }
 
 const num = (v) => {
@@ -224,15 +251,14 @@ btn.addEventListener('click', async () => {
     btn.disabled = true;
     out.clear();
     try {
-        // Chargement des infos de base et des CDB en parallèle
         await Promise.all([
             Object.keys(RACE).length === 0 ? loadTranslations() : Promise.resolve(),
-            loadOfficialDb()
+            loadOfficialDbs()
         ]);
 
         let list = [];
 
-        // 1. Lecture des JSON
+        // 1. Lecture des JSON (avec vérification des doublons internes)
         for (const f of files) {
             out.log('📄 Lecture de ' + f.name + '…');
             let data;
@@ -281,8 +307,9 @@ btn.addEventListener('click', async () => {
             });
         }
 
-        // 3. Enrichissement & Renumérotation
-        for (const e of list) {
+        // 3. Enrichissement, doublons internes & Renumérotation
+        const seenFx = new Map();
+        list = list.filter(e => {
             const c = e.card;
             const { datas, desc } = toCdb(c);
             e.datas = datas;
@@ -291,16 +318,23 @@ btn.addEventListener('click', async () => {
             if (strip) e.name = e.name.replace(/\s*\([^)]*\)\s*$/, '');
             e.ot = forceCustom ? 0x20 : 3;
 
-            // Remplissage automatique des infos manquantes via le CDB officiel
-            if (officialDb) {
-                const baseName = norm(stripParens(c.name));
-                const t = officialDb.exec(`SELECT datas.setcode, datas.category FROM texts JOIN datas ON texts.id = datas.id WHERE LOWER(texts.name) = ? OR LOWER(texts.name) LIKE ?`, [baseName, baseName + ' (%']);
-                if (t.length && t[0].values.length) {
-                    e.datas.setcode = t[0].values[0][0];
-                    e.datas.category = t[0].values[0][1];
-                }
+            // Remplissage automatique des infos manquantes
+            const serial = parseInt(String(c.serial_number || '').replace(/\D/g, ''), 10) || 0;
+            const official = findInOfficials(c.name, serial);
+            if (official) {
+                e.datas.setcode = official[1];
+                e.datas.category = official[2];
             }
-        }
+
+            // Vérification des doublons internes (même nom de base + même effet + mêmes stats)
+            const key = norm(stripParens(c.name)) + '\u0000' + desc + '\u0000' + statSig(e.datas);
+            if (seenFx.has(key)) {
+                out.log(`⏭️ Doublon interne ignoré : ${c.name}`);
+                return false;
+            }
+            seenFx.set(key, e);
+            return true;
+        });
 
         if (renum && list.length) {
             const start = startRaw !== '' ? parseInt(startRaw, 10) : 910001000;
