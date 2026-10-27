@@ -81,14 +81,14 @@
         <div class="field">
             <label for="excludeFile">Ne pas mettre les cartes déjà présentes dans <small>(optionnel)</small></label>
             <input type="file" id="excludeFile" accept=".cdb,.json,.csv,.tsv,.txt,.xml" multiple>
-            <span class="hint">CDB, JSON DuelingBook, XML, CSV ou TSV. Les cartes dont le nom de base est déjà dans ces fichiers sont ignorées.</span>
+            <span class="hint">CDB, JSON DuelingBook, XML, CSV ou TSV. Une carte dont le nom de base (sans parenthèse) ET l'effet sont identiques à une carte de ces fichiers est ignorée.</span>
         </div>
 
         <div class="opts">
             <label class="opt"><input type="checkbox" id="optEnrich" checked>
                 <span>Compléter avec les CDB officiels (setcode, category, flèches Link)<small>Recherche par passcode, puis par nom. Pour « Gold Gadget (Buff) », le setcode est copié de « Gold Gadget » ; stats et effet DuelingBook sont gardés.</small></span></label>
             <label class="opt"><input type="checkbox" id="optExcludeEffect">
-                <span>Proposer les cartes similaires pour vérification<small>Si coché, une fenêtre s'affiche pour chaque carte dont le nom de base existe déjà dans les fichiers d'exclusion mais avec un effet différent, pour choisir de la garder ou non (même effet = ignorée). Décoché : exclusion automatique sur le nom.</small></span></label>
+                <span>Proposer les cartes similaires pour vérification<small>Même nom de base + même effet = doublon, toujours ignoré. Si coché, une fenêtre s'affiche pour les cartes de même nom de base mais d'effet différent, pour choisir de les garder ou non. Décoché : elles sont gardées.</small></span></label>
             <label class="opt"><input type="checkbox" id="optMain" checked>
                 <span>Inclure le Main Deck</span></label>
             <label class="opt"><input type="checkbox" id="optExtra" checked>
@@ -337,13 +337,18 @@ function parseTableFile(name, text, needId = false) {
     return parseXml(text, needId);
 }
 
-const normDesc = (s) => String(s || '').replace(/\r\n/g, '\n').trim();
+const normDesc = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /** Noms de base (normalisés) des cartes déjà présentes dans les fichiers à exclure (CDB, JSON DuelingBook, XML, CSV, TSV). */
 async function loadExcludeNames(files) {
-    const names = new Map(); // clé -> { id, card, desc, source }
-    const add = (k, v) => { if (k && !names.has(k)) { names.set(k, v); return 1; } return 0; };
+    const names = new Map(); // clé (nom de base) -> [{ id, card, desc, source }, ...]
+    const add = (k, v) => {
+        if (!k) return 0;
+        if (!names.has(k)) names.set(k, []);
+        names.get(k).push(v);
+        return 1;
+    };
     for (const f of files) {
         try {
             let n = 0;
@@ -604,6 +609,26 @@ btn.addEventListener('click', async () => {
         out.log(`→ ${list.length} cartes distinctes sur ${totalRows} entrées` + (dup ? `, ${dup} copie(s) du même id fusionnée(s)` : '')
             + (dupName ? `, ${dupName} doublon(s) de nom ignoré(s)` : '') + '.');
 
+        // ---- Doublons dans les JSON : même nom de base (sans parenthèse) + même effet ----
+        {
+            const seenFx = new Map();
+            let dupFx = 0;
+            for (let i = 0; i < list.length; i++) {
+                const e = list[i];
+                const key = norm(stripParens(e.card.name)) + '\u0000' + normDesc(toCdb(e.card).desc);
+                const p = seenFx.get(key);
+                if (p) {
+                    dupFx++;
+                    rapport.push(`${e.id} | ${e.card.name} | doublon de « ${p.card.name} » (${p.id}) : même nom de base et même effet | ignorée`);
+                    list.splice(i, 1);
+                    i--;
+                } else {
+                    seenFx.set(key, e);
+                }
+            }
+            if (dupFx) out.log(`🧹 ${dupFx} doublon(s) (même nom de base et même effet) ignoré(s).`);
+        }
+
         // ---- Exclusion (cartes déjà présentes dans d'autres fichiers) ----
         const excludeFiles = [...$('excludeFile').files];
         if (excludeFiles.length) {
@@ -613,20 +638,20 @@ btn.addEventListener('click', async () => {
             const toVerify = [];
             for (let i = list.length - 1; i >= 0; i--) {
                 const e = list[i];
-                const excl = ex.get(norm(stripParens(e.card.name)));
-                if (!excl) continue;
-                const where = `${excl.id} | ${excl.card} dans « ${excl.source} »`;
-                if (checkEffect) {
-                    const desc = toCdb(e.card).desc;
-                    if (normDesc(desc) === normDesc(excl.desc)) {
-                        rapport.push(`${e.id} | ${e.card.name} | déjà présente dans le fichier à exclure (${where}) avec le même effet | ignorée`);
-                    } else {
-                        toVerify.unshift({ e, excl, desc });
-                    }
+                const cands = ex.get(norm(stripParens(e.card.name)));
+                if (!cands) continue;
+                const desc = toCdb(e.card).desc;
+                const same = cands.find((c) => normDesc(c.desc) === normDesc(desc));
+                if (same) {
+                    // même nom de base + même effet = doublon
+                    rapport.push(`${e.id} | ${e.card.name} | doublon de « ${same.card} » (${same.id}, « ${same.source} ») : même nom de base et même effet | ignorée`);
+                    list.splice(i, 1);
+                } else if (checkEffect) {
+                    toVerify.unshift({ e, excl: cands[0], desc });
+                    list.splice(i, 1);
                 } else {
-                    rapport.push(`${e.id} | ${e.card.name} | déjà présente dans le fichier à exclure (${where}) | ignorée`);
+                    rapport.push(`${e.id} | ${e.card.name} | nom de base présent dans « ${cands[0].source} » mais effet différent | gardée`);
                 }
-                list.splice(i, 1);
             }
             if (toVerify.length) {
                 out.log(`❓ ${toVerify.length} carte(s) similaire(s) à vérifier…`);
