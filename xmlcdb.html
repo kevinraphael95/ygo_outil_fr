@@ -732,7 +732,7 @@ async function askUserForDuplicates(toVerify) {
         info.className = 'dup-item-info';
         info.innerHTML = `<strong>${item.e.card}</strong> <span class="dup-item-keep">(sera gardé si coché)</span>
             <small>Fichier source : <b>${item.e.file}</b> | ID: ${item.e.cid}</small>
-            <small>Nom dans l'exclusion: ${item.excl.card} (${item.excl.source})</small>
+            <small>Nom dans l'exclusion: ${item.excl.card} (${item.excl.source} - ID: ${item.excl.id})</small>
             <small>Effet Officiel (copié): ${item.texts.desc || 'Aucun effet (officiel copié)'}</small>
             <small>Effet Exclusion: ${item.excl.desc || 'Aucun effet'}</small>`;
         
