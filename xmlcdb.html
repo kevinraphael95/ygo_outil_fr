@@ -725,14 +725,15 @@ async function askUserForDuplicates(toVerify) {
         
         const cb = document.createElement('input');
         cb.type = 'checkbox';
-        cb.checked = false; // Par défaut, on ne garde pas (donc on considère que c'est un doublon)
+        cb.checked = false; // Par défaut, on ne garde pas
         cb.dataset.index = index;
         
         const info = document.createElement('div');
         info.className = 'dup-item-info';
         info.innerHTML = `<strong>${item.e.card}</strong> <span class="dup-item-keep">(sera gardé si coché)</span>
-            <small>ID: ${item.e.cid} | Nom dans l'exclusion: ${item.excl.card} (${item.excl.source})</small>
-            <small>Effet XML: ${item.texts.desc || 'Aucun effet (officiel copié)'}</small>
+            <small>Fichier source : <b>${item.e.file}</b> | ID: ${item.e.cid}</small>
+            <small>Nom dans l'exclusion: ${item.excl.card} (${item.excl.source})</small>
+            <small>Effet Officiel (copié): ${item.texts.desc || 'Aucun effet (officiel copié)'}</small>
             <small>Effet Exclusion: ${item.excl.desc || 'Aucun effet'}</small>`;
         
         wrapper.appendChild(cb);
