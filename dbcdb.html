@@ -15,6 +15,19 @@
     .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
     .opt input { margin-top: 4px; }
     .opt small { display: block; opacity: .7; }
+
+    /* Modale de vérification des cartes similaires */
+    .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal.hidden { display: none; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+    .modal-content h2 { margin: 0; padding: 20px 20px 0; }
+    .modal-content .hint { padding: 10px 20px; margin: 0; }
+    .dup-list { flex: 1; overflow-y: auto; padding: 10px 20px; display: flex; flex-direction: column; gap: 8px; }
+    .dup-item { display: flex; gap: 15px; align-items: flex-start; padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+    .dup-item input[type="checkbox"] { margin-top: 4px; width: 20px; height: 20px; }
+    .dup-item-info { flex: 1; font-size: 13px; }
+    .dup-item-info strong { display: block; font-size: 14px; color: var(--text); }
+    .dup-item-info small { display: block; color: var(--text-muted); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -65,9 +78,17 @@
             <span class="hint">Séparés par « ; ».</span>
         </div>
 
+        <div class="field">
+            <label for="excludeFile">Ne pas mettre les cartes déjà présentes dans <small>(optionnel)</small></label>
+            <input type="file" id="excludeFile" accept=".cdb,.json,.csv,.tsv,.txt,.xml" multiple>
+            <span class="hint">CDB, JSON DuelingBook, XML, CSV ou TSV. Les cartes dont le nom de base est déjà dans ces fichiers sont ignorées.</span>
+        </div>
+
         <div class="opts">
             <label class="opt"><input type="checkbox" id="optEnrich" checked>
                 <span>Compléter avec les CDB officiels (setcode, category, flèches Link)<small>Recherche par passcode, puis par nom. Pour « Gold Gadget (Buff) », le setcode est copié de « Gold Gadget » ; stats et effet DuelingBook sont gardés.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optExcludeEffect">
+                <span>Proposer les cartes similaires pour vérification<small>Si coché, une fenêtre s'affiche pour chaque carte dont le nom de base existe déjà dans les fichiers d'exclusion mais avec un effet différent, pour choisir de la garder ou non (même effet = ignorée). Décoché : exclusion automatique sur le nom.</small></span></label>
             <label class="opt"><input type="checkbox" id="optMain" checked>
                 <span>Inclure le Main Deck</span></label>
             <label class="opt"><input type="checkbox" id="optExtra" checked>
@@ -104,6 +125,18 @@
 
 <footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
+
+<!-- Fenêtre de choix pour les cartes similaires -->
+<div id="dup-modal" class="modal hidden">
+    <div class="modal-content">
+        <h2 class="card-title"><i class="fa-solid fa-code-branch"></i> Cartes similaires trouvées</h2>
+        <p class="hint">Ces cartes ont le même nom de base que des cartes de tes fichiers d'exclusion, avec un effet différent. Coche celles que tu veux <strong>garder</strong> dans le CDB final (décoché = supprimée).</p>
+        <div id="dup-list" class="dup-list"></div>
+        <div class="actions" style="margin-top: 15px; justify-content: flex-end; padding: 0 20px 20px;">
+            <button id="dup-validate" class="btn btn-primary" type="button"><i class="fa-solid fa-check"></i> Valider et continuer</button>
+        </div>
+    </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
 <script>
@@ -223,6 +256,158 @@ function cardsFromJson(data, opt) {
     const res = [];
     for (const [zone, arr] of groups) for (const c of arr) res.push({ zone, c });
     return res;
+}
+
+// ============================================================
+// EXCLUSION (cartes déjà présentes dans d'autres fichiers)
+// ============================================================
+const FIELD = {
+    id: ['id', 'cardid', 'customid', 'custom'],
+    passcode: ['passcode', 'password', 'code', 'officialcode', 'officialid', 'official'],
+    card: ['card', 'name', 'nom', 'cardname'],
+};
+function fieldOf(name) {
+    const k = String(name).toLowerCase().replace(/[^a-z]/g, '');
+    for (const f of Object.keys(FIELD)) if (FIELD[f].includes(k)) return f;
+    return null;
+}
+function rowsFromTable(table, needId = true) {
+    if (!table.length) throw new Error('tableau vide');
+    const map = {};
+    table[0].forEach((h, i) => { const f = fieldOf(h); if (f && map[f] === undefined) map[f] = i; });
+    if ((needId && map.id === undefined) || map.card === undefined) {
+        throw new Error('en-têtes introuvables : il faut au moins « id » et « card » (trouvé : ' + table[0].join(' | ') + ')');
+    }
+    return table.slice(1).map((r) => ({
+        id: map.id === undefined ? '' : r[map.id], passcode: map.passcode === undefined ? '' : r[map.passcode], card: r[map.card],
+    })).filter((r) => String(r.id || '').trim() || String(r.card || '').trim());
+}
+function parseDelimited(text, needId = true) {
+    const first = text.split(/\r?\n/, 1)[0] || '';
+    const counts = { '\t': 0, ';': 0, ',': 0 };
+    for (const ch of first) if (ch in counts) counts[ch]++;
+    const sep = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    const table = [];
+    let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (q) {
+            if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+            else cell += ch;
+        } else if (ch === '"') q = true;
+        else if (ch === sep) { row.push(cell); cell = ''; }
+        else if (ch === '\n' || ch === '\r') {
+            if (ch === '\r' && text[i + 1] === '\n') i++;
+            row.push(cell); cell = '';
+            if (row.some((c) => c.trim())) table.push(row);
+            row = [];
+        } else cell += ch;
+    }
+    row.push(cell);
+    if (row.some((c) => c.trim())) table.push(row);
+    return rowsFromTable(table.map((r) => r.map((c) => c.trim())), needId);
+}
+function parseXml(text, needId = true) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const err = doc.querySelector('parsererror');
+    if (err) throw new Error('XML invalide : ' + err.textContent.slice(0, 140).replace(/\s+/g, ' '));
+    const rows = [];
+    for (const el of doc.getElementsByTagName('*')) {
+        const rec = {};
+        for (const a of el.attributes) { const f = fieldOf(a.name); if (f && rec[f] === undefined) rec[f] = a.value; }
+        for (const ch of el.children) {
+            if (ch.children.length) continue;
+            const f = fieldOf(ch.localName);
+            if (f && rec[f] === undefined) rec[f] = ch.textContent;
+        }
+        if (!el.children.length && el.attributes.length) {
+            const own = fieldOf(el.localName);
+            if (own && rec[own] === undefined && el.textContent.trim()) rec[own] = el.textContent;
+        }
+        if ((!needId || rec.id !== undefined) && rec.card !== undefined) rows.push(rec);
+    }
+    if (rows.length) return rows;
+    const rowEls = [...doc.getElementsByTagName('*')].filter((e) => /^(row|tr)$/i.test(e.localName) && e.children.length);
+    if (rowEls.length) return rowsFromTable(rowEls.map((r) => [...r.children].map((c) => c.textContent.trim())), needId);
+    throw new Error('structure XML non reconnue');
+}
+function parseTableFile(name, text, needId = false) {
+    text = text.replace(/^\uFEFF/, '');
+    if (/\.(csv|tsv|txt)$/i.test(name) && !/^\s*</.test(text)) return parseDelimited(text, needId);
+    return parseXml(text, needId);
+}
+
+const normDesc = (s) => String(s || '').replace(/\r\n/g, '\n').trim();
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/** Noms de base (normalisés) des cartes déjà présentes dans les fichiers à exclure (CDB, JSON DuelingBook, XML, CSV, TSV). */
+async function loadExcludeNames(files) {
+    const names = new Map(); // clé -> { id, card, desc, source }
+    const add = (k, v) => { if (k && !names.has(k)) { names.set(k, v); return 1; } return 0; };
+    for (const f of files) {
+        try {
+            let n = 0;
+            if (/\.cdb$/i.test(f.name)) {
+                const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+                try {
+                    const t = db.exec('SELECT id, name, desc FROM texts');
+                    if (t.length) for (const [id, name, desc] of t[0].values) {
+                        n += add(norm(stripParens(name)), { id, card: name, desc: desc || '', source: f.name });
+                    }
+                } finally { db.close(); }
+            } else if (/\.json$/i.test(f.name)) {
+                const data = JSON.parse((await f.text()).replace(/^\uFEFF/, ''));
+                const arr = Array.isArray(data) ? data : [...(data.main || []), ...(data.extra || []), ...(data.side || [])];
+                for (const c of arr) {
+                    if (!c || !c.name) continue;
+                    const desc = c.card_type ? toCdb(c).desc : (c.effect || '');
+                    n += add(norm(stripParens(c.name)), { id: c.id || '', card: c.name, desc, source: f.name });
+                }
+            } else {
+                for (const r of parseTableFile(f.name, await f.text(), false)) {
+                    n += add(norm(stripParens(r.card)), { id: r.id, card: r.card, desc: '', source: f.name });
+                }
+            }
+            out.log(`   ${f.name} : ${n} noms à exclure`);
+        } catch (e) {
+            out.log(`exclusion ignorée ${f.name} : ${e.message}`, 'warn');
+        }
+    }
+    return names;
+}
+
+/** Fenêtre de choix : retourne les éléments cochés (à garder). */
+function askUserForDuplicates(toVerify) {
+    const modal = $('dup-modal');
+    const list = $('dup-list');
+    list.innerHTML = '';
+    toVerify.forEach((item, index) => {
+        const wrapper = document.createElement('label');
+        wrapper.className = 'dup-item';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = false;
+        cb.dataset.index = index;
+        const info = document.createElement('div');
+        info.className = 'dup-item-info';
+        info.innerHTML = `<strong>${esc(item.e.card.name)}</strong>
+            <small>Fichier source : <b>${esc(item.e.file)}</b> | ID : ${esc(item.e.id)}</small>
+            <small>Déjà présente : ${esc(item.excl.card)} (${esc(item.excl.source)} - ID : ${esc(item.excl.id)})</small>
+            <small>Effet DuelingBook : ${esc(item.desc || 'Aucun effet')}</small>
+            <small>Effet du fichier d'exclusion : ${esc(item.excl.desc || 'Aucun effet')}</small>`;
+        wrapper.appendChild(cb);
+        wrapper.appendChild(info);
+        list.appendChild(wrapper);
+    });
+    modal.classList.remove('hidden');
+    return new Promise((resolve) => {
+        $('dup-validate').onclick = () => {
+            const kept = [];
+            list.querySelectorAll('input[type="checkbox"]').forEach((cb) => { if (cb.checked) kept.push(toVerify[cb.dataset.index]); });
+            modal.classList.add('hidden');
+            resolve(kept);
+        };
+    });
 }
 
 // ============================================================
@@ -359,7 +544,9 @@ btn.addEventListener('click', async () => {
     reportText = '';
     try {
         const rapport = [];
-        const seen = new Map();   // id final -> entrée
+        const seen = new Map();
+        const seenNames = new Map();
+        let dupName = 0;   // id final -> entrée
         const list = [];
         let totalRows = 0, dup = 0;
         const deckNames = [];
@@ -398,15 +585,60 @@ btn.addEventListener('click', async () => {
                     if (seen.get(id).card.name !== c.name) rapport.push(`${id} | conflit : « ${seen.get(id).card.name} » ≠ « ${c.name} » | première gardée`);
                     continue;
                 }
+                const nk = norm(c.name);
+                if (nk && seenNames.has(nk)) {
+                    const p = seenNames.get(nk);
+                    dupName++;
+                    rapport.push(`${id} | doublon de nom : « ${c.name} » déjà présente avec l'id ${p.id} (${p.file}) | première gardée`);
+                    continue;
+                }
                 const e = { id, card: c, zone, file: f.name, index: list.length, isCustom };
                 seen.set(id, e);
+                if (nk) seenNames.set(nk, e);
                 list.push(e);
                 added++;
             }
             out.log(`→ ${rows.length} entrées, ${added} carte(s) distincte(s).`);
         }
         if (!list.length) throw new Error('aucune carte exploitable dans les fichiers sélectionnés');
-        out.log(`→ ${list.length} cartes distinctes sur ${totalRows} entrées` + (dup ? `, ${dup} copie(s) du même id fusionnée(s)` : '') + '.');
+        out.log(`→ ${list.length} cartes distinctes sur ${totalRows} entrées` + (dup ? `, ${dup} copie(s) du même id fusionnée(s)` : '')
+            + (dupName ? `, ${dupName} doublon(s) de nom ignoré(s)` : '') + '.');
+
+        // ---- Exclusion (cartes déjà présentes dans d'autres fichiers) ----
+        const excludeFiles = [...$('excludeFile').files];
+        if (excludeFiles.length) {
+            const checkEffect = $('optExcludeEffect').checked;
+            out.log('🚫 Lecture des fichiers à exclure…');
+            const ex = await loadExcludeNames(excludeFiles);
+            const toVerify = [];
+            for (let i = list.length - 1; i >= 0; i--) {
+                const e = list[i];
+                const excl = ex.get(norm(stripParens(e.card.name)));
+                if (!excl) continue;
+                const where = `${excl.id} | ${excl.card} dans « ${excl.source} »`;
+                if (checkEffect) {
+                    const desc = toCdb(e.card).desc;
+                    if (normDesc(desc) === normDesc(excl.desc)) {
+                        rapport.push(`${e.id} | ${e.card.name} | déjà présente dans le fichier à exclure (${where}) avec le même effet | ignorée`);
+                    } else {
+                        toVerify.unshift({ e, excl, desc });
+                    }
+                } else {
+                    rapport.push(`${e.id} | ${e.card.name} | déjà présente dans le fichier à exclure (${where}) | ignorée`);
+                }
+                list.splice(i, 1);
+            }
+            if (toVerify.length) {
+                out.log(`❓ ${toVerify.length} carte(s) similaire(s) à vérifier…`);
+                const kept = await askUserForDuplicates(toVerify);
+                kept.forEach((k) => list.push(k.e));
+                list.sort((a, b) => a.index - b.index);
+                toVerify.filter((k) => !kept.includes(k)).forEach((k) => rapport.push(`${k.e.id} | ${k.e.card.name} | similaire à « ${k.excl.card} » (${k.excl.source}), effet différent | refusée à la vérification`));
+                out.log(`→ ${kept.length} carte(s) gardée(s) sur ${toVerify.length}.`);
+            }
+            if (!list.length) throw new Error('toutes les cartes sont déjà présentes dans les fichiers à exclure');
+            out.log(`→ ${list.length} cartes après exclusion.`);
+        }
 
         // ---- CDB officiels (enrichissement) ----
         let idx = null;
