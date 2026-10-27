@@ -40,7 +40,7 @@
         <div class="hero-icon"><i class="fa-solid fa-file-import"></i></div>
         <div>
             <h1>DuelingBook vers CDB</h1>
-            <p>Génère un CDB propre avec tes effets DuelingBook. Les infos manquantes (archétype, catégorie) sont cherchées automatiquement dans les CDB officiels.</p>
+            <p>Génère un CDB propre avec tes effets DuelingBook. Les doublons sont éliminés et les infos manquantes sont cherchées automatiquement.</p>
         </div>
     </section>
 
@@ -255,7 +255,7 @@ btn.addEventListener('click', async () => {
             }
         }
 
-        // 2. Exclusion
+        // 2. Exclusion AUTOMATIQUE (Nom + Effet)
         if (excludeFiles.length) {
             out.log('🚫 Lecture du fichier d\'exclusion…');
             const exNames = new Map();
