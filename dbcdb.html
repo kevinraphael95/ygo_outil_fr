@@ -239,8 +239,8 @@ function cardsFromJson(data, opt) {
     if (Array.isArray(data)) groups.push(['main', data]);
     else if (data && typeof data === 'object') {
         if (opt.main) groups.push(['main', data.main || []]);
-        if (opt.extra) groups.push(['extra', data.extra || []]);
         if (opt.side) groups.push(['side', data.side || []]);
+        if (opt.extra) groups.push(['extra', data.extra || []]);
     }
     const res = [];
     for (const [zone, arr] of groups) for (const c of arr) res.push({ zone, c });
