@@ -16,7 +16,6 @@
     .opt input { margin-top: 4px; }
     .opt small { display: block; opacity: .7; }
 
-    /* Modale de vérification des cartes similaires */
     .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
     .modal.hidden { display: none; }
     .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
@@ -53,7 +52,7 @@
         <div class="hero-icon"><i class="fa-solid fa-file-import"></i></div>
         <div>
             <h1>DuelingBook vers CDB</h1>
-            <p>Prend la réponse JSON de <code>load-deck.php</code> (Réseau → XHR → Réponse → Brut → copier) et génère un CDB complet : stats, type, race, attribut, niveau, effet, effet de pendule. Aucun CDB officiel nécessaire.</p>
+            <p>Prend la réponse JSON de <code>load-deck.php</code> (Réseau → XHR → Réponse → Brut → copier) et génère un CDB pour EDOPro. Cartes officielles : fiche officielle copiée (stats, texte, indices str1-16). Customs : stats et effet DuelingBook.</p>
         </div>
     </section>
 
@@ -63,7 +62,7 @@
         <div class="field">
             <label for="jsonFile">Fichiers JSON DuelingBook *</label>
             <input type="file" id="jsonFile" accept=".json,.txt" multiple>
-            <span class="hint">Réponse de <code>load-deck.php</code> sauvée en .json. Plusieurs fichiers possibles : ils sont fusionnés.</span>
+            <span class="hint">Réponse de <code>load-deck.php</code> sauvée en .json ou .txt. Plusieurs fichiers possibles : ils sont fusionnés dans l'ordre de sélection.</span>
         </div>
 
         <div class="field">
@@ -81,34 +80,38 @@
         <div class="field">
             <label for="excludeFile">Ne pas mettre les cartes déjà présentes dans <small>(optionnel)</small></label>
             <input type="file" id="excludeFile" accept=".cdb,.json,.csv,.tsv,.txt,.xml" multiple>
-            <span class="hint">CDB, JSON DuelingBook, XML, CSV ou TSV. Une carte dont le nom de base (sans parenthèse) ET l'effet sont identiques à une carte de ces fichiers est ignorée.</span>
+            <span class="hint">Ex : ton « VAACT S1.cdb » ou le CDB d'un deck déjà fait. CDB, JSON DuelingBook, XML, CSV ou TSV. Même nom de base + mêmes stats + même effet = carte ignorée. Pour XML/CSV/TSV (pas d'effet connu) : le nom suffit.</span>
         </div>
 
         <div class="opts">
             <label class="opt"><input type="checkbox" id="optEnrich" checked>
-                <span>Compléter avec les CDB officiels (setcode, category, flèches Link)<small>Recherche par passcode, puis par nom. Pour « Gold Gadget (Buff) », le setcode est copié de « Gold Gadget » ; stats et effet DuelingBook sont gardés.</small></span></label>
+                <span>Utiliser les CDB officiels (setcode, category, flèches Link, fiches officielles)<small>Recherche par passcode, puis par nom. Pour « Gold Gadget (Buff) », le setcode est copié de « Gold Gadget » ; stats et effet DuelingBook sont gardés.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optCopyOfficial" checked>
+                <span>Cartes officielles : copier la fiche officielle complète<small>Stats, texte EDOPro et indices str1-16 (nécessaires aux scripts copiés). Décoché : stats et texte DuelingBook.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optBaseHints">
+                <span>Customs dérivées : copier aussi category et str1-16 de la carte de base<small>« Gold Gadget (Buff) » reprend les indices de « Gold Gadget ». Peut être faux si l'effet a changé. Décoché : seulement le setcode.</small></span></label>
             <label class="opt"><input type="checkbox" id="optExcludeEffect">
-                <span>Proposer les cartes similaires pour vérification<small>Même nom de base + même effet = doublon, toujours ignoré. Si coché, une fenêtre s'affiche pour les cartes de même nom de base mais d'effet différent, pour choisir de les garder ou non. Décoché : elles sont gardées.</small></span></label>
+                <span>Proposer les cartes similaires pour vérification<small>Même nom de base + même effet + mêmes stats = doublon, toujours ignoré. Si coché, une fenêtre s'affiche pour les cartes de même nom de base mais d'effet ou de stats différents, pour choisir de les garder ou non. Décoché : elles sont gardées.</small></span></label>
             <label class="opt"><input type="checkbox" id="optMain" checked>
                 <span>Inclure le Main Deck</span></label>
             <label class="opt"><input type="checkbox" id="optExtra" checked>
                 <span>Inclure l'Extra Deck</span></label>
-            <label class="opt"><input type="checkbox" id="optSide">
-                <span>Inclure le Side Deck</span></label>
+            <label class="opt"><input type="checkbox" id="optSide" checked>
+                <span>Inclure le Side Deck<small>Les decks VAACT rangent les cartes hors Main Deck dans le Side.</small></span></label>
             <label class="opt"><input type="checkbox" id="optPass" checked>
-                <span>Cartes officielles : utiliser le passcode (<code>serial_number</code>) comme ID<small>Décoché : l'ID DuelingBook est gardé pour toutes les cartes. Les customs gardent toujours leur ID DuelingBook.</small></span></label>
+                <span>Cartes officielles : utiliser le passcode (<code>serial_number</code>) comme ID<small>Décoché : l'ID DuelingBook est gardé. Les customs gardent toujours leur ID DuelingBook. Sans effet si « Renuméroter » est coché.</small></span></label>
             <label class="opt"><input type="checkbox" id="optStrip">
                 <span>Retirer le suffixe entre parenthèses du nom<small>« Gold Gadget (Buff) » devient « Gold Gadget ».</small></span></label>
             <label class="opt"><input type="checkbox" id="optCustomOt">
                 <span>Forcer toutes les cartes en Custom (ot = 0x20 / 32)<small>Décoché : customs en 0x20, officielles en 3 (OCG/TCG).</small></span></label>
-            <label class="opt"><input type="checkbox" id="optRenum">
-                <span>Renuméroter les IDs dans l'ordre du deck<small>Les IDs se suivent à partir de la valeur ci-dessous.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optRenum" checked>
+                <span>Renuméroter les IDs dans l'ordre du deck<small>Les IDs se suivent à partir de la valeur ci-dessous. Nécessaire pour les cartes officielles copiées (leur passcode existe déjà dans EDOPro).</small></span></label>
         </div>
 
         <div class="field">
             <label for="startId">ID de la première carte</label>
-            <input type="number" id="startId" min="1" step="1" placeholder="vide = ID de la 1re carte" autocomplete="off">
-            <span class="hint">Utilisé seulement avec « Renuméroter ».</span>
+            <input type="number" id="startId" min="1" step="1" placeholder="vide = plus grand ID custom des fichiers d'exclusion + 1" autocomplete="off">
+            <span class="hint">Utilisé seulement avec « Renuméroter ». Vide : on prend le plus grand ID ≥ 100 000 000 trouvé dans les CDB d'exclusion + 1, sinon l'ID de la 1re carte.</span>
         </div>
 
         <div class="actions">
@@ -126,11 +129,10 @@
 <footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
 
-<!-- Fenêtre de choix pour les cartes similaires -->
 <div id="dup-modal" class="modal hidden">
     <div class="modal-content">
         <h2 class="card-title"><i class="fa-solid fa-code-branch"></i> Cartes similaires trouvées</h2>
-        <p class="hint">Ces cartes ont le même nom de base que des cartes de tes fichiers d'exclusion, avec un effet différent. Coche celles que tu veux <strong>garder</strong> dans le CDB final (décoché = supprimée).</p>
+        <p class="hint">Ces cartes ont le même nom de base que des cartes de tes fichiers d'exclusion, avec un effet ou des stats différents. Coche celles que tu veux <strong>garder</strong> dans le CDB final (décoché = supprimée).</p>
         <div id="dup-list" class="dup-list"></div>
         <div class="actions" style="margin-top: 15px; justify-content: flex-end; padding: 0 20px 20px;">
             <button id="dup-validate" class="btn btn-primary" type="button"><i class="fa-solid fa-check"></i> Valider et continuer</button>
@@ -140,23 +142,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
 <script>
-const { $ } = YGO;
-const out = YGO.console($('console'));
-const btn = $('startBtn');
-
-let SQL = null;
-YGO.initSql()
-    .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
-    .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
-
-$('startId').disabled = true;
-$('optRenum').addEventListener('change', () => { $('startId').disabled = !$('optRenum').checked; });
-
-let reportText = '';
-$('reportBtn').addEventListener('click', () => {
-    if (reportText) YGO.download(new Blob([reportText], { type: 'text/plain;charset=utf-8' }), 'rapport_duelingbook.txt');
-});
-
+// <CORE>
 // ============================================================
 // TABLES DE CORRESPONDANCE DuelingBook -> CDB (EDOPro / YGOPro)
 // ============================================================
@@ -177,8 +163,15 @@ const num = (v) => {
     const n = parseInt(v, 10);
     return Number.isFinite(n) ? n : 0;
 };
+const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const normDesc = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const parseSerial = (v) => parseInt(String(v || '').replace(/\D/g, ''), 10) || 0;
+const statSig = (d) => [d.type, d.atk, d.def, d.level, d.race, d.attribute].map((v) => Number(v) || 0).join('/');
 
-/** Convertit une carte DuelingBook en lignes datas/texts. Retourne { datas, texts, warn[] }. */
+/** Convertit une carte DuelingBook en { datas, desc, warn[] }. */
 function toCdb(c) {
     const warn = [];
     const ct = String(c.card_type || '').toLowerCase();
@@ -196,11 +189,10 @@ function toCdb(c) {
         if (col.includes('xyz')) type |= 0x800000;
         if (col.includes('link')) type |= 0x4000000;
         if (col.includes('token')) type |= 0x4000;
-        if (col.includes('pendulum') || c.pendulum) type |= 0x1000000;
+        if (col.includes('pendulum') || Number(c.pendulum)) type |= 0x1000000;
         if (!NO_COLOR.some((k) => col.includes(k)) && !col.includes('pendulum')) warn.push(`monster_color inconnu « ${c.monster_color} »`);
-        // is_effect : seulement pour les types spéciaux (un Normal reste Normal)
         if (c.is_effect && !col.includes('normal')) type |= 0x20;
-        if (c.flip) type |= 0x200000;
+        if (Number(c.flip)) type |= 0x200000;
         for (const a of String(c.ability || '').toLowerCase().split(/[\/,]/)) {
             const k = a.trim();
             if (!k) continue;
@@ -242,9 +234,6 @@ function toCdb(c) {
     return { datas: { alias: 0, setcode: 0, type, atk, def, level, race, attribute, category: 0 }, desc, warn };
 }
 
-// ============================================================
-// LECTURE DES JSON
-// ============================================================
 function cardsFromJson(data, opt) {
     const groups = [];
     if (Array.isArray(data)) groups.push(['main', data]);
@@ -259,7 +248,7 @@ function cardsFromJson(data, opt) {
 }
 
 // ============================================================
-// EXCLUSION (cartes déjà présentes dans d'autres fichiers)
+// LECTURE DES FICHIERS D'EXCLUSION (CDB, JSON, XML, CSV, TSV)
 // ============================================================
 const FIELD = {
     id: ['id', 'cardid', 'customid', 'custom'],
@@ -271,18 +260,18 @@ function fieldOf(name) {
     for (const f of Object.keys(FIELD)) if (FIELD[f].includes(k)) return f;
     return null;
 }
-function rowsFromTable(table, needId = true) {
+function rowsFromTable(table, needId) {
     if (!table.length) throw new Error('tableau vide');
     const map = {};
     table[0].forEach((h, i) => { const f = fieldOf(h); if (f && map[f] === undefined) map[f] = i; });
     if ((needId && map.id === undefined) || map.card === undefined) {
-        throw new Error('en-têtes introuvables : il faut au moins « id » et « card » (trouvé : ' + table[0].join(' | ') + ')');
+        throw new Error('en-têtes introuvables : il faut au moins « card » (trouvé : ' + table[0].join(' | ') + ')');
     }
     return table.slice(1).map((r) => ({
         id: map.id === undefined ? '' : r[map.id], passcode: map.passcode === undefined ? '' : r[map.passcode], card: r[map.card],
     })).filter((r) => String(r.id || '').trim() || String(r.card || '').trim());
 }
-function parseDelimited(text, needId = true) {
+function parseDelimited(text, needId) {
     const first = text.split(/\r?\n/, 1)[0] || '';
     const counts = { '\t': 0, ';': 0, ',': 0 };
     for (const ch of first) if (ch in counts) counts[ch]++;
@@ -307,7 +296,7 @@ function parseDelimited(text, needId = true) {
     if (row.some((c) => c.trim())) table.push(row);
     return rowsFromTable(table.map((r) => r.map((c) => c.trim())), needId);
 }
-function parseXml(text, needId = true) {
+function parseXml(text, needId) {
     const doc = new DOMParser().parseFromString(text, 'application/xml');
     const err = doc.querySelector('parsererror');
     if (err) throw new Error('XML invalide : ' + err.textContent.slice(0, 140).replace(/\s+/g, ' '));
@@ -331,18 +320,19 @@ function parseXml(text, needId = true) {
     if (rowEls.length) return rowsFromTable(rowEls.map((r) => [...r.children].map((c) => c.textContent.trim())), needId);
     throw new Error('structure XML non reconnue');
 }
-function parseTableFile(name, text, needId = false) {
+function parseTableFile(name, text, needId) {
     text = text.replace(/^\uFEFF/, '');
     if (/\.(csv|tsv|txt)$/i.test(name) && !/^\s*</.test(text)) return parseDelimited(text, needId);
     return parseXml(text, needId);
 }
 
-const normDesc = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-/** Noms de base (normalisés) des cartes déjà présentes dans les fichiers à exclure (CDB, JSON DuelingBook, XML, CSV, TSV). */
-async function loadExcludeNames(files) {
-    const names = new Map(); // clé (nom de base) -> [{ id, card, desc, source }, ...]
+/**
+ * Cartes déjà présentes. Retourne { names: Map(nom de base -> [{id, card, desc, hasDesc, sig, st, source}]), maxId }.
+ * maxId = plus grand ID >= 100 000 000 vu dans un CDB (sert au démarrage de la renumérotation).
+ */
+async function loadExclude(files, SQL, log, deckToCdb) {
+    const names = new Map();
+    let maxId = 0;
     const add = (k, v) => {
         if (!k) return 0;
         if (!names.has(k)) names.set(k, []);
@@ -355,9 +345,11 @@ async function loadExcludeNames(files) {
             if (/\.cdb$/i.test(f.name)) {
                 const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
                 try {
-                    const t = db.exec('SELECT id, name, desc FROM texts');
-                    if (t.length) for (const [id, name, desc] of t[0].values) {
-                        n += add(norm(stripParens(name)), { id, card: name, desc: desc || '', source: f.name });
+                    const t = db.exec('SELECT t.id, t.name, t."desc", d.type, d.atk, d.def, d.level, d.race, d.attribute FROM texts t LEFT JOIN datas d ON d.id = t.id');
+                    if (t.length) for (const [id, name, desc, type, atk, def, level, race, attribute] of t[0].values) {
+                        if (id >= 100000000 && id > maxId) maxId = id;
+                        const st = { type, atk, def, level, race, attribute };
+                        n += add(norm(stripParens(name)), { id, card: name, desc: desc || '', hasDesc: true, sig: type == null ? null : statSig(st), st: type == null ? null : st, source: f.name });
                     }
                 } finally { db.close(); }
             } else if (/\.json$/i.test(f.name)) {
@@ -365,69 +357,360 @@ async function loadExcludeNames(files) {
                 const arr = Array.isArray(data) ? data : [...(data.main || []), ...(data.extra || []), ...(data.side || [])];
                 for (const c of arr) {
                     if (!c || !c.name) continue;
-                    const desc = c.card_type ? toCdb(c).desc : (c.effect || '');
-                    n += add(norm(stripParens(c.name)), { id: c.id || '', card: c.name, desc, source: f.name });
+                    let desc = c.effect || '', sig = null, st = null;
+                    if (c.card_type) { const r = deckToCdb(c); desc = r.desc; st = r.datas; sig = statSig(st); }
+                    n += add(norm(stripParens(c.name)), { id: c.id || '', card: c.name, desc, hasDesc: true, sig, st, source: f.name });
                 }
             } else {
                 for (const r of parseTableFile(f.name, await f.text(), false)) {
-                    n += add(norm(stripParens(r.card)), { id: r.id, card: r.card, desc: '', source: f.name });
+                    n += add(norm(stripParens(r.card)), { id: r.id, card: r.card, desc: '', hasDesc: false, sig: null, st: null, source: f.name });
                 }
             }
-            out.log(`   ${f.name} : ${n} noms à exclure`);
+            log(`   ${f.name} : ${n} noms à exclure`);
         } catch (e) {
-            out.log(`exclusion ignorée ${f.name} : ${e.message}`, 'warn');
+            log(`exclusion ignorée ${f.name} : ${e.message}`, 'warn');
         }
     }
-    return names;
-}
-
-/** Fenêtre de choix : retourne les éléments cochés (à garder). */
-function askUserForDuplicates(toVerify) {
-    const modal = $('dup-modal');
-    const list = $('dup-list');
-    list.innerHTML = '';
-    toVerify.forEach((item, index) => {
-        const wrapper = document.createElement('label');
-        wrapper.className = 'dup-item';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = false;
-        cb.dataset.index = index;
-        const info = document.createElement('div');
-        info.className = 'dup-item-info';
-        info.innerHTML = `<strong>${esc(item.e.card.name)}</strong>
-            <small>Fichier source : <b>${esc(item.e.file)}</b> | ID : ${esc(item.e.id)}</small>
-            <small>Déjà présente : ${esc(item.excl.card)} (${esc(item.excl.source)} - ID : ${esc(item.excl.id)})</small>
-            <small>Effet DuelingBook : ${esc(item.desc || 'Aucun effet')}</small>
-            <small>Effet du fichier d'exclusion : ${esc(item.excl.desc || 'Aucun effet')}</small>`;
-        wrapper.appendChild(cb);
-        wrapper.appendChild(info);
-        list.appendChild(wrapper);
-    });
-    modal.classList.remove('hidden');
-    return new Promise((resolve) => {
-        $('dup-validate').onclick = () => {
-            const kept = [];
-            list.querySelectorAll('input[type="checkbox"]').forEach((cb) => { if (cb.checked) kept.push(toVerify[cb.dataset.index]); });
-            modal.classList.add('hidden');
-            resolve(kept);
-        };
-    });
+    return { names, maxId };
 }
 
 // ============================================================
-// ENRICHISSEMENT (CDB officiels)
+// CDB OFFICIELS (index id/nom -> base ouverte)
 // ============================================================
-const REPO = { owner: 'kevinraphael95', repo: 'ygo_outil_fr', branch: 'main' };
-const RAW = `https://raw.githubusercontent.com/${REPO.owner}/${REPO.repo}/${REPO.branch}/`;
-const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
-const stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
-const tick = () => new Promise((r) => setTimeout(r, 0));
+function fileRank(n) {
+    n = n.toLowerCase();
+    if (n === 'cards.delta.cdb') return 0;
+    if (n === 'cards.cdb') return 1;
+    if (/rush|skill|goat/.test(n)) return 4;
+    if (/prerelease|release|unofficial/.test(n)) return 3;
+    return 2;
+}
+
+async function loadOfficial(files, SQL, log) {
+    const dbs = [], idMap = new Map(), nameMap = new Map();
+    for (const f of files) {
+        try {
+            const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+            const rank = fileRank(f.name);
+            const di = dbs.push({ db, name: f.name }) - 1;
+            const ids = new Set();
+            const d = db.exec('SELECT id FROM datas');
+            if (d.length) for (const [id] of d[0].values) {
+                ids.add(id);
+                const cur = idMap.get(id);
+                if (!cur || rank < cur.rank) idMap.set(id, { di, rank });
+            }
+            const t = db.exec('SELECT id, name FROM texts');
+            if (t.length) for (const [id, name] of t[0].values) {
+                if (!ids.has(id)) continue;
+                const k = norm(name);
+                if (!k) continue;
+                if (!nameMap.has(k)) nameMap.set(k, []);
+                nameMap.get(k).push({ id, di, rank });
+            }
+            log(`   ${f.name} : ${ids.size} cartes`);
+        } catch (e) {
+            log(`ignoré ${f.name} : ${e.message}`, 'warn');
+        }
+        await tick();
+    }
+    return { dbs, idMap, nameMap };
+}
+
+function findOfficial(off, serial, name) {
+    if (serial) {
+        const h = off.idMap.get(serial);
+        if (h) return { id: serial, di: h.di, how: 'passcode', stripped: false };
+    }
+    const k = norm(name);
+    let list = off.nameMap.get(k), stripped = false;
+    if (!list) {
+        const k2 = norm(stripParens(name));
+        if (k2 && k2 !== k) { list = off.nameMap.get(k2); stripped = !!list; }
+    }
+    if (!list) return null;
+    const best = [...list].sort((a, b) => a.rank - b.rank || a.id - b.id)[0];
+    return { id: best.id, di: best.di, how: 'nom', stripped };
+}
+
+function oneRow(db, sql, id) {
+    const st = db.prepare(sql);
+    try { st.bind([id]); return st.step() ? st.getAsObject() : null; } finally { st.free(); }
+}
+const GET_DATAS = 'SELECT ot, alias, CAST(setcode AS TEXT) AS setcode, type, atk, def, level, race, attribute, category FROM datas WHERE id = ?';
+const GET_TEXTS = 'SELECT * FROM texts WHERE id = ?';
+
+// ============================================================
+// SCHEMA CDB
+// ============================================================
+const DATAS_COLS = ['id', 'ot', 'alias', 'setcode', 'type', 'atk', 'def', 'level', 'race', 'attribute', 'category'];
+const STR_COLS = Array.from({ length: 16 }, (_, i) => 'str' + (i + 1));
+const TEXTS_COLS = ['id', 'name', 'desc', ...STR_COLS];
+const SCHEMA = `
+CREATE TABLE datas(id integer primary key, ot integer, alias integer, setcode integer, type integer, atk integer, def integer, level integer, race integer, attribute integer, category integer);
+CREATE TABLE texts(id integer primary key, name text, "desc" text, ${STR_COLS.map((c) => c + ' text').join(', ')});`;
+
+function writeCdb(SQL, found) {
+    const outDb = new SQL.Database();
+    outDb.run(SCHEMA);
+    const insD = outDb.prepare(`INSERT OR REPLACE INTO datas (${DATAS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${DATAS_COLS.map(() => '?').join(',')})`);
+    const insT = outDb.prepare(`INSERT OR REPLACE INTO texts (${TEXTS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${TEXTS_COLS.map(() => '?').join(',')})`);
+    outDb.run('BEGIN');
+    for (const c of found) {
+        insD.run(DATAS_COLS.map((k) => (k === 'id' ? c.cid : k === 'ot' ? c.ot : (c.datas[k] == null ? 0 : c.datas[k]))));
+        insT.run(TEXTS_COLS.map((k) => (k === 'id' ? c.cid : k === 'name' ? c.name : (c.texts[k] == null ? '' : c.texts[k]))));
+    }
+    outDb.run('COMMIT');
+    insD.free(); insT.free();
+    const bytes = outDb.export();
+    outDb.close();
+    return bytes;
+}
+
+// ============================================================
+// CONVERSION COMPLÈTE (sans DOM)
+// decks : [{ fileName, text }]
+// opt   : { main, extra, side, usePass, strip, forceCustom, renum, startRaw, checkSimilar, copyOfficial, baseHints }
+// off   : résultat de loadOfficial ou null
+// ============================================================
+async function convertDecks({ decks, opt, SQL, off, excludeFiles, askDup, log }) {
+    const rapport = [];
+    const deckNames = [];
+    const seen = new Map(), seenNames = new Map();
+    let list = [];
+    let totalRows = 0, dup = 0, dupName = 0;
+
+    // ---- 1. Lecture des JSON ----
+    for (const f of decks) {
+        log('📄 Lecture de ' + f.fileName + '…');
+        let data;
+        try { data = JSON.parse(f.text.replace(/^\uFEFF/, '')); }
+        catch (e) {
+            log(`ignoré ${f.fileName} : JSON invalide (${e.message})`, 'warn');
+            rapport.push(`${f.fileName} | fichier ignoré : JSON invalide`);
+            continue;
+        }
+        if (data && data.action && data.action !== 'Success') {
+            log(`ignoré ${f.fileName} : action = « ${data.action} »`, 'warn');
+            rapport.push(`${f.fileName} | fichier ignoré : action = ${data.action}`);
+            continue;
+        }
+        if (data && data.name) deckNames.push(data.name);
+        const rows = cardsFromJson(data, opt);
+        totalRows += rows.length;
+        let added = 0;
+        for (const { zone, c } of rows) {
+            if (!c || !c.name) { rapport.push(`${f.fileName} | ${zone} | entrée sans nom ignorée`); continue; }
+            if (!c.card_type) { rapport.push(`${f.fileName} | ${c.name} | pas de card_type (export partiel ?) | ignorée`); continue; }
+            const serial = parseSerial(c.serial_number);
+            const isCustom = !!Number(c.custom);
+            const id = (opt.usePass && !isCustom && serial) ? serial : parseInt(c.id, 10);
+            if (!Number.isFinite(id) || id <= 0) { rapport.push(`${f.fileName} | ${c.name} | id invalide | ignorée`); continue; }
+            if (seen.has(id)) {
+                dup++;
+                if (seen.get(id).card.name !== c.name) rapport.push(`${id} | conflit : « ${seen.get(id).card.name} » ≠ « ${c.name} » | première gardée`);
+                continue;
+            }
+            const nk = norm(c.name);
+            if (nk && seenNames.has(nk)) {
+                const p = seenNames.get(nk);
+                dupName++;
+                rapport.push(`${id} | doublon de nom : « ${c.name} » déjà présente avec l'id ${p.id} (${p.file}) | première gardée`);
+                continue;
+            }
+            const e = { id, card: c, zone, file: f.fileName, isCustom, order: list.length };
+            seen.set(id, e);
+            if (nk) seenNames.set(nk, e);
+            list.push(e);
+            added++;
+        }
+        log(`→ ${rows.length} entrées, ${added} carte(s) distincte(s).`);
+    }
+    if (!list.length) throw new Error('aucune carte exploitable dans les fichiers sélectionnés');
+    log(`→ ${list.length} cartes distinctes sur ${totalRows} entrées` + (dup ? `, ${dup} copie(s) du même id fusionnée(s)` : '')
+        + (dupName ? `, ${dupName} doublon(s) de nom ignoré(s)` : '') + '.');
+
+    // ---- 2. Conversion : fiche officielle ou données DuelingBook ----
+    let nOfficialCopied = 0, nCustomBase = 0, nCustomNoBase = 0;
+    for (const e of list) {
+        const c = e.card;
+        const base = toCdb(c);
+        let datas = base.datas;
+        let texts = { name: String(c.name).trim(), desc: base.desc };
+        const warn = base.warn;
+        if (off) {
+            const serial = e.isCustom ? 0 : parseSerial(c.serial_number);
+            const m = findOfficial(off, serial, c.name);
+            if (!m) {
+                if (e.isCustom) nCustomNoBase++;
+                else rapport.push(`${e.id} | ${c.name} | introuvable dans les CDB officiels (données DuelingBook, setcode = 0, category = 0)`);
+            } else {
+                const db = off.dbs[m.di].db;
+                const oD = oneRow(db, GET_DATAS, m.id);
+                const oT = oneRow(db, GET_TEXTS, m.id);
+                if (!oD || !oT) {
+                    rapport.push(`${e.id} | ${c.name} | ligne datas/texts incomplète pour ${m.id}`);
+                } else if (!e.isCustom && opt.copyOfficial && !m.stripped) {
+                    datas = { alias: 0, setcode: oD.setcode, type: oD.type, atk: oD.atk, def: oD.def, level: oD.level, race: oD.race, attribute: oD.attribute, category: oD.category };
+                    texts = { name: oT.name || texts.name, desc: oT.desc || '' };
+                    for (const k of STR_COLS) texts[k] = oT[k] || '';
+                    warn.length = 0;
+                    nOfficialCopied++;
+                } else {
+                    datas.setcode = oD.setcode;
+                    if (m.stripped) {
+                        nCustomBase++;
+                        rapport.push(`${e.id} | ${c.name} | version alternative : setcode copié de « ${oT.name} » (${m.id})` + (opt.baseHints ? ', category et str1-16 copiés' : ''));
+                    } else {
+                        datas.category = oD.category;
+                        nCustomBase++;
+                    }
+                    if (opt.baseHints) {
+                        datas.category = oD.category;
+                        for (const k of STR_COLS) texts[k] = oT[k] || '';
+                    }
+                    if ((datas.type & 0x4000000) && (oD.type & 0x4000000)) {
+                        datas.def = oD.def;
+                        const i = warn.findIndex((w) => w.startsWith('Link'));
+                        if (i >= 0) warn.splice(i, 1);
+                    }
+                }
+            }
+        }
+        e.datas = datas; e.texts = texts; e.warn = warn;
+        await tick();
+    }
+    if (off) log(`→ ${nOfficialCopied} fiche(s) officielle(s) copiée(s), ${nCustomBase} custom(s) avec base officielle, ${nCustomNoBase} custom(s) sans base.`);
+
+    // ---- 3. Doublons internes : même nom de base + même effet + mêmes stats ----
+    {
+        const seenFx = new Map();
+        let dupFx = 0;
+        list = list.filter((e) => {
+            const key = norm(stripParens(e.card.name)) + '\u0000' + normDesc(e.texts.desc) + '\u0000' + statSig(e.datas);
+            const p = seenFx.get(key);
+            if (p) {
+                dupFx++;
+                rapport.push(`${e.id} | ${e.card.name} | doublon de « ${p.card.name} » (${p.id}) : même nom de base, même effet, mêmes stats | ignorée`);
+                return false;
+            }
+            seenFx.set(key, e);
+            return true;
+        });
+        if (dupFx) log(`🧹 ${dupFx} doublon(s) (nom de base + effet + stats) ignoré(s).`);
+    }
+
+    // ---- 4. Exclusion ----
+    let exMaxId = 0;
+    if (excludeFiles.length) {
+        log('🚫 Lecture des fichiers à exclure…');
+        const ex = await loadExclude(excludeFiles, SQL, log, toCdb);
+        exMaxId = ex.maxId;
+        const toVerify = [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            const e = list[i];
+            const cands = ex.names.get(norm(stripParens(e.card.name)));
+            if (!cands) continue;
+            const sig = statSig(e.datas);
+            const same = cands.find((c) => !c.hasDesc || (normDesc(c.desc) === normDesc(e.texts.desc) && (c.sig == null || c.sig === sig)));
+            if (same) {
+                rapport.push(`${e.id} | ${e.card.name} | déjà présente : « ${same.card} » (${same.id}, « ${same.source} »)` + (same.hasDesc ? ' même effet et mêmes stats' : ' même nom') + ' | ignorée');
+                list.splice(i, 1);
+            } else if (opt.checkSimilar) {
+                toVerify.unshift({ e, excl: cands[0], desc: e.texts.desc });
+                list.splice(i, 1);
+            } else {
+                rapport.push(`${e.id} | ${e.card.name} | nom de base présent dans « ${cands[0].source} » mais effet ou stats différents | gardée`);
+            }
+        }
+        if (toVerify.length) {
+            log(`❓ ${toVerify.length} carte(s) similaire(s) à vérifier…`);
+            const kept = await askDup(toVerify);
+            kept.forEach((k) => list.push(k.e));
+            list.sort((a, b) => a.order - b.order);
+            toVerify.filter((k) => !kept.includes(k)).forEach((k) => rapport.push(`${k.e.id} | ${k.e.card.name} | similaire à « ${k.excl.card} » (${k.excl.source}), effet ou stats différents | refusée à la vérification`));
+            log(`→ ${kept.length} carte(s) gardée(s) sur ${toVerify.length}.`);
+        }
+        if (!list.length) throw new Error('toutes les cartes sont déjà présentes dans les fichiers à exclure');
+        log(`→ ${list.length} cartes après exclusion.`);
+    }
+
+    // ---- 5. Cartes finales ----
+    const found = [];
+    const lines = [];
+    for (const e of list) {
+        e.warn.forEach((w) => rapport.push(`${e.id} | ${e.card.name} | ${w}`));
+        let name = e.texts.name;
+        if (opt.strip) name = name.replace(/\s*\([^)]*\)\s*$/, '');
+        found.push({
+            cid: e.id, order: e.order, datas: e.datas, texts: e.texts, name,
+            ot: (e.isCustom || opt.forceCustom) ? 0x20 : 3,
+        });
+        const c = e.card;
+        lines.push(`${e.id} | ${name} | ${c.card_type}/${c.type}${c.attribute ? '/' + c.attribute : ''}`
+            + (c.card_type === 'Monster' ? ` | niv ${c.level} | ${c.atk}/${c.def}` : '')
+            + (e.isCustom ? ` | custom (${c.username || '?'})` : ''));
+    }
+
+    // ---- 6. Renumérotation ----
+    const mapLines = [];
+    if (opt.renum) {
+        found.sort((a, b) => a.order - b.order);
+        let start;
+        if (opt.startRaw !== '') start = parseInt(opt.startRaw, 10);
+        else if (exMaxId) start = exMaxId + 1;
+        else start = found[0].cid;
+        found.forEach((c, i) => {
+            c.oldCid = c.cid;
+            c.cid = start + i;
+            mapLines.push(`${c.cid} ← ${c.oldCid} | ${c.name}`);
+        });
+        log(`🔢 IDs renumérotés dans l'ordre du fichier : ${start} → ${start + found.length - 1}`
+            + (opt.startRaw === '' && exMaxId ? ` (suite du plus grand ID custom trouvé : ${exMaxId})` : ''));
+    } else {
+        found.sort((a, b) => a.cid - b.cid);
+    }
+
+    const reportText = [
+        `Decks : ${deckNames.join(', ') || '-'}`,
+        `Source : ${decks.map((f) => f.fileName).join(', ')}`,
+        `${found.length} cartes`,
+        '', '== Cartes ==', ...lines,
+        '', '== Remarques ==', ...rapport,
+        ...(mapLines.length ? ['', '== Correspondance des IDs (nouvel ← ancien) ==', ...mapLines] : []),
+    ].join('\n');
+
+    return { found, lines, rapport, deckNames, reportText };
+}
+// </CORE>
+
+// ============================================================
+// INTERFACE
+// ============================================================
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const btn = $('startBtn');
+
+let SQL = null;
+YGO.initSql()
+    .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
+    .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
+
+$('startId').disabled = !$('optRenum').checked;
+$('optRenum').addEventListener('change', () => { $('startId').disabled = !$('optRenum').checked; });
+
+let reportText = '';
+$('reportBtn').addEventListener('click', () => {
+    if (reportText) YGO.download(new Blob([reportText], { type: 'text/plain;charset=utf-8' }), 'rapport_duelingbook.txt');
+});
 
 $('cdbOfficial').addEventListener('change', (e) => {
     const n = e.target.files.length;
     $('cdbOfficialHint').textContent = n ? `${n} fichier(s) CDB sélectionné(s)` : 'Vide = tous les CDB de data/cdb/en du dépôt GitHub ygo_outil_fr.';
 });
+
+const REPO = { owner: 'kevinraphael95', repo: 'ygo_outil_fr', branch: 'main' };
+const RAW = `https://raw.githubusercontent.com/${REPO.owner}/${REPO.repo}/${REPO.branch}/`;
 
 async function pool(items, limit, fn) {
     let i = 0;
@@ -459,214 +742,63 @@ function remoteFile(path) {
     };
 }
 
-function fileRank(n) {
-    n = n.toLowerCase();
-    if (n === 'cards.delta.cdb') return 0;
-    if (n === 'cards.cdb') return 1;
-    if (/rush|skill|goat/.test(n)) return 4;
-    if (/prerelease|release|unofficial/.test(n)) return 3;
-    return 2;
+/** Fenêtre de choix : retourne les éléments cochés (à garder). */
+function askUserForDuplicates(toVerify) {
+    const modal = $('dup-modal');
+    const listEl = $('dup-list');
+    listEl.innerHTML = '';
+    const stLine = (d) => d ? `Niv ${d.level & 0xff} · ATK ${d.atk} · DEF ${d.def}` : 'stats inconnues';
+    toVerify.forEach((item, index) => {
+        const wrapper = document.createElement('label');
+        wrapper.className = 'dup-item';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = false;
+        cb.dataset.index = index;
+        const info = document.createElement('div');
+        info.className = 'dup-item-info';
+        info.innerHTML = `<strong>${esc(item.e.card.name)}</strong>
+            <small>Fichier source : <b>${esc(item.e.file)}</b> | ID : ${esc(item.e.id)} | ${esc(stLine(item.e.datas))}</small>
+            <small>Déjà présente : ${esc(item.excl.card)} (${esc(item.excl.source)} - ID : ${esc(item.excl.id)}) | ${esc(stLine(item.excl.st))}</small>
+            <small>Effet DuelingBook : ${esc(item.desc || 'Aucun effet')}</small>
+            <small>Effet du fichier d'exclusion : ${esc(item.excl.desc || 'Aucun effet')}</small>`;
+        wrapper.appendChild(cb);
+        wrapper.appendChild(info);
+        listEl.appendChild(wrapper);
+    });
+    modal.classList.remove('hidden');
+    return new Promise((resolve) => {
+        $('dup-validate').onclick = () => {
+            const kept = [];
+            listEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => { if (cb.checked) kept.push(toVerify[cb.dataset.index]); });
+            modal.classList.add('hidden');
+            resolve(kept);
+        };
+    });
 }
 
-/** Index léger : id -> {setcode, category, def, type}, nom normalisé -> id. Les bases sont fermées après lecture. */
-async function loadOfficialIndex(files) {
-    const byId = new Map();
-    const byName = new Map();
-    for (const f of files) {
-        try {
-            const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
-            try {
-                const rank = fileRank(f.name);
-                const ids = new Set();
-                const d = db.exec('SELECT id, CAST(setcode AS TEXT), category, def, type FROM datas');
-                if (d.length) for (const [id, setcode, category, def, type] of d[0].values) {
-                    ids.add(id);
-                    const cur = byId.get(id);
-                    if (!cur || rank < cur.rank) byId.set(id, { id, setcode, category, def, type, rank });
-                }
-                const t = db.exec('SELECT id, name FROM texts');
-                if (t.length) for (const [id, name] of t[0].values) {
-                    if (!ids.has(id)) continue;
-                    const k = norm(name);
-                    if (!k) continue;
-                    const cur = byName.get(k);
-                    if (!cur || rank < cur.rank || (rank === cur.rank && id < cur.id)) byName.set(k, { id, rank });
-                }
-                out.log(`   ${f.name} : ${ids.size} cartes`);
-            } finally { db.close(); }
-        } catch (e) {
-            out.log(`ignoré ${f.name} : ${e.message}`, 'warn');
-        }
-        await tick();
-    }
-    return { byId, byName };
-}
-
-function findOfficial(idx, serial, name) {
-    if (serial) {
-        const h = idx.byId.get(serial);
-        if (h) return { h, how: 'passcode', stripped: false };
-    }
-    const k = norm(name);
-    let n = idx.byName.get(k);
-    if (n) return { h: idx.byId.get(n.id), how: 'nom', stripped: false };
-    const k2 = norm(stripParens(name));
-    if (k2 && k2 !== k) {
-        n = idx.byName.get(k2);
-        if (n) return { h: idx.byId.get(n.id), how: 'nom', stripped: true };
-    }
-    return null;
-}
-
-// ============================================================
-// SCHEMA CDB
-// ============================================================
-const DATAS_COLS = ['id', 'ot', 'alias', 'setcode', 'type', 'atk', 'def', 'level', 'race', 'attribute', 'category'];
-const TEXTS_COLS = ['id', 'name', 'desc', ...Array.from({ length: 16 }, (_, i) => 'str' + (i + 1))];
-const SCHEMA = `
-CREATE TABLE datas(id integer primary key, ot integer, alias integer, setcode integer, type integer, atk integer, def integer, level integer, race integer, attribute integer, category integer);
-CREATE TABLE texts(id integer primary key, name text, "desc" text, ${Array.from({ length: 16 }, (_, i) => 'str' + (i + 1) + ' text').join(', ')});`;
-
-// ============================================================
-// PROGRAMME PRINCIPAL
-// ============================================================
 btn.addEventListener('click', async () => {
     if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
     const files = [...$('jsonFile').files];
     if (!files.length) return YGO.toast('Sélectionne au moins un fichier JSON.', 'err');
 
-    const opt = { main: $('optMain').checked, extra: $('optExtra').checked, side: $('optSide').checked };
-    const usePass = $('optPass').checked;
-    const strip = $('optStrip').checked;
-    const forceCustom = $('optCustomOt').checked;
-    const renum = $('optRenum').checked;
-    const startRaw = $('startId').value.trim();
-    if (renum && startRaw !== '' && !(parseInt(startRaw, 10) >= 1)) return YGO.toast('ID de la première carte invalide.', 'err');
+    const opt = {
+        main: $('optMain').checked, extra: $('optExtra').checked, side: $('optSide').checked,
+        usePass: $('optPass').checked, strip: $('optStrip').checked, forceCustom: $('optCustomOt').checked,
+        renum: $('optRenum').checked, startRaw: $('startId').value.trim(),
+        checkSimilar: $('optExcludeEffect').checked, copyOfficial: $('optCopyOfficial').checked, baseHints: $('optBaseHints').checked,
+    };
+    if (opt.renum && opt.startRaw !== '' && !(parseInt(opt.startRaw, 10) >= 1)) return YGO.toast('ID de la première carte invalide.', 'err');
 
     btn.disabled = true;
     out.clear();
     $('reportBtn').classList.add('hidden');
     reportText = '';
+    let off = null;
     try {
-        const rapport = [];
-        const seen = new Map();
-        const seenNames = new Map();
-        let dupName = 0;   // id final -> entrée
-        const list = [];
-        let totalRows = 0, dup = 0;
-        const deckNames = [];
+        const decks = [];
+        for (const f of files) decks.push({ fileName: f.name, text: await f.text() });
 
-        for (const f of files) {
-            out.log('📄 Lecture de ' + f.name + '…');
-            let data;
-            try {
-                data = JSON.parse((await f.text()).replace(/^\uFEFF/, ''));
-            } catch (e) {
-                out.log(`ignoré ${f.name} : JSON invalide (${e.message})`, 'warn');
-                rapport.push(`${f.name} | fichier ignoré : JSON invalide`);
-                continue;
-            }
-            if (data && data.action && data.action !== 'Success') {
-                out.log(`ignoré ${f.name} : action = « ${data.action} »`, 'warn');
-                rapport.push(`${f.name} | fichier ignoré : action = ${data.action}`);
-                continue;
-            }
-            if (data && data.name) deckNames.push(data.name);
-            const rows = cardsFromJson(data, opt);
-            totalRows += rows.length;
-            let added = 0;
-            for (const { zone, c } of rows) {
-                if (!c || !c.name) { rapport.push(`${f.name} | ${zone} | entrée sans nom ignorée`); continue; }
-                if (!c.card_type) {
-                    rapport.push(`${f.name} | ${c.name} | pas de card_type (export partiel name/effect ?) | ignorée`);
-                    continue;
-                }
-                const serial = parseInt(String(c.serial_number || '').replace(/\D/g, ''), 10) || 0;
-                const isCustom = !!c.custom;
-                const id = (usePass && !isCustom && serial) ? serial : parseInt(c.id, 10);
-                if (!Number.isFinite(id) || id <= 0) { rapport.push(`${f.name} | ${c.name} | id invalide | ignorée`); continue; }
-                if (seen.has(id)) {
-                    dup++;
-                    if (seen.get(id).card.name !== c.name) rapport.push(`${id} | conflit : « ${seen.get(id).card.name} » ≠ « ${c.name} » | première gardée`);
-                    continue;
-                }
-                const nk = norm(c.name);
-                if (nk && seenNames.has(nk)) {
-                    const p = seenNames.get(nk);
-                    dupName++;
-                    rapport.push(`${id} | doublon de nom : « ${c.name} » déjà présente avec l'id ${p.id} (${p.file}) | première gardée`);
-                    continue;
-                }
-                const e = { id, card: c, zone, file: f.name, index: list.length, isCustom, originalOrder: list.length };
-                seen.set(id, e);
-                if (nk) seenNames.set(nk, e);
-                list.push(e);
-                added++;
-            }
-            out.log(`→ ${rows.length} entrées, ${added} carte(s) distincte(s).`);
-        }
-        if (!list.length) throw new Error('aucune carte exploitable dans les fichiers sélectionnés');
-        out.log(`→ ${list.length} cartes distinctes sur ${totalRows} entrées` + (dup ? `, ${dup} copie(s) du même id fusionnée(s)` : '')
-            + (dupName ? `, ${dupName} doublon(s) de nom ignoré(s)` : '') + '.');
-
-        // ---- Doublons dans les JSON : même nom de base (sans parenthèse) + même effet ----
-        {
-            const seenFx = new Map();
-            let dupFx = 0;
-            for (let i = 0; i < list.length; i++) {
-                const e = list[i];
-                const key = norm(stripParens(e.card.name)) + '\u0000' + normDesc(toCdb(e.card).desc);
-                const p = seenFx.get(key);
-                if (p) {
-                    dupFx++;
-                    rapport.push(`${e.id} | ${e.card.name} | doublon de « ${p.card.name} » (${p.id}) : même nom de base et même effet | ignorée`);
-                    list.splice(i, 1);
-                    i--;
-                } else {
-                    seenFx.set(key, e);
-                }
-            }
-            if (dupFx) out.log(`🧹 ${dupFx} doublon(s) (même nom de base et même effet) ignoré(s).`);
-        }
-
-        // ---- Exclusion (cartes déjà présentes dans d'autres fichiers) ----
-        const excludeFiles = [...$('excludeFile').files];
-        if (excludeFiles.length) {
-            const checkEffect = $('optExcludeEffect').checked;
-            out.log('🚫 Lecture des fichiers à exclure…');
-            const ex = await loadExcludeNames(excludeFiles);
-            const toVerify = [];
-            for (let i = list.length - 1; i >= 0; i--) {
-                const e = list[i];
-                const cands = ex.get(norm(stripParens(e.card.name)));
-                if (!cands) continue;
-                const desc = toCdb(e.card).desc;
-                const same = cands.find((c) => normDesc(c.desc) === normDesc(desc));
-                if (same) {
-                    // même nom de base + même effet = doublon
-                    rapport.push(`${e.id} | ${e.card.name} | doublon de « ${same.card} » (${same.id}, « ${same.source} ») : même nom de base et même effet | ignorée`);
-                    list.splice(i, 1);
-                } else if (checkEffect) {
-                    toVerify.unshift({ e, excl: cands[0], desc });
-                    list.splice(i, 1);
-                } else {
-                    rapport.push(`${e.id} | ${e.card.name} | nom de base présent dans « ${cands[0].source} » mais effet différent | gardée`);
-                }
-            }
-            if (toVerify.length) {
-                out.log(`❓ ${toVerify.length} carte(s) similaire(s) à vérifier…`);
-                const kept = await askUserForDuplicates(toVerify);
-                kept.forEach((k) => list.push(k.e));
-                list.sort((a, b) => a.index - b.index);
-                toVerify.filter((k) => !kept.includes(k)).forEach((k) => rapport.push(`${k.e.id} | ${k.e.card.name} | similaire à « ${k.excl.card} » (${k.excl.source}), effet différent | refusée à la vérification`));
-                out.log(`→ ${kept.length} carte(s) gardée(s) sur ${toVerify.length}.`);
-            }
-            if (!list.length) throw new Error('toutes les cartes sont déjà présentes dans les fichiers à exclure');
-            out.log(`→ ${list.length} cartes après exclusion.`);
-        }
-
-        // ---- CDB officiels (enrichissement) ----
-        let idx = null;
         if ($('optEnrich').checked) {
             let official = [...$('cdbOfficial').files];
             if (!official.length) {
@@ -682,106 +814,38 @@ btn.addEventListener('click', async () => {
                 });
             }
             out.log('📂 Lecture des CDB officiels…');
-            idx = await loadOfficialIndex(official);
-            out.log(`→ ${idx.byId.size} cartes officielles indexées.`);
+            off = await loadOfficial(official, SQL, (m, k) => out.log(m, k));
+            out.log(`→ ${off.idMap.size} cartes officielles indexées.`);
         }
 
-        // ---- Conversion ----
-        const found = [];
-        const lines = [];
-        for (const e of list) {
-            const { datas, desc, warn } = toCdb(e.card);
-            if (idx) {
-                const serial = e.isCustom ? 0 : (parseInt(String(e.card.serial_number || '').replace(/\D/g, ''), 10) || 0);
-                const m = findOfficial(idx, serial, e.card.name);
-                if (!m) {
-                    rapport.push(`${e.id} | ${e.card.name} | introuvable dans les CDB officiels (setcode = 0, category = 0)`);
-                } else if (m.stripped) {
-                    datas.setcode = m.h.setcode;
-                    rapport.push(`${e.id} | ${e.card.name} | version alternative : setcode copié de l'officiel (${m.h.id}), category non copiée`);
-                } else {
-                    datas.setcode = m.h.setcode;
-                    datas.category = m.h.category;
-                    if ((datas.type & 0x4000000) && (m.h.type & 0x4000000)) {
-                        datas.def = m.h.def;
-                        const i = warn.findIndex((w) => w.startsWith('Link'));
-                        if (i >= 0) warn.splice(i, 1);
-                    }
-                }
-            }
-            warn.forEach((w) => rapport.push(`${e.id} | ${e.card.name} | ${w}`));
-            let name = String(e.card.name).trim();
-            if (strip) name = name.replace(/\s*\([^)]*\)\s*$/, '');
-            found.push({
-                cid: e.id, index: e.index, datas,
-                ot: (e.isCustom || forceCustom) ? 0x20 : 3,
-                name, desc, originalOrder: e.originalOrder,
-            });
-            lines.push(`${e.id} | ${name} | ${e.card.card_type}/${e.card.type}${e.card.attribute ? '/' + e.card.attribute : ''}`
-                + (e.card.card_type === 'Monster' ? ` | niv ${e.card.level} | ${e.card.atk}/${e.card.def}` : '')
-                + (e.isCustom ? ` | custom (${e.card.username || '?'})` : ''));
-        }
-
-        // ---- Renumérotation ----
-        const mapLines = [];
-        if (renum) {
-            // On trie les cartes selon l'ordre exact où elles ont été lues dans le JSON
-            found.sort((a, b) => a.originalOrder - b.originalOrder);
-            
-            const start = startRaw !== '' ? parseInt(startRaw, 10) : found[0].cid;
-            found.forEach((c, i) => { 
-                c.oldCid = c.cid; 
-                c.cid = start + i; 
-                mapLines.push(`${c.cid} ← ${c.oldCid} | ${c.name}`); 
-            });
-            out.log(`🔢 IDs renumérotés dans l'ordre du fichier : ${start} → ${start + found.length - 1}`);
-        } else {
-            found.sort((a, b) => a.cid - b.cid);
-        }
+        const res = await convertDecks({
+            decks, opt, SQL, off, excludeFiles: [...$('excludeFile').files],
+            askDup: askUserForDuplicates, log: (m, k) => out.log(m, k),
+        });
 
         out.log('');
-        out.log(`${found.length} cartes prêtes, ${rapport.length} remarque(s).`);
-        lines.forEach((l) => out.log('   ' + l));
-        if (rapport.length) {
+        out.log(`${res.found.length} cartes prêtes, ${res.rapport.length} remarque(s).`);
+        res.lines.forEach((l) => out.log('   ' + l));
+        if (res.rapport.length) {
             out.log('--- rapport ---');
-            rapport.forEach((l) => out.log(l, 'warn'));
+            res.rapport.forEach((l) => out.log(l, 'warn'));
         }
-        reportText = [
-            `Decks : ${deckNames.join(', ') || '-'}`,
-            `Source : ${files.map((f) => f.name).join(', ')}`,
-            `${found.length} cartes`,
-            '', '== Cartes ==', ...lines,
-            '', '== Remarques ==', ...rapport,
-            ...(mapLines.length ? ['', '== Correspondance des IDs (nouvel ← ancien) ==', ...mapLines] : []),
-        ].join('\n');
+        reportText = res.reportText;
         $('reportBtn').classList.remove('hidden');
 
-        // ---- Création du CDB ----
         out.log('📦 Création du CDB…');
-        const outDb = new SQL.Database();
-        outDb.run(SCHEMA);
-        const insD = outDb.prepare(`INSERT OR REPLACE INTO datas (${DATAS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${DATAS_COLS.map(() => '?').join(',')})`);
-        const insT = outDb.prepare(`INSERT OR REPLACE INTO texts (${TEXTS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${TEXTS_COLS.map(() => '?').join(',')})`);
-        outDb.run('BEGIN');
-        for (const c of found) {
-            insD.run(DATAS_COLS.map((k) => (k === 'id' ? c.cid : k === 'ot' ? c.ot : (c.datas[k] == null ? 0 : c.datas[k]))));
-            insT.run(TEXTS_COLS.map((k) => (k === 'id' ? c.cid : k === 'name' ? c.name : k === 'desc' ? c.desc : '')));
-        }
-        outDb.run('COMMIT');
-        insD.free(); insT.free();
-        const bytes = outDb.export();
-        outDb.close();
-
+        const bytes = writeCdb(SQL, res.found);
         const base = files.length === 1
-            ? ((deckNames[0] || files[0].name.replace(/\.[^.]+$/, '')).replace(/[^\w.\- ]+/g, '_') || 'duelingbook')
+            ? ((res.deckNames[0] || files[0].name.replace(/\.[^.]+$/, '')).replace(/[^\w.\- ]+/g, '_') || 'duelingbook')
             : 'duelingbook_decks';
         const size = await YGO.download(new Blob([bytes], { type: 'application/x-sqlite3' }), base + '.cdb');
-        out.log(`✅ ${found.length} cartes dans ${base}.cdb (${YGO.fmtBytes(size)}).`, 'ok');
-        YGO.toast(`${found.length} cartes générées !`);
+        out.log(`✅ ${res.found.length} cartes dans ${base}.cdb (${YGO.fmtBytes(size)}).`, 'ok');
+        YGO.toast(`${res.found.length} cartes générées !`);
     } catch (err) {
         out.log('❌ Erreur : ' + err.message, 'err');
         YGO.toast('Une erreur est survenue.', 'err');
     } finally {
+        if (off) off.dbs.forEach((d) => { try { d.db.close(); } catch (e) { /* déjà fermé */ } });
         btn.disabled = false;
     }
 });
