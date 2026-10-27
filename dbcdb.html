@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DuelingBook vers CDB · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="utils/ygo.css">
+<script src="utils/ygo.js"></script>
+<style>
+    .opts { display: grid; gap: 10px; margin: 6px 0 16px; }
+    .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+    .opt input { margin-top: 4px; }
+    .opt small { display: block; opacity: .7; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-file-import"></i></div>
+        <div>
+            <h1>DuelingBook vers CDB</h1>
+            <p>Prend la réponse JSON de <code>load-deck.php</code> (Réseau → XHR → Réponse → Brut → copier) et génère un CDB complet : stats, type, race, attribut, niveau, effet, effet de pendule. Aucun CDB officiel nécessaire.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
+
+        <div class="field">
+            <label for="jsonFile">Fichiers JSON DuelingBook *</label>
+            <input type="file" id="jsonFile" accept=".json,.txt" multiple>
+            <span class="hint">Réponse de <code>load-deck.php</code> sauvée en .json. Plusieurs fichiers possibles : ils sont fusionnés.</span>
+        </div>
+
+        <div class="field">
+            <label for="cdbOfficial">CDB officiels <small>(optionnel)</small></label>
+            <input type="file" id="cdbOfficial" accept=".cdb" multiple>
+            <span class="hint" id="cdbOfficialHint">Vide = tous les CDB de data/cdb/en du dépôt GitHub ygo_outil_fr.</span>
+        </div>
+
+        <div class="field">
+            <label for="ignoreTags">Ignorer les CDB du dépôt dont le nom contient</label>
+            <input type="text" id="ignoreTags" value="VAACT" placeholder="ex : VAACT ; patch" autocomplete="off">
+            <span class="hint">Séparés par « ; ».</span>
+        </div>
+
+        <div class="opts">
+            <label class="opt"><input type="checkbox" id="optEnrich" checked>
+                <span>Compléter avec les CDB officiels (setcode, category, flèches Link)<small>Recherche par passcode, puis par nom. Pour « Gold Gadget (Buff) », le setcode est copié de « Gold Gadget » ; stats et effet DuelingBook sont gardés.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optMain" checked>
+                <span>Inclure le Main Deck</span></label>
+            <label class="opt"><input type="checkbox" id="optExtra" checked>
+                <span>Inclure l'Extra Deck</span></label>
+            <label class="opt"><input type="checkbox" id="optSide">
+                <span>Inclure le Side Deck</span></label>
+            <label class="opt"><input type="checkbox" id="optPass" checked>
+                <span>Cartes officielles : utiliser le passcode (<code>serial_number</code>) comme ID<small>Décoché : l'ID DuelingBook est gardé pour toutes les cartes. Les customs gardent toujours leur ID DuelingBook.</small></span></label>
+            <label class="opt"><input type="checkbox" id="optStrip">
+                <span>Retirer le suffixe entre parenthèses du nom<small>« Gold Gadget (Buff) » devient « Gold Gadget ».</small></span></label>
+            <label class="opt"><input type="checkbox" id="optCustomOt">
+                <span>Forcer toutes les cartes en Custom (ot = 0x20 / 32)<small>Décoché : customs en 0x20, officielles en 3 (OCG/TCG).</small></span></label>
+            <label class="opt"><input type="checkbox" id="optRenum">
+                <span>Renuméroter les IDs dans l'ordre du deck<small>Les IDs se suivent à partir de la valeur ci-dessous.</small></span></label>
+        </div>
+
+        <div class="field">
+            <label for="startId">ID de la première carte</label>
+            <input type="number" id="startId" min="1" step="1" placeholder="vide = ID de la 1re carte" autocomplete="off">
+            <span class="hint">Utilisé seulement avec « Renuméroter ».</span>
+        </div>
+
+        <div class="actions">
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Générer le CDB</button>
+            <button id="reportBtn" class="btn hidden" type="button"><i class="fa-solid fa-file-lines"></i> Télécharger le rapport</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script>
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const btn = $('startBtn');
+
+let SQL = null;
+YGO.initSql()
+    .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
+    .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
+
+$('startId').disabled = true;
+$('optRenum').addEventListener('change', () => { $('startId').disabled = !$('optRenum').checked; });
+
+let reportText = '';
+$('reportBtn').addEventListener('click', () => {
+    if (reportText) YGO.download(new Blob([reportText], { type: 'text/plain;charset=utf-8' }), 'rapport_duelingbook.txt');
+});
+
+// ============================================================
+// TABLES DE CORRESPONDANCE DuelingBook -> CDB (EDOPro / YGOPro)
+// ============================================================
+const RACE = {
+    'warrior': 0x1, 'spellcaster': 0x2, 'fairy': 0x4, 'fiend': 0x8, 'zombie': 0x10, 'machine': 0x20,
+    'aqua': 0x40, 'pyro': 0x80, 'rock': 0x100, 'winged beast': 0x200, 'plant': 0x400, 'insect': 0x800,
+    'thunder': 0x1000, 'dragon': 0x2000, 'beast': 0x4000, 'beast-warrior': 0x8000, 'dinosaur': 0x10000,
+    'fish': 0x20000, 'sea serpent': 0x40000, 'reptile': 0x80000, 'psychic': 0x100000,
+    'divine-beast': 0x200000, 'creator god': 0x400000, 'wyrm': 0x800000, 'cyberse': 0x1000000, 'illusion': 0x2000000,
+};
+const ATTR = { earth: 0x1, water: 0x2, fire: 0x4, wind: 0x8, light: 0x10, dark: 0x20, divine: 0x40 };
+const ABILITY = { tuner: 0x1000, spirit: 0x200, union: 0x400, gemini: 0x800, toon: 0x400000 };
+const NO_COLOR = ['normal', 'effect', 'fusion', 'ritual', 'synchro', 'xyz', 'link', 'token'];
+
+const num = (v) => {
+    if (v == null || v === '') return 0;
+    if (String(v).trim() === '?') return -2;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : 0;
+};
+
+/** Convertit une carte DuelingBook en lignes datas/texts. Retourne { datas, texts, warn[] }. */
+function toCdb(c) {
+    const warn = [];
+    const ct = String(c.card_type || '').toLowerCase();
+    const sub = String(c.type || '').toLowerCase();
+    let type = 0, race = 0, attribute = 0, level = 0, atk = 0, def = 0;
+
+    if (ct === 'monster') {
+        type = 0x1;
+        const col = String(c.monster_color || '').toLowerCase();
+        if (col.includes('normal')) type |= 0x10;
+        if (col.includes('effect')) type |= 0x20;
+        if (col.includes('fusion')) type |= 0x40;
+        if (col.includes('ritual')) type |= 0x80;
+        if (col.includes('synchro')) type |= 0x2000;
+        if (col.includes('xyz')) type |= 0x800000;
+        if (col.includes('link')) type |= 0x4000000;
+        if (col.includes('token')) type |= 0x4000;
+        if (col.includes('pendulum') || c.pendulum) type |= 0x1000000;
+        if (!NO_COLOR.some((k) => col.includes(k)) && !col.includes('pendulum')) warn.push(`monster_color inconnu « ${c.monster_color} »`);
+        // is_effect : seulement pour les types spéciaux (un Normal reste Normal)
+        if (c.is_effect && !col.includes('normal')) type |= 0x20;
+        if (c.flip) type |= 0x200000;
+        for (const a of String(c.ability || '').toLowerCase().split(/[\/,]/)) {
+            const k = a.trim();
+            if (!k) continue;
+            if (ABILITY[k]) type |= ABILITY[k]; else warn.push(`ability inconnue « ${a.trim()} »`);
+        }
+        race = RACE[sub] || 0;
+        if (!race) warn.push(`race inconnue « ${c.type} »`);
+        attribute = ATTR[String(c.attribute || '').toLowerCase()] || 0;
+        if (!attribute) warn.push(`attribut inconnu « ${c.attribute} »`);
+        level = num(c.level);
+        const scale = num(c.scale);
+        if (type & 0x1000000) level = level | (scale << 24) | (scale << 16);
+        atk = num(c.atk);
+        def = (type & 0x4000000) ? 0 : num(c.def);
+        if (type & 0x4000000) warn.push('Link : flèches (arrows) non converties, DEF = 0');
+    } else if (ct === 'spell') {
+        type = 0x2;
+        if (sub.includes('quick')) type |= 0x10000;
+        else if (sub.includes('continuous')) type |= 0x20000;
+        else if (sub.includes('equip')) type |= 0x40000;
+        else if (sub.includes('field')) type |= 0x80000;
+        else if (sub.includes('ritual')) type |= 0x80;
+        else if (!sub.includes('normal')) warn.push(`type de magie inconnu « ${c.type} »`);
+    } else if (ct === 'trap') {
+        type = 0x4;
+        if (sub.includes('continuous')) type |= 0x20000;
+        else if (sub.includes('counter')) type |= 0x100000;
+        else if (!sub.includes('normal')) warn.push(`type de piège inconnu « ${c.type} »`);
+    } else {
+        warn.push(`card_type inconnu « ${c.card_type} »`);
+    }
+
+    const eff = String(c.effect || '').trim();
+    const pe = String(c.pendulum_effect || '').trim();
+    const desc = pe
+        ? `[ Pendulum Effect ]\n${pe}\n----------------------------------------\n[ Monster Effect ]\n${eff}`
+        : eff;
+
+    return { datas: { alias: 0, setcode: 0, type, atk, def, level, race, attribute, category: 0 }, desc, warn };
+}
+
+// ============================================================
+// LECTURE DES JSON
+// ============================================================
+function cardsFromJson(data, opt) {
+    const groups = [];
+    if (Array.isArray(data)) groups.push(['main', data]);
+    else if (data && typeof data === 'object') {
+        if (opt.main) groups.push(['main', data.main || []]);
+        if (opt.extra) groups.push(['extra', data.extra || []]);
+        if (opt.side) groups.push(['side', data.side || []]);
+    }
+    const res = [];
+    for (const [zone, arr] of groups) for (const c of arr) res.push({ zone, c });
+    return res;
+}
+
+// ============================================================
+// ENRICHISSEMENT (CDB officiels)
+// ============================================================
+const REPO = { owner: 'kevinraphael95', repo: 'ygo_outil_fr', branch: 'main' };
+const RAW = `https://raw.githubusercontent.com/${REPO.owner}/${REPO.repo}/${REPO.branch}/`;
+const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+$('cdbOfficial').addEventListener('change', (e) => {
+    const n = e.target.files.length;
+    $('cdbOfficialHint').textContent = n ? `${n} fichier(s) CDB sélectionné(s)` : 'Vide = tous les CDB de data/cdb/en du dépôt GitHub ygo_outil_fr.';
+});
+
+async function pool(items, limit, fn) {
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (i < items.length) await fn(items[i++]);
+    }));
+}
+
+async function repoCdbPaths() {
+    const r = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.repo}/git/trees/${REPO.branch}?recursive=1`);
+    if (!r.ok) throw new Error(r.status === 403 ? "limite de l'API GitHub atteinte, réessaie plus tard ou sélectionne les CDB à la main" : `API GitHub : HTTP ${r.status}`);
+    const j = await r.json();
+    return j.tree.filter((t) => t.type === 'blob').map((t) => t.path).filter((p) => /^data\/cdb\/en\/[^/]+\.cdb$/i.test(p));
+}
+
+function remoteFile(path) {
+    const url = RAW + path.split('/').map(encodeURIComponent).join('/');
+    let buf = null;
+    return {
+        name: path.split('/').pop(),
+        arrayBuffer() {
+            if (!buf) {
+                buf = fetch(url)
+                    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status} (${path})`); return r.arrayBuffer(); })
+                    .catch((e) => { buf = null; throw e; });
+            }
+            return buf;
+        },
+    };
+}
+
+function fileRank(n) {
+    n = n.toLowerCase();
+    if (n === 'cards.delta.cdb') return 0;
+    if (n === 'cards.cdb') return 1;
+    if (/rush|skill|goat/.test(n)) return 4;
+    if (/prerelease|release|unofficial/.test(n)) return 3;
+    return 2;
+}
+
+/** Index léger : id -> {setcode, category, def, type}, nom normalisé -> id. Les bases sont fermées après lecture. */
+async function loadOfficialIndex(files) {
+    const byId = new Map();
+    const byName = new Map();
+    for (const f of files) {
+        try {
+            const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+            try {
+                const rank = fileRank(f.name);
+                const ids = new Set();
+                const d = db.exec('SELECT id, CAST(setcode AS TEXT), category, def, type FROM datas');
+                if (d.length) for (const [id, setcode, category, def, type] of d[0].values) {
+                    ids.add(id);
+                    const cur = byId.get(id);
+                    if (!cur || rank < cur.rank) byId.set(id, { id, setcode, category, def, type, rank });
+                }
+                const t = db.exec('SELECT id, name FROM texts');
+                if (t.length) for (const [id, name] of t[0].values) {
+                    if (!ids.has(id)) continue;
+                    const k = norm(name);
+                    if (!k) continue;
+                    const cur = byName.get(k);
+                    if (!cur || rank < cur.rank || (rank === cur.rank && id < cur.id)) byName.set(k, { id, rank });
+                }
+                out.log(`   ${f.name} : ${ids.size} cartes`);
+            } finally { db.close(); }
+        } catch (e) {
+            out.log(`ignoré ${f.name} : ${e.message}`, 'warn');
+        }
+        await tick();
+    }
+    return { byId, byName };
+}
+
+function findOfficial(idx, serial, name) {
+    if (serial) {
+        const h = idx.byId.get(serial);
+        if (h) return { h, how: 'passcode', stripped: false };
+    }
+    const k = norm(name);
+    let n = idx.byName.get(k);
+    if (n) return { h: idx.byId.get(n.id), how: 'nom', stripped: false };
+    const k2 = norm(stripParens(name));
+    if (k2 && k2 !== k) {
+        n = idx.byName.get(k2);
+        if (n) return { h: idx.byId.get(n.id), how: 'nom', stripped: true };
+    }
+    return null;
+}
+
+// ============================================================
+// SCHEMA CDB
+// ============================================================
+const DATAS_COLS = ['id', 'ot', 'alias', 'setcode', 'type', 'atk', 'def', 'level', 'race', 'attribute', 'category'];
+const TEXTS_COLS = ['id', 'name', 'desc', ...Array.from({ length: 16 }, (_, i) => 'str' + (i + 1))];
+const SCHEMA = `
+CREATE TABLE datas(id integer primary key, ot integer, alias integer, setcode integer, type integer, atk integer, def integer, level integer, race integer, attribute integer, category integer);
+CREATE TABLE texts(id integer primary key, name text, "desc" text, ${Array.from({ length: 16 }, (_, i) => 'str' + (i + 1) + ' text').join(', ')});`;
+
+// ============================================================
+// PROGRAMME PRINCIPAL
+// ============================================================
+btn.addEventListener('click', async () => {
+    if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
+    const files = [...$('jsonFile').files];
+    if (!files.length) return YGO.toast('Sélectionne au moins un fichier JSON.', 'err');
+
+    const opt = { main: $('optMain').checked, extra: $('optExtra').checked, side: $('optSide').checked };
+    const usePass = $('optPass').checked;
+    const strip = $('optStrip').checked;
+    const forceCustom = $('optCustomOt').checked;
+    const renum = $('optRenum').checked;
+    const startRaw = $('startId').value.trim();
+    if (renum && startRaw !== '' && !(parseInt(startRaw, 10) >= 1)) return YGO.toast('ID de la première carte invalide.', 'err');
+
+    btn.disabled = true;
+    out.clear();
+    $('reportBtn').classList.add('hidden');
+    reportText = '';
+    try {
+        const rapport = [];
+        const seen = new Map();   // id final -> entrée
+        const list = [];
+        let totalRows = 0, dup = 0;
+        const deckNames = [];
+
+        for (const f of files) {
+            out.log('📄 Lecture de ' + f.name + '…');
+            let data;
+            try {
+                data = JSON.parse((await f.text()).replace(/^\uFEFF/, ''));
+            } catch (e) {
+                out.log(`ignoré ${f.name} : JSON invalide (${e.message})`, 'warn');
+                rapport.push(`${f.name} | fichier ignoré : JSON invalide`);
+                continue;
+            }
+            if (data && data.action && data.action !== 'Success') {
+                out.log(`ignoré ${f.name} : action = « ${data.action} »`, 'warn');
+                rapport.push(`${f.name} | fichier ignoré : action = ${data.action}`);
+                continue;
+            }
+            if (data && data.name) deckNames.push(data.name);
+            const rows = cardsFromJson(data, opt);
+            totalRows += rows.length;
+            let added = 0;
+            for (const { zone, c } of rows) {
+                if (!c || !c.name) { rapport.push(`${f.name} | ${zone} | entrée sans nom ignorée`); continue; }
+                if (!c.card_type) {
+                    rapport.push(`${f.name} | ${c.name} | pas de card_type (export partiel name/effect ?) | ignorée`);
+                    continue;
+                }
+                const serial = parseInt(String(c.serial_number || '').replace(/\D/g, ''), 10) || 0;
+                const isCustom = !!c.custom;
+                const id = (usePass && !isCustom && serial) ? serial : parseInt(c.id, 10);
+                if (!Number.isFinite(id) || id <= 0) { rapport.push(`${f.name} | ${c.name} | id invalide | ignorée`); continue; }
+                if (seen.has(id)) {
+                    dup++;
+                    if (seen.get(id).card.name !== c.name) rapport.push(`${id} | conflit : « ${seen.get(id).card.name} » ≠ « ${c.name} » | première gardée`);
+                    continue;
+                }
+                const e = { id, card: c, zone, file: f.name, index: list.length, isCustom };
+                seen.set(id, e);
+                list.push(e);
+                added++;
+            }
+            out.log(`→ ${rows.length} entrées, ${added} carte(s) distincte(s).`);
+        }
+        if (!list.length) throw new Error('aucune carte exploitable dans les fichiers sélectionnés');
+        out.log(`→ ${list.length} cartes distinctes sur ${totalRows} entrées` + (dup ? `, ${dup} copie(s) du même id fusionnée(s)` : '') + '.');
+
+        // ---- CDB officiels (enrichissement) ----
+        let idx = null;
+        if ($('optEnrich').checked) {
+            let official = [...$('cdbOfficial').files];
+            if (!official.length) {
+                out.log('🌐 Lecture du dépôt GitHub…');
+                const ignore = $('ignoreTags').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
+                const all = await repoCdbPaths();
+                const kept = all.filter((p) => !ignore.some((t) => p.split('/').pop().toLowerCase().includes(t)));
+                if (!kept.length) throw new Error('aucun CDB officiel trouvé dans data/cdb/en du dépôt');
+                official = kept.map(remoteFile);
+                out.log(`→ ${kept.length} CDB du dépôt` + (all.length !== kept.length ? ` (${all.length - kept.length} ignoré(s))` : '') + ', téléchargement…');
+                await pool(official, 4, async (f) => {
+                    try { await f.arrayBuffer(); } catch (e) { out.log(`échec ${f.name} : ${e.message}`, 'warn'); }
+                });
+            }
+            out.log('📂 Lecture des CDB officiels…');
+            idx = await loadOfficialIndex(official);
+            out.log(`→ ${idx.byId.size} cartes officielles indexées.`);
+        }
+
+        // ---- Conversion ----
+        const found = [];
+        const lines = [];
+        for (const e of list) {
+            const { datas, desc, warn } = toCdb(e.card);
+            if (idx) {
+                const serial = e.isCustom ? 0 : (parseInt(String(e.card.serial_number || '').replace(/\D/g, ''), 10) || 0);
+                const m = findOfficial(idx, serial, e.card.name);
+                if (!m) {
+                    rapport.push(`${e.id} | ${e.card.name} | introuvable dans les CDB officiels (setcode = 0, category = 0)`);
+                } else if (m.stripped) {
+                    datas.setcode = m.h.setcode;
+                    rapport.push(`${e.id} | ${e.card.name} | version alternative : setcode copié de l'officiel (${m.h.id}), category non copiée`);
+                } else {
+                    datas.setcode = m.h.setcode;
+                    datas.category = m.h.category;
+                    if ((datas.type & 0x4000000) && (m.h.type & 0x4000000)) {
+                        datas.def = m.h.def;
+                        const i = warn.findIndex((w) => w.startsWith('Link'));
+                        if (i >= 0) warn.splice(i, 1);
+                    }
+                }
+            }
+            warn.forEach((w) => rapport.push(`${e.id} | ${e.card.name} | ${w}`));
+            let name = String(e.card.name).trim();
+            if (strip) name = name.replace(/\s*\([^)]*\)\s*$/, '');
+            found.push({
+                cid: e.id, index: e.index, datas,
+                ot: (e.isCustom || forceCustom) ? 0x20 : 3,
+                name, desc,
+            });
+            lines.push(`${e.id} | ${name} | ${e.card.card_type}/${e.card.type}${e.card.attribute ? '/' + e.card.attribute : ''}`
+                + (e.card.card_type === 'Monster' ? ` | niv ${e.card.level} | ${e.card.atk}/${e.card.def}` : '')
+                + (e.isCustom ? ` | custom (${e.card.username || '?'})` : ''));
+        }
+
+        // ---- Renumérotation ----
+        const mapLines = [];
+        if (renum) {
+            const start = startRaw !== '' ? parseInt(startRaw, 10) : found[0].cid;
+            found.forEach((c, i) => { c.oldCid = c.cid; c.cid = start + i; mapLines.push(`${c.cid} ← ${c.oldCid} | ${c.name}`); });
+            out.log(`🔢 IDs renumérotés : ${start} → ${start + found.length - 1}`);
+        } else {
+            found.sort((a, b) => a.cid - b.cid);
+        }
+
+        out.log('');
+        out.log(`${found.length} cartes prêtes, ${rapport.length} remarque(s).`);
+        lines.forEach((l) => out.log('   ' + l));
+        if (rapport.length) {
+            out.log('--- rapport ---');
+            rapport.forEach((l) => out.log(l, 'warn'));
+        }
+        reportText = [
+            `Decks : ${deckNames.join(', ') || '-'}`,
+            `Source : ${files.map((f) => f.name).join(', ')}`,
+            `${found.length} cartes`,
+            '', '== Cartes ==', ...lines,
+            '', '== Remarques ==', ...rapport,
+            ...(mapLines.length ? ['', '== Correspondance des IDs (nouvel ← ancien) ==', ...mapLines] : []),
+        ].join('\n');
+        $('reportBtn').classList.remove('hidden');
+
+        // ---- Création du CDB ----
+        out.log('📦 Création du CDB…');
+        const outDb = new SQL.Database();
+        outDb.run(SCHEMA);
+        const insD = outDb.prepare(`INSERT OR REPLACE INTO datas (${DATAS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${DATAS_COLS.map(() => '?').join(',')})`);
+        const insT = outDb.prepare(`INSERT OR REPLACE INTO texts (${TEXTS_COLS.map((c) => `"${c}"`).join(',')}) VALUES (${TEXTS_COLS.map(() => '?').join(',')})`);
+        outDb.run('BEGIN');
+        for (const c of found) {
+            insD.run(DATAS_COLS.map((k) => (k === 'id' ? c.cid : k === 'ot' ? c.ot : (c.datas[k] == null ? 0 : c.datas[k]))));
+            insT.run(TEXTS_COLS.map((k) => (k === 'id' ? c.cid : k === 'name' ? c.name : k === 'desc' ? c.desc : '')));
+        }
+        outDb.run('COMMIT');
+        insD.free(); insT.free();
+        const bytes = outDb.export();
+        outDb.close();
+
+        const base = files.length === 1
+            ? ((deckNames[0] || files[0].name.replace(/\.[^.]+$/, '')).replace(/[^\w.\- ]+/g, '_') || 'duelingbook')
+            : 'duelingbook_decks';
+        const size = await YGO.download(new Blob([bytes], { type: 'application/x-sqlite3' }), base + '.cdb');
+        out.log(`✅ ${found.length} cartes dans ${base}.cdb (${YGO.fmtBytes(size)}).`, 'ok');
+        YGO.toast(`${found.length} cartes générées !`);
+    } catch (err) {
+        out.log('❌ Erreur : ' + err.message, 'err');
+        YGO.toast('Une erreur est survenue.', 'err');
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+out.log('Sélectionne le(s) JSON de load-deck.php, puis lance la génération.');
+</script>
+</body>
+</html>
