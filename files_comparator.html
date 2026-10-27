@@ -272,57 +272,50 @@ function diffVal(a, b, path, acc, norm) {
     }
 }
 
-// --- NOUVELLE COMPARAISON INTELLIGENTE ---
+// --- COMPARAISON CORRIGÉE ---
 function compareMaps(m1, m2, norm) {
     const removed = [], added = [], modified = [], shifted = [];
-    
-    // Créer des index par nom pour détecter les décalages
-    const nameIndex1 = new Map();
-    const nameIndex2 = new Map();
-    for (const [k, v] of m1) if (v.name) nameIndex1.set(v.name, { key: k, data: v });
-    for (const [k, v] of m2) if (v.name) nameIndex2.set(v.name, { key: k, data: v });
-
     const matched1 = new Set();
     const matched2 = new Set();
 
-    // 1. Chercher les correspondances par nom (décalages)
+    // 1. D'abord, on associe tout ce qui a le même ID
+    for (const [k, v1] of m1) {
+        if (m2.has(k)) {
+            matched1.add(k);
+            matched2.add(k);
+            const v2 = m2.get(k);
+            const changes = [];
+            diffVal(v1, v2, '', changes, norm);
+            if (changes.length) modified.push({ key: k, label: labelOf(v2), changes });
+        }
+    }
+
+    // 2. Ensuite, on cherche les décalages pour ce qui reste
+    const nameIndex1 = new Map();
+    const nameIndex2 = new Map();
+    for (const [k, v] of m1) if (!matched1.has(k) && v.name) nameIndex1.set(v.name, { key: k, data: v });
+    for (const [k, v] of m2) if (!matched2.has(k) && v.name) nameIndex2.set(v.name, { key: k, data: v });
+
     for (const [name, info1] of nameIndex1) {
         if (nameIndex2.has(name)) {
             const info2 = nameIndex2.get(name);
             matched1.add(info1.key);
             matched2.add(info2.key);
             
-            if (info1.key !== info2.key) {
-                shifted.push({ name, oldId: info1.key, newId: info2.key });
-            }
+            shifted.push({ name, oldId: info1.key, newId: info2.key });
             
-            // Vérifier si les données ont changé (en ignorant l'ID qui est la clé)
             const changes = [];
             diffVal(info1.data, info2.data, '', changes, norm);
             if (changes.length) modified.push({ key: info1.key, label: labelOf(info1.data), changes, newId: info2.key });
         }
     }
 
-    // 2. Ce qui reste non matché par nom
+    // 3. Ce qui n'a jamais été matché
     for (const [k, v] of m1) {
-        if (!matched1.has(k)) {
-            if (m2.has(k)) {
-                // Même ID, mais le nom a dû changer
-                matched1.add(k);
-                matched2.add(k);
-                const changes = [];
-                diffVal(v, m2.get(k), '', changes, norm);
-                if (changes.length) modified.push({ key: k, label: labelOf(v), changes });
-            } else {
-                removed.push({ key: k, label: labelOf(v) });
-            }
-        }
+        if (!matched1.has(k)) removed.push({ key: k, label: labelOf(v) });
     }
-    
     for (const [k, v] of m2) {
-        if (!matched2.has(k)) {
-            added.push({ key: k, label: labelOf(v) });
-        }
+        if (!matched2.has(k)) added.push({ key: k, label: labelOf(v) });
     }
 
     return { removed, added, modified, shifted };
@@ -391,19 +384,18 @@ btn.addEventListener('click', async () => {
         out.log(`📥 ${f2.name}`);
         const b = await readFile(f2, wanted, 'Fichier 2');
 
-        progress.set(70, 'Comparaison intelligente…'); await tick();
+        progress.set(70, 'Comparaison…'); await tick();
         const r = compareMaps(a.map, b.map, norm);
         
-        // Le nombre de cartes identiques est calculé en soustrayant tout ce qui a été touché
         const totalTouched = r.removed.length + r.added.length + r.modified.length + r.shifted.length;
-        const same = a.map.size + b.map.size - totalTouched; // approximation
+        const same = a.map.size + b.map.size - totalTouched;
 
         progress.set(100, 'Terminé !');
         out.log(`=== RAPPORT DE COMPARAISON .${e1.toUpperCase()} ===`, 'ok');
         out.log(`Fichier 1 : ${a.map.size} entrées · Fichier 2 : ${b.map.size} entrées`);
         
         if (r.shifted.length) {
-            out.log(`🔄 Décalages d'ID détectés : ${r.shifted.length} (ce ne sont pas de vraies modifications)`, 'warn');
+            out.log(`🔄 Décalages d'ID détectés : ${r.shifted.length}`, 'warn');
             out.log(r.shifted.map(s => `${s.name} (${s.oldId} → ${s.newId})`).join(' ; '));
         }
 
