@@ -62,7 +62,7 @@
         <div class="field">
             <label for="excludeFile">Ne pas mettre les cartes déjà présentes dans <small>(optionnel)</small></label>
             <input type="file" id="excludeFile" accept=".cdb,.csv,.tsv,.txt,.xml" multiple>
-            <span class="hint">Les cartes dont le nom de base est déjà dans ces fichiers sont ignorées.</span>
+            <span class="hint">Les cartes dont le nom de base ET l'effet sont déjà dans ces fichiers sont ignorées.</span>
         </div>
 
         <div class="field">
@@ -314,19 +314,19 @@ async function loadOfficial(files) {
 
 /** Noms (normalisés) des cartes déjà présentes dans les fichiers à exclure (CDB, CSV, TSV, XML). */
 async function loadExcludeNames(files) {
-    const names = new Map(); // On stocke { id, source, card }
+    const names = new Map(); // On stocke { id, source, card, desc }
     for (const f of files) {
         try {
             let n = 0;
             if (/\.cdb$/i.test(f.name)) {
                 const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
                 try {
-                    // On récupère l'id, le nom et la source
-                    const t = db.exec('SELECT id, name FROM texts');
-                    if (t.length) for (const [id, name] of t[0].values) {
+                    // On récupère l'id, le nom ET l'effet
+                    const t = db.exec('SELECT id, name, desc FROM texts');
+                    if (t.length) for (const [id, name, desc] of t[0].values) {
                         const k = norm(stripParens(name));
                         if (k && !names.has(k)) { 
-                            names.set(k, { id, card: name, source: f.name }); 
+                            names.set(k, { id, card: name, desc: desc || '', source: f.name }); 
                             n++; 
                         }
                     }
@@ -335,7 +335,7 @@ async function loadExcludeNames(files) {
                 for (const r of parseFile(f.name, await f.text(), false)) {
                     const k = norm(stripParens(r.card));
                     if (k && !names.has(k)) { 
-                        names.set(k, { id: r.id, card: r.card, source: f.name }); 
+                        names.set(k, { id: r.id, card: r.card, desc: r.desc || '', source: f.name }); 
                         n++; 
                     }
                 }
@@ -462,26 +462,6 @@ btn.addEventListener('click', async () => {
             + (dup ? `, ${dup} doublon(s) d'id ignoré(s)` : '')
             + (dupName ? `, ${dupName} doublon(s) de nom ignoré(s)` : '') + '.');
 
-        // ---- Exclusion ----
-        if (excludeFiles.length) {
-            out.log('🚫 Lecture des fichiers à exclure…');
-            const ex = await loadExcludeNames(excludeFiles);
-            const kept = [];
-            for (const e of list) {
-                const k = norm(stripParens(e.card));
-                if (ex.has(k)) {
-                    const orig = ex.get(k); // On récupère les infos de la carte bloquante
-                    rapport.push(`${e.cid} | ${e.card} | déjà présente dans le fichier à exclure (${orig.id} | ${orig.card} dans "${orig.source}") | ignorée`);
-                } else {
-                    kept.push(e);
-                }
-            }
-            out.log(`→ ${list.length - kept.length} carte(s) déjà présente(s) ignorée(s), ${kept.length} restante(s).`);
-            list.length = 0;
-            list.push(...kept);
-            if (!list.length) throw new Error('toutes les cartes sont déjà dans les fichiers à exclure');
-        }
-
         // ---- CDB officiels ----
         if (!officialFiles.length) {
             out.log('🌐 Lecture du dépôt GitHub…');
@@ -498,6 +478,13 @@ btn.addEventListener('click', async () => {
         out.log('📂 Lecture des CDB officiels…');
         official = await loadOfficial(officialFiles);
         out.log(`→ ${official.idMap.size} cartes officielles indexées.`);
+
+        // ---- Exclusion ----
+        let ex = new Map();
+        if (excludeFiles.length) {
+            out.log('🚫 Lecture des fichiers à exclure…');
+            ex = await loadExcludeNames(excludeFiles);
+        }
 
         // ---- Recherche et copie ----
         out.log('🔄 Recherche des cartes…');
@@ -542,6 +529,26 @@ btn.addEventListener('click', async () => {
                 rapport.push(`${e.cid} | ${e.card} | ligne datas/texts incomplète pour ${src.id}` + (useMissing ? ' | ajoutée vide' : ''));
                 if (useMissing) addPlaceholder(e);
                 continue;
+            }
+
+            // --- VÉRIFICATION DE L'EXCLUSION (Nom + Effet) ---
+            if (excludeFiles.length) {
+                const k = norm(stripParens(e.card));
+                const excl = ex.get(k);
+                if (excl) {
+                    // Comparer les effets (on normalise les sauts de ligne et les espaces)
+                    const effetSource = String(texts.desc || '').replace(/\r\n/g, '\n').trim();
+                    const effetExclu = String(excl.desc || '').replace(/\r\n/g, '\n').trim();
+                    
+                    if (effetSource === effetExclu) {
+                        // C'est un vrai doublon (même nom, même effet)
+                        rapport.push(`${e.cid} | ${e.card} | déjà présente dans le fichier à exclure (${excl.id} | ${excl.card} dans "${excl.source}") avec le même effet | ignorée`);
+                        continue;
+                    } else {
+                        // Même nom mais effet différent : on garde
+                        rapport.push(`${e.cid} | ${e.card} | même nom que ${excl.card} (${excl.id} dans "${excl.source}") mais effet différent | gardée`);
+                    }
+                }
             }
 
             // --- PATCH : Si c'est une carte custom (trouvée via parenthèses), on met un effet à remplir
