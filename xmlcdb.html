@@ -312,24 +312,32 @@ async function loadOfficial(files) {
     return { dbs, idMap, nameMap };
 }
 
+/** Noms (normalisés) des cartes déjà présentes dans les fichiers à exclure (CDB, CSV, TSV, XML). */
 async function loadExcludeNames(files) {
-    const names = new Set();
+    const names = new Map(); // On stocke { id, source, card }
     for (const f of files) {
         try {
             let n = 0;
             if (/\.cdb$/i.test(f.name)) {
                 const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
                 try {
-                    const t = db.exec('SELECT name FROM texts');
-                    if (t.length) for (const [name] of t[0].values) {
+                    // On récupère l'id, le nom et la source
+                    const t = db.exec('SELECT id, name FROM texts');
+                    if (t.length) for (const [id, name] of t[0].values) {
                         const k = norm(stripParens(name));
-                        if (k) { names.add(k); n++; }
+                        if (k && !names.has(k)) { 
+                            names.set(k, { id, card: name, source: f.name }); 
+                            n++; 
+                        }
                     }
                 } finally { db.close(); }
             } else {
                 for (const r of parseFile(f.name, await f.text(), false)) {
                     const k = norm(stripParens(r.card));
-                    if (k) { names.add(k); n++; }
+                    if (k && !names.has(k)) { 
+                        names.set(k, { id: r.id, card: r.card, source: f.name }); 
+                        n++; 
+                    }
                 }
             }
             out.log(`   ${f.name} : ${n} noms à exclure`);
@@ -460,8 +468,13 @@ btn.addEventListener('click', async () => {
             const ex = await loadExcludeNames(excludeFiles);
             const kept = [];
             for (const e of list) {
-                if (ex.has(norm(stripParens(e.card)))) rapport.push(`${e.cid} | ${e.card} | déjà présente dans les fichiers à exclure | ignorée`);
-                else kept.push(e);
+                const k = norm(stripParens(e.card));
+                if (ex.has(k)) {
+                    const orig = ex.get(k); // On récupère les infos de la carte bloquante
+                    rapport.push(`${e.cid} | ${e.card} | déjà présente dans le fichier à exclure (${orig.id} | ${orig.card} dans "${orig.source}") | ignorée`);
+                } else {
+                    kept.push(e);
+                }
             }
             out.log(`→ ${list.length - kept.length} carte(s) déjà présente(s) ignorée(s), ${kept.length} restante(s).`);
             list.length = 0;
