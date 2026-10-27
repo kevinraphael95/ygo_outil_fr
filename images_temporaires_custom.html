@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Images temporaires · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+/* ============================================================
+   YGO Tools — Design system commun
+   ============================================================ */
+
+/* ---------- Tokens ---------- */
+:root,
+[data-theme="dark"] {
+    color-scheme: dark;
+    --bg:            #0d0a1a;
+    --bg-glow:       rgba(212, 175, 55, 0.05);
+    --surface:       #16112a;
+    --surface-2:     #1f1838;
+    --surface-3:     #2a2148;
+    --border:        #3a2d5c;
+    --border-strong: #4d3d75;
+    --text:          #f5ecd8;
+    --text-muted:    #a89b82;
+    --text-dim:      #7a705c;
+    --gold:          #d4af37;
+    --gold-light:    #e8c85a;
+    --gold-dark:     #a67c00;
+    --gold-soft:     rgba(212, 175, 55, 0.12);
+    --gold-glow:     rgba(212, 175, 55, 0.35);
+    --success:       #5fd07f;
+    --success-soft:  rgba(95, 208, 127, 0.13);
+    --warning:       #e0b64c;
+    --warning-soft:  rgba(224, 182, 76, 0.13);
+    --danger:        #e07a7a;
+    --danger-soft:   rgba(224, 122, 122, 0.13);
+    --info:          #b88ae0;
+    --info-soft:     rgba(155, 107, 196, 0.15);
+    --shadow-sm:     0 1px 3px rgba(0,0,0,.5);
+    --shadow-md:     0 6px 24px rgba(0,0,0,.5);
+    --shadow-lg:     0 18px 50px rgba(0,0,0,.7);
+    --code-bg:       #0a0715;
+}
+
+[data-theme="light"] {
+    color-scheme: light;
+    --bg:            #f0e8d8;
+    --bg-glow:       rgba(166, 124, 0, 0.07);
+    --surface:       #faf5e8;
+    --surface-2:     #f2ebd9;
+    --surface-3:     #e8dfc5;
+    --border:        #d9cdb4;
+    --border-strong: #bcab88;
+    --text:          #2a1f14;
+    --text-muted:    #6b5d47;
+    --text-dim:      #94856a;
+    --gold:          #a67c00;
+    --gold-light:    #c49616;
+    --gold-dark:     #7a5a00;
+    --gold-soft:     rgba(166, 124, 0, 0.10);
+    --gold-glow:     rgba(166, 124, 0, 0.28);
+    --success:       #1f8a3d;
+    --success-soft:  rgba(31, 138, 61, 0.11);
+    --warning:       #8f6a00;
+    --warning-soft:  rgba(166, 124, 0, 0.12);
+    --danger:        #c33a3a;
+    --danger-soft:   rgba(195, 58, 58, 0.10);
+    --info:          #6a3a9a;
+    --info-soft:     rgba(106, 58, 154, 0.10);
+    --shadow-sm:     0 1px 2px rgba(60,40,10,.08);
+    --shadow-md:     0 6px 20px rgba(60,40,10,.12);
+    --shadow-lg:     0 18px 50px rgba(60,40,10,.2);
+    --code-bg:       #f6f0df;
+}
+
+:root {
+    --radius:      16px;
+    --radius-sm:   10px;
+    --font-display: 'Cinzel', Georgia, serif;
+    --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --ease:         cubic-bezier(.2, .7, .3, 1);
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text);
+    background-color: var(--bg);
+    background-image:
+        radial-gradient(circle at 15% 0%,   var(--bg-glow) 0%, transparent 45%),
+        radial-gradient(circle at 85% 100%, var(--bg-glow) 0%, transparent 45%);
+    background-attachment: fixed;
+    transition: background-color .3s var(--ease), color .3s var(--ease);
+    display: flex;
+    flex-direction: column;
+}
+a { color: var(--gold); text-decoration: none; }
+a:hover { color: var(--gold-light); text-decoration: underline; }
+code, kbd, pre { font-family: var(--font-mono); }
+code {
+    background: var(--gold-soft);
+    color: var(--gold-light);
+    padding: 1px 7px;
+    border-radius: 6px;
+    font-size: .88em;
+}
+[data-theme="light"] code { color: var(--gold-dark); }
+kbd {
+    background: var(--surface-3);
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    padding: 1px 7px;
+    font-size: .85em;
+}
+::selection { background: var(--gold-glow); }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.hidden { display: none !important; }
+.muted { color: var(--text-muted); }
+.dim   { color: var(--text-dim); }
+.mono  { font-family: var(--font-mono); }
+
+/* Scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+
+/* ---------- Header ---------- */
+.app-header {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm);
+}
+.app-header-inner {
+    max-width: 1240px; margin: 0 auto;
+    padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.brand { display: flex; align-items: center; gap: 12px; color: inherit; }
+.brand:hover { text-decoration: none; color: inherit; }
+.brand-logo {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: grid; place-items: center;
+    font-size: 1.15rem; color: #1a1408;
+    background: linear-gradient(135deg, var(--gold-light), var(--gold-dark));
+    box-shadow: 0 0 18px var(--gold-glow);
+}
+.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; color: var(--gold); letter-spacing: .02em; line-height: 1.1; }
+.brand-sub  { font-size: 11.5px; color: var(--text-muted); }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+    width: 40px; height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 11px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text);
+    cursor: pointer; font-size: 1rem;
+    transition: all .18s var(--ease);
+}
+.icon-btn:hover { background: var(--gold-soft); border-color: var(--gold); color: var(--gold); text-decoration: none; transform: translateY(-1px); }
+
+/* ---------- Layout ---------- */
+.container { width: 100%; max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; flex: 1; }
+.container.wide { max-width: 1240px; }
+.app-footer { text-align: center; padding: 22px; font-size: 12px; color: var(--text-dim); border-top: 1px solid var(--border); }
+
+.hero { display: flex; align-items: center; gap: 18px; margin-bottom: 28px; }
+.hero-icon {
+    flex: none; width: 58px; height: 58px; border-radius: 16px;
+    display: grid; place-items: center; font-size: 1.6rem; color: var(--gold);
+    background: var(--gold-soft); border: 1px solid var(--gold);
+    box-shadow: 0 0 24px var(--gold-soft);
+}
+.hero h1 { font-family: var(--font-display); font-size: clamp(1.35rem, 3.4vw, 1.9rem); line-height: 1.2; margin: 0 0 4px; font-weight: 700; }
+.hero p  { margin: 0; color: var(--text-muted); max-width: 70ch; }
+.grad {
+    background: linear-gradient(90deg, var(--gold-light), var(--gold) 50%, var(--info));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ---------- Cards ---------- */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+}
+.card-title {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-display); font-size: 1.02rem; font-weight: 700;
+    color: var(--gold); margin: 0 0 6px;
+}
+.card-sub { margin: 0 0 18px; color: var(--text-muted); font-size: 13.5px; }
+.card-title + .field, .card-title + .grid-2 { margin-top: 14px; }
+
+/* ---------- Forms ---------- */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field > label, .label { font-size: 13px; font-weight: 600; }
+.hint { font-size: 12px; color: var(--text-dim); }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.row + .row { margin-top: 12px; }
+.row > .grow { flex: 1; min-width: 160px; }
+.inline-field { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.inline-field > label { min-width: 190px; font-size: 13px; font-weight: 600; }
+
+input[type="text"], input[type="number"], select, textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit; font-size: 14px;
+    transition: border-color .15s, box-shadow .15s;
+}
+.inline-field input[type="text"], .inline-field input[type="number"], .inline-field select { width: auto; min-width: 120px; }
+textarea { min-height: 150px; resize: vertical; font-family: var(--font-mono); font-size: 13px; line-height: 1.5; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+input[type="file"] {
+    width: 100%; padding: 6px; border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm); background: var(--surface-2);
+    color: var(--text-muted); font: inherit; font-size: 13px; cursor: pointer;
+}
+input[type="file"]::file-selector-button {
+    margin-right: 12px; padding: 7px 14px; cursor: pointer;
+    border: 1px solid var(--gold); border-radius: 8px;
+    background: var(--gold-soft); color: var(--gold); font: 600 13px var(--font-body);
+    transition: background .15s;
+}
+input[type="file"]::file-selector-button:hover { background: var(--gold-glow); }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--gold); cursor: pointer; }
+.check { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+
+/* ---------- Buttons ---------- */
+.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 20px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2); color: var(--text);
+    font: 600 14px/1.1 var(--font-body); white-space: nowrap;
+    cursor: pointer; text-decoration: none;
+    transition: all .18s var(--ease);
+}
+.btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); background: var(--gold-soft); transform: translateY(-1px); text-decoration: none; }
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary {
+    background: linear-gradient(135deg, var(--gold-light), var(--gold) 55%, var(--gold-dark));
+    color: #1a1408; border-color: var(--gold);
+    box-shadow: 0 2px 14px var(--gold-glow);
+}
+.btn-primary:hover:not(:disabled) { color: #1a1408; background: linear-gradient(135deg, #f3d77a, var(--gold-light)); box-shadow: 0 4px 20px var(--gold-glow); }
+.btn-danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+.btn-sm { padding: 7px 12px; font-size: 12.5px; }
+.btn-copied { border-color: var(--success) !important; color: var(--success) !important; background: var(--success-soft) !important; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+
+/* Onglets / filtres */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab {
+    padding: 7px 14px; border-radius: 999px; font: 600 12.5px var(--font-body);
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted);
+    cursor: pointer; transition: all .15s;
+}
+.tab:hover { color: var(--gold); border-color: var(--gold); }
+.tab.active { background: var(--gold); color: #1a1408; border-color: var(--gold); }
+
+/* ---------- Progress ---------- */
+.progress { margin-top: 18px; }
+.progress-meta { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--text-muted); margin-bottom: 7px; }
+.progress-bar { height: 10px; background: var(--surface-3); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+.progress-fill {
+    height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-light));
+    box-shadow: 0 0 12px var(--gold-glow);
+    transition: width .35s var(--ease);
+}
+
+/* ---------- Console ---------- */
+.console {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; height: 240px; overflow-y: auto;
+    font: 12.5px/1.65 var(--font-mono); color: var(--text-muted);
+}
+.console-line { white-space: pre-wrap; word-break: break-word; }
+.console-line .t { color: var(--text-dim); margin-right: 8px; }
+.console-line.info .m { color: var(--text); }
+.console-line.ok   .m { color: var(--success); }
+.console-line.warn .m { color: var(--warning); }
+.console-line.err  .m { color: var(--danger); }
+
+/* ---------- Alertes / puces ---------- */
+.alert {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 12px 16px; margin: 14px 0; border-radius: 12px;
+    border: 1px solid var(--border); border-left-width: 4px;
+    background: var(--surface-2); font-size: 14px;
+}
+.alert > i { margin-top: 3px; }
+.alert.info { border-left-color: var(--info);    background: var(--info-soft); }
+.alert.ok   { border-left-color: var(--success); background: var(--success-soft); }
+.alert.warn { border-left-color: var(--warning); background: var(--warning-soft); }
+.alert.err  { border-left-color: var(--danger);  background: var(--danger-soft); }
+.alert p { margin: 0; }
+
+.stats { margin-top: 12px; font-size: 13px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--surface-3); border: 1px solid var(--border); }
+.chip.ok   { color: var(--success); background: var(--success-soft); border-color: transparent; }
+.chip.warn { color: var(--warning); background: var(--warning-soft); border-color: transparent; }
+.chip.err  { color: var(--danger);  background: var(--danger-soft);  border-color: transparent; }
+
+/* ---------- Dropzone ---------- */
+.dropzone {
+    display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+    padding: 38px 20px; cursor: pointer;
+    border: 2px dashed var(--border-strong); border-radius: var(--radius);
+    background: var(--surface-2); color: var(--text-muted);
+    transition: all .2s var(--ease);
+}
+.dropzone:hover, .dropzone.over { border-color: var(--gold); background: var(--gold-soft); color: var(--text); transform: scale(1.005); }
+.dropzone i { font-size: 2.1rem; color: var(--gold); }
+.dropzone strong { color: var(--text); }
+
+/* ---------- Tableaux ---------- */
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.table-wrap { overflow: auto; max-height: 560px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+    position: sticky; top: 0; z-index: 1; text-align: left;
+    padding: 11px 14px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--gold); background: var(--surface-3); border-bottom: 1px solid var(--border-strong);
+}
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--gold-soft); }
+tr.ok   td:first-child { box-shadow: inset 3px 0 var(--success); }
+tr.miss td:first-child { box-shadow: inset 3px 0 var(--warning); }
+tr.miss td:nth-child(3) { color: var(--text-muted); }
+.val { max-width: 340px; font: 12px var(--font-mono); word-break: break-all; color: var(--text-muted); }
+.val.ok { color: var(--success); } .val.warn { color: var(--warning); } .val.err { color: var(--danger); }
+.preview-cell img { width: 40px; height: 40px; object-fit: contain; border-radius: 6px; background: var(--surface-3); display: block; }
+.empty { text-align: center; padding: 34px 10px; color: var(--text-muted); }
+.empty i { display: block; font-size: 1.8rem; margin-bottom: 10px; color: var(--text-dim); }
+
+.result-list { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; max-height: 280px; overflow: auto; }
+.result-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); font: 12.5px var(--font-mono); }
+
+/* ---------- Tutoriel ---------- */
+.step { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 18px; box-shadow: var(--shadow-sm); }
+.step h2, .prose h2 { font-family: var(--font-display); font-size: 1.1rem; color: var(--gold); margin: 0 0 14px; display: flex; align-items: center; gap: 12px; }
+.num {
+    flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    font: 700 .9rem var(--font-body); color: #1a1408;
+    background: linear-gradient(135deg, var(--gold-light), var(--gold-dark));
+}
+.step ol { padding-left: 22px; margin: 0 0 12px; display: grid; gap: 8px; }
+.step ol li::marker { color: var(--gold); font-weight: 700; }
+.step p { margin: 8px 0; }
+.prose { margin-top: 36px; }
+.prose h2 { margin-top: 28px; }
+.prose h3 { font-size: .98rem; margin: 20px 0 6px; color: var(--text); }
+.prose p { margin: 4px 0; color: var(--text-muted); }
+.code-block { position: relative; margin: 12px 0; }
+.code-block pre {
+    margin: 0; padding: 16px 18px; overflow: auto; font-size: 12.5px; line-height: 1.6;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; color: var(--text);
+}
+.code-block pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+.code-block .copy { position: absolute; top: 10px; right: 10px; }
+.final {
+    text-align: center; padding: 28px; margin: 22px 0; border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--gold-soft), var(--info-soft)); border: 1px solid var(--gold);
+}
+.final a { font-family: var(--font-display); font-size: clamp(1rem, 3vw, 1.35rem); font-weight: 700; word-break: break-all; }
+
+/* ---------- Accueil ---------- */
+.tool-section { margin: 30px 0 12px; font: 700 .78rem var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+.tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.tool-card {
+    display: flex; flex-direction: column; gap: 10px; padding: 20px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-sm); transition: all .2s var(--ease);
+}
+.tool-card:hover { transform: translateY(-3px); border-color: var(--gold); box-shadow: var(--shadow-md), 0 0 0 1px var(--gold-soft); text-decoration: none; color: var(--text); }
+.tool-card .hero-icon { width: 46px; height: 46px; font-size: 1.2rem; border-radius: 13px; }
+.tool-card h3 { margin: 0; font-family: var(--font-display); font-size: 1rem; color: var(--gold); }
+.tool-card p { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+
+/* ---------- Toasts ---------- */
+.toasts { position: fixed; bottom: 22px; right: 22px; z-index: 200; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.toast {
+    display: flex; align-items: center; gap: 10px; max-width: min(380px, calc(100vw - 44px));
+    padding: 12px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 600;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-left: 4px solid var(--success);
+    box-shadow: var(--shadow-lg); pointer-events: auto;
+    animation: toastIn .3s var(--ease);
+}
+.toast.err { border-left-color: var(--danger); }
+.toast.ok > i { color: var(--success); } .toast.err > i { color: var(--danger); }
+.toast.out { opacity: 0; transform: translateX(30px); transition: all .3s var(--ease); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Responsive / accessibilité ---------- */
+@media (max-width: 640px) {
+    .app-header-inner { padding: 10px 14px; }
+    .brand-sub { display: none; }
+    .container { padding: 22px 14px 48px; }
+    .hero { align-items: flex-start; }
+    .hero-icon { width: 48px; height: 48px; font-size: 1.3rem; }
+    .card, .step { padding: 16px; }
+    .inline-field > label { min-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+</style>
+<script>
+/* ============================================================
+   YGO Tools — utilitaires communs (thème, toasts, console, I/O)
+   Chargé dans le <head> pour appliquer le thème avant l'affichage.
+   ============================================================ */
+(function () {
+    'use strict';
+
+    const KEY = 'ygo_theme';
+    const root = document.documentElement;
+
+    /* ---------- Thème ---------- */
+    function preferred() {
+        try {
+            const saved = localStorage.getItem(KEY);
+            if (saved === 'dark' || saved === 'light') return saved;
+        } catch (e) { /* stockage indisponible */ }
+        return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+
+    function applyTheme(theme) {
+        root.setAttribute('data-theme', theme);
+        const btn = document.getElementById('theme-toggle');
+        if (btn) {
+            btn.innerHTML = theme === 'dark'
+                ? '<i class="fa-solid fa-moon"></i>'
+                : '<i class="fa-solid fa-sun"></i>';
+            btn.title = theme === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre';
+            btn.setAttribute('aria-label', btn.title);
+        }
+    }
+
+    applyTheme(preferred());
+
+    document.addEventListener('DOMContentLoaded', () => {
+        applyTheme(root.getAttribute('data-theme'));
+        const btn = document.getElementById('theme-toggle');
+        if (btn) btn.addEventListener('click', () => {
+            const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            try { localStorage.setItem(KEY, next); } catch (e) { /* ignore */ }
+            applyTheme(next);
+        });
+    });
+
+    window.addEventListener('storage', (e) => {
+        if (e.key === KEY && (e.newValue === 'dark' || e.newValue === 'light')) applyTheme(e.newValue);
+    });
+
+    /* ---------- API ---------- */
+    const YGO = {};
+
+    YGO.$ = (id) => document.getElementById(id);
+    YGO.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    /** Création rapide d'éléments DOM (texte toujours échappé). */
+    YGO.el = function (tag, props, ...children) {
+        const node = document.createElement(tag);
+        for (const [k, v] of Object.entries(props || {})) {
+            if (v == null || v === false) continue;
+            if (k === 'className') node.className = v;
+            else if (k === 'text') node.textContent = v;
+            else if (k === 'dataset') Object.assign(node.dataset, v);
+            else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v);
+            else node.setAttribute(k, v === true ? '' : v);
+        }
+        for (const c of children.flat()) {
+            if (c == null || c === false) continue;
+            node.append(c.nodeType ? c : document.createTextNode(String(c)));
+        }
+        return node;
+    };
+
+    YGO.fmtBytes = function (n) {
+        if (n < 1024) return n + ' o';
+        if (n < 1048576) return (n / 1024).toFixed(1) + ' Ko';
+        return (n / 1048576).toFixed(2) + ' Mo';
+    };
+
+    /** Toast : type 'ok' | 'err'. */
+    YGO.toast = function (message, type = 'ok') {
+        let box = document.getElementById('toasts');
+        if (!box) {
+            box = YGO.el('div', { className: 'toasts', id: 'toasts', 'aria-live': 'polite' });
+            document.body.append(box);
+        }
+        const t = YGO.el('div', { className: 'toast ' + type, role: 'status' },
+            YGO.el('i', { className: 'fa-solid ' + (type === 'ok' ? 'fa-circle-check' : 'fa-circle-exclamation') }),
+            YGO.el('span', { text: message }));
+        box.append(t);
+        setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, 3600);
+    };
+
+    /** Console d'exécution. level : 'info' | 'ok' | 'warn' | 'err'. */
+    YGO.console = function (el) {
+        return {
+            log(msg, level = 'info') {
+                const time = new Date().toLocaleTimeString('fr-FR');
+                el.append(YGO.el('div', { className: 'console-line ' + level },
+                    YGO.el('span', { className: 't', text: '[' + time + ']' }),
+                    YGO.el('span', { className: 'm', text: msg })));
+                while (el.childElementCount > 3000) el.firstElementChild.remove();
+                el.scrollTop = el.scrollHeight;
+            },
+            clear() { el.textContent = ''; },
+        };
+    };
+
+    /** Barre de progression : root contient .progress-text / .progress-percent / .progress-fill. */
+    YGO.progress = function (root) {
+        const fill = root.querySelector('.progress-fill');
+        const pct = root.querySelector('.progress-percent');
+        const txt = root.querySelector('.progress-text');
+        return {
+            show() { root.classList.remove('hidden'); },
+            hide() { root.classList.add('hidden'); },
+            set(value, text) {
+                const v = Math.max(0, Math.min(100, Math.round(value)));
+                fill.style.width = v + '%';
+                if (pct) pct.textContent = v + '%';
+                if (txt && text != null) txt.textContent = text;
+            },
+        };
+    };
+
+    /** Télécharge une chaîne, un Blob ou un Uint8Array. */
+    YGO.download = function (data, filename, mime = 'application/octet-stream') {
+        const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = YGO.el('a', { href: url, download: filename });
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return blob.size;
+    };
+
+    /** Copie dans le presse-papiers (avec repli pour les contextes non sécurisés). */
+    YGO.copy = async function (text, okMessage = 'Copié dans le presse-papiers !') {
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch (e) {
+            const ta = YGO.el('textarea', { style: 'position:fixed;opacity:0' });
+            ta.value = text;
+            document.body.append(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+        }
+        if (okMessage) YGO.toast(okMessage);
+    };
+
+    /** Affiche "N fichier(s)" sous un champ fichier / dossier. */
+    YGO.bindFileCount = function (input, hintEl, pattern) {
+        input.addEventListener('change', () => {
+            const files = [...input.files];
+            const n = pattern ? files.filter((f) => pattern.test(f.name)).length : files.length;
+            hintEl.textContent = n ? n.toLocaleString('fr-FR') + ' fichier(s) retenu(s)' : '';
+        });
+    };
+
+    /** Initialise sql.js (le script sql-wasm.js doit être chargé). */
+    YGO.initSql = () => initSqlJs({
+        locateFile: (f) => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/' + f,
+    });
+
+    window.YGO = YGO;
+})();
+
+</script>
+<style>
+    .preview-cell img { width: 40px; height: 58px; object-fit: cover; border-radius: 4px; background: var(--surface-3); display: block; }
+    .preview-cell .noimg { width: 40px; height: 58px; border-radius: 4px; background: var(--surface-3); display: grid; place-items: center; color: var(--text-dim); font-size: .8rem; }
+    .row.tight { margin-bottom: 0; }
+    .num-in { width: 150px !important; }
+    .console { height: 180px; }
+</style>
+</head>
+<body>
+
+<button class="icon-btn" id="theme-toggle" type="button" style="position:fixed;top:14px;right:14px;z-index:60;"></button>
+
+<main class="container wide">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-images"></i></div>
+        <div>
+            <h1>Images <span class="grad">temporaires</span> des customs</h1>
+            <p>Pour chaque carte custom, on retrouve la carte officielle du même nom dans tes .cdb, on récupère son image officielle et on l'enregistre sous l'ID de la custom (ex. <code>910000022.jpg</code>). Peu importe l'effet : c'est juste pour avoir une image en attendant la vraie.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-folder-open"></i> 1. Fichiers .cdb</h2>
+        <p class="card-sub">Il faut les .cdb custom (VAACT…) <strong>et</strong> les .cdb officiels, pour faire le lien par le nom.</p>
+        <div class="row">
+            <button class="btn btn-primary" id="loadBtn" type="button"><i class="fa-solid fa-bolt"></i> Charger ProjectIgnis</button>
+            <button class="btn" id="changeBtn" type="button"><i class="fa-solid fa-folder-tree"></i> Changer de dossier</button>
+            <button class="btn" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Tout vider</button>
+        </div>
+        <details id="manual" style="margin-bottom:10px;">
+            <summary class="hint" style="cursor:pointer;">Autre méthode (Firefox ou dossiers à la main)</summary>
+            <div class="row" style="margin-top:8px;">
+                <label for="folderInput" class="btn"><i class="fa-solid fa-folder-plus"></i> Ajouter un dossier</label>
+                <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden">
+                <label for="fileInput" class="btn"><i class="fa-solid fa-file-circle-plus"></i> Ajouter des .cdb</label>
+                <input type="file" id="fileInput" accept=".cdb" multiple class="hidden">
+            </div>
+        </details>
+        <div class="hint" id="status"></div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-sliders"></i> 2. Cartes custom à traiter</h2>
+        <div class="inline-field" style="margin-bottom:6px;">
+            <label for="idMin">ID custom de</label>
+            <input type="number" id="idMin" class="num-in" value="910000000">
+            <label for="idMax" style="min-width:auto;">à</label>
+            <input type="number" id="idMax" class="num-in" value="999999999">
+            <button class="btn btn-sm" id="anaBtn" type="button"><i class="fa-solid fa-rotate"></i> Recalculer</button>
+        </div>
+        <div class="hint">Officielle = ID &lt; 900000000. Si plusieurs cartes officielles ont le même nom, on prend le passcode principal (pas l'alt art).</div>
+        <div class="stats" id="chips"></div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-download"></i> 3. Récupérer les images</h2>
+        <p class="card-sub">Ordre de recherche : ton dossier <code>pics</code> local (si ProjectIgnis est chargé), puis images.ygoprodeck.com, puis pics.projectignis.org.</p>
+        <div class="row">
+            <button class="btn btn-primary" id="zipBtn" type="button" disabled><i class="fa-solid fa-file-zipper"></i> Tout en .zip</button>
+            <button class="btn btn-primary" id="dirBtn" type="button" disabled><i class="fa-solid fa-folder-arrow-down"></i> Enregistrer dans un dossier</button>
+            <button class="btn" id="batBtn" type="button" disabled><i class="fa-solid fa-terminal"></i> Plan B : script .bat</button>
+        </div>
+        <div class="row tight">
+            <label class="check"><input type="checkbox" id="optSkip" checked><span>Dossier : ne pas écraser les images déjà présentes</span></label>
+        </div>
+        <div class="progress hidden" id="prog">
+            <div class="progress-meta"><span class="progress-text"></span><span class="progress-percent"></span></div>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+        </div>
+        <div class="console" id="con" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-table-list"></i> Correspondances</h2>
+        <div class="toolbar">
+            <div class="tabs" id="tabs">
+                <button class="tab active" data-f="all" type="button">Toutes</button>
+                <button class="tab" data-f="ok" type="button">Avec équivalent</button>
+                <button class="tab" data-f="miss" type="button">Sans équivalent</button>
+            </div>
+            <div class="row tight">
+                <label class="check"><input type="checkbox" id="optPreview"><span>Aperçus (charge les images)</span></label>
+                <button class="btn btn-sm" id="copyMissBtn" type="button"><i class="fa-solid fa-copy"></i> Copier « sans équivalent »</button>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>ID custom</th><th>Nom custom</th><th>Carte officielle</th><th>Aperçu</th></tr></thead>
+                <tbody id="tbody"><tr><td colspan="4" class="empty"><i class="fa-solid fa-database"></i>Charge tes .cdb pour commencer.</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<div class="toasts" id="toasts"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script>
+const { $ } = YGO;
+// ===== CONFIG (tout se règle ici) =====
+const CONFIG = {
+    BASE: 'C:\\ProjectIgnis',
+    SEARCH_PATHS: ['repositories', 'expansions', 'config/languages'],   // sous-dossiers lus (récursif) ; ceux qui n'existent pas sont ignorés
+    EXCLUDE_DIRS: ['.git', 'node_modules', 'script', 'scripts', 'pics'],
+    AUTO_LOAD: true,
+    CUSTOM_MIN_ID: 900000000,
+    IMG_URLS: [                                          // {} = ID de la carte officielle
+        'https://images.ygoprodeck.com/images/cards/{}.jpg',
+        'https://pics.projectignis.org:2096/pics/{}.jpg',
+    ],
+    CONCURRENCY: 4,
+};
+
+let SQL = null, baseHandle = null, filter = 'all', nbCdb = 0;
+const names = new Map();     // id -> Set(noms)
+const byName = new Map();    // nom normalisé -> Set(id)
+const aliasOf = new Map();   // id -> alias
+const loaded = new Set();
+let rows = [];               // [{id, name, off, offName}]
+let busy = false;
+
+const log = YGO.console($('con')).log;
+const prog = YGO.progress($('prog'));
+const sqlReady = YGO.initSql().then((s) => { SQL = s; }).catch((e) => setStatus('Impossible de charger sql.js : ' + e.message));
+const setStatus = (t) => { $('status').textContent = t; };
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const norm = (s) => String(s || '').normalize('NFD').toLowerCase().replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]/gu, '');
+const stripTag = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
+
+// ===== ZIP (sans bibliothèque, mode "stocké") =====
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = (b) => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+function makeZip(files) {   // files : [{name, data: string | Uint8Array}]
+    const enc = new TextEncoder(), parts = [], central = [];
+    const d = new Date();
+    const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    let offset = 0;
+    for (const f of files) {
+        const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data);
+        const lh = new DataView(new ArrayBuffer(30));
+        lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+        lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true);
+        lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+        const ch = new DataView(new ArrayBuffer(46));
+        ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+        ch.setUint16(12, time, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true);
+        ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+        ch.setUint32(42, offset, true);
+        parts.push(new Uint8Array(lh.buffer), name, data);
+        central.push(new Uint8Array(ch.buffer), name);
+        offset += 30 + name.length + data.length;
+    }
+    const cdSize = central.reduce((s, a) => s + a.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+}
+
+// ===== LECTURE DES .CDB =====
+async function addFiles(items) {
+    await sqlReady;
+    if (!SQL) return;
+    const files = items.filter((x) => /\.cdb$/i.test(x.file.name));
+    if (!files.length) return YGO.toast('Aucun .cdb trouvé.', 'err');
+    let added = 0, bad = 0;
+    for (const { file: f, rel } of files) {
+        if (loaded.has(rel)) continue;
+        setStatus(`Lecture de ${rel}…`);
+        try {
+            const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+            const t = db.exec('SELECT id, name FROM texts');
+            for (const [id, name] of (t.length ? t[0].values : [])) {
+                if (!name) continue;
+                if (!names.has(id)) names.set(id, new Set());
+                names.get(id).add(name);
+                const n = norm(name);
+                if (!n) continue;
+                if (!byName.has(n)) byName.set(n, new Set());
+                byName.get(n).add(id);
+            }
+            try {
+                const d = db.exec('SELECT id, alias FROM datas');
+                for (const [id, alias] of (d.length ? d[0].values : [])) if (alias) aliasOf.set(id, alias);
+            } catch (e) { /* pas de datas */ }
+            db.close();
+            loaded.add(rel); nbCdb++; added++;
+        } catch (e) { bad++; }
+        await tick();
+    }
+    setStatus(`${nbCdb} .cdb lus · ${names.size.toLocaleString('fr-FR')} cartes` + (bad ? ` · ${bad} fichier(s) ignoré(s)` : '') + '.');
+    YGO.toast(`${added} .cdb ajoutés.`);
+    analyse();
+}
+
+const asItems = (l) => l.map((f) => ({ file: f, rel: f.webkitRelativePath || f.name }));
+$('folderInput').addEventListener('change', (e) => { const l = [...e.target.files]; e.target.value = ''; addFiles(asItems(l)); });
+$('fileInput').addEventListener('change', (e) => { const l = [...e.target.files]; e.target.value = ''; addFiles(asItems(l)); });
+$('clearBtn').addEventListener('click', () => {
+    names.clear(); byName.clear(); aliasOf.clear(); loaded.clear(); nbCdb = 0; rows = [];
+    setStatus('Tout est vidé.'); render();
+});
+
+// ===== CORRESPONDANCE PAR LE NOM =====
+const rank = (id) => (id >= 100000000 ? 2 : 0) + (aliasOf.has(id) ? 1 : 0);   // passcode principal d'abord
+function matchOfficial(nameSet) {
+    for (const n of nameSet) for (const cand of [n, stripTag(n)]) {
+        const set = byName.get(norm(cand));
+        if (!set) continue;
+        const ids = [...set].filter((id) => id < CONFIG.CUSTOM_MIN_ID);
+        if (ids.length) return ids.sort((a, b) => rank(a) - rank(b) || a - b)[0];
+    }
+    return null;
+}
+
+function analyse() {
+    const min = Math.max(Number($('idMin').value) || CONFIG.CUSTOM_MIN_ID, CONFIG.CUSTOM_MIN_ID);
+    const max = Number($('idMax').value) || Infinity;
+    rows = [];
+    for (const [id, set] of names) {
+        if (id < min || id > max) continue;
+        const off = matchOfficial(set);
+        rows.push({ id, name: [...set][0], off, offName: off ? [...names.get(off)][0] : '' });
+    }
+    rows.sort((a, b) => a.id - b.id);
+    render();
+}
+$('anaBtn').addEventListener('click', analyse);
+
+// ===== AFFICHAGE =====
+const imgUrl = (off, k = 0) => CONFIG.IMG_URLS[k].replace('{}', off);
+
+function render() {
+    const ok = rows.filter((r) => r.off).length, miss = rows.length - ok;
+    const chips = $('chips'); chips.textContent = '';
+    if (rows.length) chips.append(
+        YGO.el('span', { className: 'chip', text: rows.length.toLocaleString('fr-FR') + ' customs' }),
+        YGO.el('span', { className: 'chip ok', text: ok.toLocaleString('fr-FR') + ' avec équivalent officiel' }),
+        YGO.el('span', { className: 'chip ' + (miss ? 'warn' : ''), text: miss.toLocaleString('fr-FR') + ' sans équivalent' }));
+    $('zipBtn').disabled = $('dirBtn').disabled = $('batBtn').disabled = !ok || busy;
+
+    const body = $('tbody'); body.textContent = '';
+    const list = rows.filter((r) => filter === 'all' || (filter === 'ok' ? r.off : !r.off));
+    if (!list.length) {
+        body.append(YGO.el('tr', {}, YGO.el('td', { colspan: 4, className: 'empty' },
+            YGO.el('i', { className: 'fa-solid fa-database' }),
+            rows.length ? 'Rien à afficher.' : 'Aucune carte custom trouvée (charge les .cdb ou ajuste la plage d\'ID).')));
+        return;
+    }
+    const preview = $('optPreview').checked;
+    const frag = document.createDocumentFragment();
+    for (const r of list) {
+        const cell = YGO.el('td', { className: 'preview-cell' });
+        if (r.off && preview) {
+            const img = YGO.el('img', { loading: 'lazy', alt: '' });
+            let k = 0;
+            img.onerror = () => { if (++k < CONFIG.IMG_URLS.length) img.src = imgUrl(r.off, k); };
+            img.src = imgUrl(r.off);
+            cell.append(img);
+        } else cell.append(YGO.el('div', { className: 'noimg' }, YGO.el('i', { className: 'fa-regular fa-image' })));
+        frag.append(YGO.el('tr', { className: r.off ? 'ok' : 'miss' },
+            YGO.el('td', { className: 'mono', text: r.id }),
+            YGO.el('td', { text: r.name }),
+            YGO.el('td', {}, r.off ? [r.offName + ' ', YGO.el('span', { className: 'mono dim', text: '(' + r.off + ')' })] : '— aucune carte officielle du même nom'),
+            cell));
+    }
+    body.append(frag);
+}
+$('tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('.tab'); if (!b) return;
+    filter = b.dataset.f;
+    document.querySelectorAll('#tabs .tab').forEach((t) => t.classList.toggle('active', t === b));
+    render();
+});
+$('optPreview').addEventListener('change', render);
+$('copyMissBtn').addEventListener('click', () => {
+    const miss = rows.filter((r) => !r.off).map((r) => r.id + '\t' + r.name);
+    if (!miss.length) return YGO.toast('Aucune carte sans équivalent.');
+    YGO.copy(miss.join('\n'), miss.length + ' carte(s) copiée(s).');
+});
+
+// ===== RÉCUPÉRATION DES IMAGES =====
+const cache = new Map();   // ID officiel -> Promise<{blob, ext} | null>
+
+async function localImage(off) {
+    if (!baseHandle) return null;
+    try {
+        const dir = await baseHandle.getDirectoryHandle('pics');
+        for (const ext of ['jpg', 'png']) {
+            try {
+                const f = await (await dir.getFileHandle(off + '.' + ext)).getFile();
+                if (f.size > 1000) return { blob: f, ext, from: 'local' };
+            } catch (e) { /* absent */ }
+        }
+    } catch (e) { /* pas de dossier pics */ }
+    return null;
+}
+async function remoteImage(off) {
+    for (let k = 0; k < CONFIG.IMG_URLS.length; k++) {
+        try {
+            const r = await fetch(imgUrl(off, k));
+            if (!r.ok) continue;
+            const b = await r.blob();
+            if (b.size > 1000 && /^image\//.test(b.type)) return { blob: b, ext: b.type.includes('png') ? 'png' : 'jpg', from: new URL(CONFIG.IMG_URLS[k]).host };
+        } catch (e) { /* CORS ou réseau : on essaie la source suivante */ }
+    }
+    return null;
+}
+function getOfficialImage(off) {
+    if (!cache.has(off)) cache.set(off, (async () => (await localImage(off)) || (await remoteImage(off)))());
+    return cache.get(off);
+}
+
+/** Parcourt les customs avec équivalent. skip(r) -> true pour ignorer ; onFile(r, img) enregistre. */
+async function runExport(onFile, skip) {
+    cache.clear();
+    const todo = rows.filter((r) => r.off);
+    const failed = []; let done = 0, saved = 0, skipped = 0, i = 0;
+    prog.show(); prog.set(0, 'Démarrage…');
+    const worker = async () => {
+        while (i < todo.length) {
+            const r = todo[i++];
+            try {
+                if (skip && await skip(r)) skipped++;
+                else {
+                    const img = await getOfficialImage(r.off);
+                    if (!img) { failed.push(r); log(`✗ ${r.id} ${r.name} → officielle ${r.off} : image introuvable`, 'warn'); }
+                    else { await onFile(r, img); saved++; }
+                }
+            } catch (e) { failed.push(r); log(`✗ ${r.id} : ${e.message}`, 'err'); }
+            done++;
+            prog.set(done / todo.length * 100, `${done} / ${todo.length}`);
+        }
+    };
+    await Promise.all(Array.from({ length: CONFIG.CONCURRENCY }, worker));
+    cache.clear();
+    return { saved, skipped, failed, total: todo.length };
+}
+function report(res, what) {
+    log(`Terminé : ${res.saved} image(s) ${what}` + (res.skipped ? `, ${res.skipped} déjà présente(s)` : '') + (res.failed.length ? `, ${res.failed.length} échec(s)` : '') + '.', res.failed.length ? 'warn' : 'ok');
+    if (res.failed.length && res.saved === 0 && res.total > 0)
+        log('Tout a échoué : le navigateur bloque sûrement les téléchargements (CORS). Utilise « Plan B : script .bat ».', 'err');
+}
+async function guard(fn) {
+    if (busy) return;
+    busy = true; render();
+    try { await fn(); } catch (e) { if (e.name !== 'AbortError') { log('Erreur : ' + e.message, 'err'); YGO.toast('Erreur : ' + e.message, 'err'); } }
+    busy = false; render();
+    setTimeout(() => prog.hide(), 1500);
+}
+
+$('zipBtn').addEventListener('click', () => guard(async () => {
+    const files = [];
+    log('Création du zip…');
+    const res = await runExport(async (r, img) => {
+        files.push({ name: `${r.id}.${img.ext}`, data: new Uint8Array(await img.blob.arrayBuffer()) });
+    });
+    if (!files.length) return report(res, 'dans le zip');
+    files.sort((a, b) => a.name.localeCompare(b.name));
+    const size = YGO.download(makeZip(files), 'images_custom.zip', 'application/zip');
+    report(res, 'dans le zip'); log(`images_custom.zip (${YGO.fmtBytes(size)}) téléchargé.`, 'ok');
+}));
+
+$('dirBtn').addEventListener('click', () => guard(async () => {
+    if (!window.showDirectoryPicker) throw new Error('Ce navigateur ne peut pas écrire dans un dossier (utilise Chrome ou Edge, ou le .zip).');
+    const dir = await window.showDirectoryPicker({ id: 'ygo-pics-out', mode: 'readwrite' });
+    log(`Écriture dans « ${dir.name} »…`);
+    const exists = async (name) => { try { await dir.getFileHandle(name); return true; } catch (e) { return false; } };
+    const skip = $('optSkip').checked ? async (r) => (await exists(r.id + '.jpg')) || (await exists(r.id + '.png')) : null;
+    const res = await runExport(async (r, img) => {
+        const w = await (await dir.getFileHandle(`${r.id}.${img.ext}`, { create: true })).createWritable();
+        await w.write(img.blob); await w.close();
+    }, skip);
+    report(res, 'écrite(s)');
+}));
+
+$('batBtn').addEventListener('click', () => {
+    const L = ['@echo off', 'chcp 65001 >nul', 'rem Images temporaires : image officielle du meme nom, enregistree sous l\'ID de la custom', 'if not exist pics mkdir pics'];
+    for (const r of rows.filter((x) => x.off)) {
+        const f = `pics\\${r.id}.jpg`;
+        L.push(`if not exist "${f}" ( curl -L -f -s -o "${f}" "${imgUrl(r.off, 0)}" || curl -L -f -s -o "${f}" "${imgUrl(r.off, 1)}" || echo Echec : ${r.id} )`);
+    }
+    L.push('echo Termine.', 'pause');
+    YGO.download(L.join('\r\n') + '\r\n', 'telecharger_images.bat', 'text/plain');
+    YGO.toast('Place le .bat à côté du dossier pics (ex. expansions\\VAACT) et lance-le.');
+});
+
+// ===== DOSSIER PROJECTIGNIS MÉMORISÉ (Chrome / Edge) =====
+const FS = !!window.showDirectoryPicker;
+const kv = (mode, fn) => new Promise((res, rej) => {
+    const r = indexedDB.open('ygo-cdb-finder', 1);   // même base que les autres outils : le dossier est partagé
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onerror = () => rej(r.error);
+    r.onsuccess = () => {
+        const tx = r.result.transaction('kv', mode), req = fn(tx.objectStore('kv'));
+        tx.oncomplete = () => res(req.result); tx.onerror = () => rej(tx.error);
+    };
+});
+const saveHandle = (h) => kv('readwrite', (st) => st.put(h, 'base'));
+const getHandle = () => kv('readonly', (st) => st.get('base')).catch(() => null);
+
+async function walk(dir, rel, out) {
+    for await (const [name, h] of dir.entries()) {
+        if (h.kind === 'directory') { if (!CONFIG.EXCLUDE_DIRS.includes(name.toLowerCase())) await walk(h, rel + '/' + name, out); }
+        else if (/\.cdb$/i.test(name)) out.push({ file: await h.getFile(), rel: rel + '/' + name });
+    }
+}
+async function loadFromHandle(base) {
+    baseHandle = base;
+    setStatus('Recherche des .cdb…');
+    const items = [], absent = [];
+    for (const p of CONFIG.SEARCH_PATHS) {
+        try {
+            let d = base;
+            for (const seg of p.split('/')) d = await d.getDirectoryHandle(seg);
+            await walk(d, p, items);
+        } catch (e) { absent.push(p); }
+    }
+    if (absent.length) log('Dossier(s) absent(s) dans « ' + base.name + ' » : ' + absent.join(', '), 'warn');
+    await addFiles(items);
+}
+async function pickBase() {
+    try {
+        const h = await window.showDirectoryPicker({ id: 'ygo-projectignis', mode: 'read' });
+        await saveHandle(h);
+        await loadFromHandle(h);
+    } catch (e) { if (e.name !== 'AbortError') YGO.toast('Erreur : ' + e.message, 'err'); }
+}
+$('loadBtn').addEventListener('click', async () => {
+    const h = await getHandle();
+    if (!h) return pickBase();
+    if ((await h.requestPermission({ mode: 'read' })) !== 'granted') return YGO.toast('Autorisation refusée.', 'err');
+    loadFromHandle(h);
+});
+$('changeBtn').addEventListener('click', pickBase);
+
+(async () => {
+    if (!FS) {
+        $('loadBtn').disabled = $('changeBtn').disabled = $('dirBtn').disabled = true;
+        $('manual').open = true;
+        return setStatus('Ce navigateur ne peut pas mémoriser un dossier (utilise Chrome ou Edge) : ajoute les dossiers à la main ci-dessous.');
+    }
+    const h = await getHandle();
+    if (h && CONFIG.AUTO_LOAD && (await h.queryPermission({ mode: 'read' })) === 'granted') return loadFromHandle(h);
+    setStatus(h ? 'Clique sur « Charger ProjectIgnis » (le navigateur redemande l\'autorisation).'
+                : `Clique sur « Charger ProjectIgnis » et choisis ${CONFIG.BASE} : une seule fois, il s'en souvient ensuite.`);
+})();
+</script>
+</body>
+</html>
