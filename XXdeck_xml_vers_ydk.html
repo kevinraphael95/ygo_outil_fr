@@ -11,7 +11,6 @@
 <style>
 /* ============================================================
    YGO Tools — Design system commun
-   Un seul fichier de style pour toutes les pages.
    ============================================================ */
 
 /* ---------- Tokens ---------- */
@@ -631,6 +630,15 @@ tr.miss td:nth-child(3) { color: var(--text-muted); }
             <button class="btn" id="changeBtn" type="button" title="Choisir un autre dossier ProjectIgnis"><i class="fa-solid fa-folder-tree"></i> Changer de dossier</button>
             <button class="btn" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Tout vider</button>
         </div>
+        
+        <!-- OPTION MODIFIÉE ICI -->
+        <div class="row" style="margin-top:10px; margin-bottom: 10px;">
+            <label class="check">
+                <input type="checkbox" id="optPreferCustom" checked>
+                <span>Ignorer les cartes officielles (ne garder <strong>que</strong> les cartes custom VAACT)</span>
+            </label>
+        </div>
+
         <details id="manual" style="margin-bottom:10px;">
             <summary class="hint" style="cursor:pointer;">Autre méthode (Firefox ou dossiers à la main)</summary>
             <div class="row" style="margin-top:8px;">
@@ -725,15 +733,39 @@ $('clearBtn').addEventListener('click', () => {
 });
 
 /** ID d'une carte du XML : passcode si présent, sinon recherche par nom dans les .cdb. */
-function findId(cardEl) {
+function findId(cardEl, deckAverageId) {
     const passcode = (cardEl.getAttribute('passcode') || '').trim();
-    if (/^\d+$/.test(passcode) && Number(passcode) > 0) return Number(passcode);
+    const onlyCustom = $('optPreferCustom').checked; 
+
+    // Si on veut UNIQUEMENT du custom, on ignore le passcode et on cherche par nom
+    if (!onlyCustom && /^\d+$/.test(passcode) && Number(passcode) > 0) {
+        return Number(passcode);
+    }
+    
     const name = (cardEl.textContent || '').trim();
+
     for (const candidate of [name, stripTag(name)]) {
         const set = byName.get(norm(candidate));
         if (!set || !set.size) continue;
-        const ids = [...set];
-        return ids.find((id) => id >= CONFIG.CUSTOM_MIN_ID) ?? ids[0];
+        
+        let ids = [...set];
+        
+        if (onlyCustom) {
+            // On filtre pour ne garder QUE les customs
+            ids = ids.filter((id) => id >= CONFIG.CUSTOM_MIN_ID);
+            if (!ids.length) return null; // Aucun custom trouvé, on abandonne
+            
+            // Si on a plusieurs versions custom, on prend celle qui est la plus proche de la moyenne du deck
+            if (ids.length > 1 && deckAverageId > 0) {
+                ids.sort((a, b) => Math.abs(a - deckAverageId) - Math.abs(b - deckAverageId));
+                return ids[0];
+            }
+            // Sinon on prend la première
+            return ids.sort((a, b) => a - b)[0];
+        }
+        
+        // Si l'option n'est pas cochée, on accepte tout
+        return ids.sort((a, b) => a - b)[0];
     }
     return null;
 }
@@ -742,13 +774,27 @@ function convertXml(text, filename) {
     const doc = new DOMParser().parseFromString(text, 'application/xml');
     if (doc.querySelector('parsererror')) throw new Error('XML invalide');
     const deck = doc.documentElement;
+    
+    // --- Nouvelle étape : calculer l'ID moyen du deck (pour trouver le bon "bloc" d'ID) ---
+    let sum = 0, count = 0;
+    for (const part of deck.children) {
+        for (const c of part.children) {
+            const passcode = (c.getAttribute('passcode') || '').trim();
+            if (/^\d+$/.test(passcode) && Number(passcode) > CONFIG.CUSTOM_MIN_ID) {
+                sum += Number(passcode);
+                count++;
+            }
+        }
+    }
+    const deckAverageId = count > 0 ? Math.round(sum / count) : 0;
+
     const sec = { main: [], extra: [], side: [] };
     const missing = [];
     for (const part of deck.children) {
         const tag = part.tagName.toLowerCase();
         if (!(tag in sec)) continue;
         for (const c of part.children) {
-            const id = findId(c);
+            const id = findId(c, deckAverageId);
             if (id == null) missing.push(`(${tag}) ${(c.textContent || '').trim()}`);
             else sec[tag].push(id);
         }
