@@ -15,6 +15,20 @@
     .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
     .opt input { margin-top: 4px; }
     .opt small { display: block; opacity: .7; }
+
+    /* Styles pour la modale */
+    .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal.hidden { display: none; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+    .modal-content h2 { margin: 0; padding: 20px 20px 0; }
+    .modal-content .hint { padding: 10px 20px; margin: 0; }
+    .dup-list { flex: 1; overflow-y: auto; padding: 10px 20px; display: flex; flex-direction: column; gap: 8px; }
+    .dup-item { display: flex; gap: 15px; align-items: flex-start; padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+    .dup-item input[type="checkbox"] { margin-top: 4px; width: 20px; height: 20px; }
+    .dup-item-info { flex: 1; font-size: 13px; }
+    .dup-item-info strong { display: block; font-size: 14px; color: var(--text); }
+    .dup-item-info small { display: block; color: var(--text-muted); margin-top: 2px; }
+    .dup-item-keep { color: var(--success); font-weight: 600; margin-left: 5px; }
 </style>
 </head>
 <body>
@@ -80,7 +94,7 @@
                 <span>Inclure les cartes non trouvées<small>Elles sont ajoutées au CDB avec leur nom et un effet générique.</small></span></label>
             <label class="opt"><input type="checkbox" id="optCustomOt">
                 <span>Forcer toutes les cartes en tant que Custom (ot = 0x20 / 32)<small>Définit l'origine des cartes sur Custom.</small></span></label>
-            <label class="opt"><input type="checkbox" id="optExcludeEffect" checked>
+            <label class="opt"><input type="checkbox" id="optExcludeEffect">
                 <span>Vérifier l'effet pour l'exclusion<small>Si coché, une carte n'est exclue que si son nom ET son effet sont identiques à ceux du fichier d'exclusion. Décoché : l'exclusion se fait uniquement sur le nom.</small></span></label>
         </div>
 
@@ -104,6 +118,19 @@
 
 <footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
+
+<!-- Fenêtre de choix pour les doublons -->
+<div id="dup-modal" class="modal hidden">
+    <div class="modal-content">
+        <h2 class="card-title"><i class="fa-solid fa-code-branch"></i> Cartes similaires trouvées</h2>
+        <p class="hint">Ces cartes ont le même nom de base que des cartes dans vos fichiers d'exclusion. Cochez celles que vous voulez <strong>garder</strong> dans le CDB final. (Décoché = supprimé).</p>
+        <div id="dup-list" class="dup-list"></div>
+        <div class="actions" style="margin-top: 15px; justify-content: flex-end; padding: 0 20px 20px;">
+            <button id="dup-validate" class="btn btn-primary" type="button"><i class="fa-solid fa-check"></i> Valider et continuer</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
 <script>
 const { $ } = YGO;
@@ -399,7 +426,7 @@ btn.addEventListener('click', async () => {
     const useMissing = $('optMissing').checked;
     const customOt = $('optCustomOt').checked;
     const excludeFiles = [...$('excludeFile').files];
-    const checkExcludeEffect = $('optExcludeEffect').checked; // Nouvelle option
+    const checkExcludeEffect = $('optExcludeEffect').checked; // Par défaut décoché maintenant
     const startRaw = $('startId').value.trim();
     if (renum && startRaw !== '' && !(parseInt(startRaw, 10) >= 1)) return YGO.toast("ID de la première carte invalide.", 'err');
 
@@ -507,6 +534,8 @@ btn.addEventListener('click', async () => {
             });
         };
 
+        const toVerify = []; // Liste des cartes à vérifier manuellement (même nom, effet différent)
+
         for (const e of list) {
             let src = null, how = '', stripped = false;
             if (e.pc) {
@@ -548,7 +577,9 @@ btn.addEventListener('click', async () => {
                         rapport.push(`${e.cid} | ${e.card} | déjà présente dans le fichier à exclure (${excl.id} | ${excl.card} dans "${excl.source}") avec le même effet | ignorée`);
                         continue;
                     } else {
-                        rapport.push(`${e.cid} | ${e.card} | même nom que ${excl.card} (${excl.id} dans "${excl.source}") mais effet différent | gardée`);
+                        // Même nom, effet différent -> à vérifier manuellement
+                        toVerify.push({ e, excl, datas, texts });
+                        continue;
                     }
                 } else {
                     // Mode simple : on jette juste si le nom correspond
@@ -583,6 +614,22 @@ btn.addEventListener('click', async () => {
             found.push({ cid: e.cid, card: e.card, datas, texts });
         }
         if (nSame) out.log(`🧹 ${nSame} carte(s) identique(s) (mêmes stats et même effet) ignorée(s).`);
+
+        // ---- GESTION DES DOUBLONS POTENTIELS (Pop-up) ----
+        if (toVerify.length > 0) {
+            out.log(`❓ ${toVerify.length} carte(s) similaire(s) à vérifier…`);
+            const keptCards = await askUserForDuplicates(toVerify);
+            
+            keptCards.forEach(({ e, datas, texts }) => {
+                // On applique le patch si c'est une carte custom
+                if (norm(e.card) !== norm(texts.name)) { 
+                    texts.desc = "[EFFET CUSTOM À REMPLIR]";
+                }
+                found.push({ cid: e.cid, card: e.card, datas, texts });
+            });
+            
+            out.log(`→ ${keptCards.length} carte(s) gardée(s) sur ${toVerify.length}.`);
+        }
 
         // ---- Renumérotation ----
         let mapLines = [];
@@ -663,6 +710,49 @@ btn.addEventListener('click', async () => {
         btn.disabled = false;
     }
 });
+
+// Fonction pour afficher la modale de choix des doublons
+async function askUserForDuplicates(toVerify) {
+    if (toVerify.length === 0) return [];
+    
+    const modal = $('dup-modal');
+    const list = $('dup-list');
+    list.innerHTML = '';
+    
+    toVerify.forEach((item, index) => {
+        const wrapper = document.createElement('label');
+        wrapper.className = 'dup-item';
+        
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = false; // Par défaut, on ne garde pas (donc on considère que c'est un doublon)
+        cb.dataset.index = index;
+        
+        const info = document.createElement('div');
+        info.className = 'dup-item-info';
+        info.innerHTML = `<strong>${item.e.card}</strong> <span class="dup-item-keep">(sera gardé si coché)</span>
+            <small>ID: ${item.e.cid} | Nom dans l'exclusion: ${item.excl.card} (${item.excl.source})</small>
+            <small>Effet XML: ${item.texts.desc || 'Aucun effet (officiel copié)'}</small>
+            <small>Effet Exclusion: ${item.excl.desc || 'Aucun effet'}</small>`;
+        
+        wrapper.appendChild(cb);
+        wrapper.appendChild(info);
+        list.appendChild(wrapper);
+    });
+    
+    modal.classList.remove('hidden');
+    
+    return new Promise(resolve => {
+        $('dup-validate').onclick = () => {
+            const kept = [];
+            document.querySelectorAll('#dup-list input[type="checkbox"]').forEach(cb => {
+                if (cb.checked) kept.push(toVerify[cb.dataset.index]);
+            });
+            modal.classList.add('hidden');
+            resolve(kept);
+        };
+    });
+}
 
 out.log('Choisis le fichier XML (les CDB officiels sont pris sur le dépôt si tu n\'en sélectionnes pas), puis lance la génération.');
 </script>
