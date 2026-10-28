@@ -320,8 +320,10 @@ async function handleFiles(files) {
     for (const f of files) {
         try {
             let r;
-            if (/\.json$/i.test(f.name)) r = convertJson(await f.text(), f.name);
-            else if (/\.xml$/i.test(f.name)) r = convertXml(await f.text(), f.name);
+            const text = await f.text();
+            const isJson = text.trim().startsWith('{');
+            if (isJson) r = convertJson(text, f.name);
+            else if (/\.xml$/i.test(f.name) || text.trim().startsWith('<')) r = convertXml(text, f.name);
             else continue;
 
             results.push({ filename: safeName(f.name.replace(/\.[^.]+$/, '')) + '.ydk', ydk: r.ydk });
