@@ -127,12 +127,12 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--gold); c
         <div class="hero-icon"><i class="fa-solid fa-file-export"></i></div>
         <div>
             <h1>Deck vers <span class="grad">YDK</span></h1>
-            <p>Glisse tes decks .xml ou .json : les cartes sont retrouvées et tu récupères des .ydk prêts pour EDOPro.</p>
+            <p>Glisse tes decks .xml, .json ou .txt : les cartes sont retrouvées et tu récupères des .ydk prêts pour EDOPro.</p>
         </div>
     </section>
 
     <div class="card">
-        <h2 class="card-title"><i class="fa-solid fa-folder-open"></i> 1. Fichiers .cdb <small>(Optionnel pour le JSON)</small></h2>
+        <h2 class="card-title"><i class="fa-solid fa-folder-open"></i> 1. Fichiers .cdb <small>(Optionnel pour le JSON/TXT)</small></h2>
         <div class="row">
             <button class="btn btn-primary" id="loadBtn" type="button"><i class="fa-solid fa-bolt"></i> Charger ProjectIgnis</button>
             <button class="btn" id="changeBtn" type="button"><i class="fa-solid fa-folder-tree"></i> Changer de dossier</button>
@@ -159,14 +159,14 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--gold); c
     </div>
 
     <div class="card">
-        <h2 class="card-title"><i class="fa-solid fa-file-code"></i> 2. Decks .xml ou .json</h2>
+        <h2 class="card-title"><i class="fa-solid fa-file-code"></i> 2. Decks .xml, .json ou .txt</h2>
         <label class="dropzone" id="drop" for="xmlInput">
             <i class="fa-solid fa-cloud-arrow-up"></i>
-            <span><strong>Glisse tes fichiers ici</strong> (.xml ou .json)</span>
+            <span><strong>Glisse tes fichiers ici</strong> (.xml, .json ou .txt)</span>
         </label>
-        <input type="file" id="xmlInput" accept=".xml,.json" multiple class="hidden">
+        <input type="file" id="xmlInput" accept=".xml,.json,.txt" multiple class="hidden">
         <div class="row" style="margin-top:14px;">
-            <button class="btn btn-primary" id="allBtn" type="button" disabled><i class="fa-solid fa-download"></i> Tout télécharger (.ydk)</button>
+            <button class="btn btn-primary" id="allBtn" type="button" disabled><i class="fa-solid fa-download"></i> Tout télécharger (.zip)</button>
         </div>
         <div id="decks"></div>
     </div>
@@ -291,11 +291,42 @@ function convertJson(text, filename) {
     const lines = ['#created by json_to_ydk', '#main', ...sec.main, '#extra', ...sec.extra, '!side', ...sec.side];
     
     return { 
-        name: data.name || filename.replace(/\.json$/i, ''), 
+        name: data.name || filename.replace(/\.[^.]+$/, ''), 
         ydk: lines.join('\n') + '\n', 
         counts: { main: sec.main.length, extra: sec.extra.length, side: sec.side.length }, 
         missing: [] 
     };
+}
+
+// ===== ZIP =====
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = (b) => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+function makeZip(files) {
+    const enc = new TextEncoder(), parts = [], central = [];
+    const d = new Date();
+    const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    let offset = 0;
+    for (const f of files) {
+        const name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+        const lh = new DataView(new ArrayBuffer(30));
+        lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+        lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true);
+        lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+        const ch = new DataView(new ArrayBuffer(46));
+        ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+        ch.setUint16(12, time, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true);
+        ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+        ch.setUint32(42, offset, true);
+        parts.push(new Uint8Array(lh.buffer), name, data);
+        central.push(new Uint8Array(ch.buffer), name);
+        offset += 30 + name.length + data.length;
+    }
+    const cdSize = central.reduce((s, a) => s + a.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
 }
 
 const safeName = (s) => s.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'deck';
@@ -315,13 +346,14 @@ function renderDeck(r, filename) {
 }
 
 async function handleFiles(files) {
-    if (!nbCdb) YGO.toast('Info : Aucun .cdb chargé (le JSON marchera, le XML risque d\'avoir des manques).');
+    if (!nbCdb) YGO.toast('Info : Aucun .cdb chargé (le JSON/TXT marchera, le XML risque d\'avoir des manques).');
     $('decks').innerHTML = ''; results.length = 0;
     for (const f of files) {
         try {
             let r;
             const text = await f.text();
             const isJson = text.trim().startsWith('{');
+            
             if (isJson) r = convertJson(text, f.name);
             else if (/\.xml$/i.test(f.name) || text.trim().startsWith('<')) r = convertXml(text, f.name);
             else continue;
@@ -341,8 +373,18 @@ const drop = $('drop');
 ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', (e) => handleFiles([...e.dataTransfer.files]));
-$('allBtn').addEventListener('click', async () => {
-    for (const r of results) { YGO.download(r.ydk, r.filename, 'text/plain'); await YGO.sleep(300); }
+
+$('allBtn').addEventListener('click', () => {
+    if (!results.length) return;
+    const used = new Set();
+    const files = results.map((r) => {
+        let name = r.filename, i = 2;
+        while (used.has(name.toLowerCase())) name = r.filename.replace(/\.ydk$/i, '') + ' (' + i++ + ').ydk';
+        used.add(name.toLowerCase());
+        return { name, data: r.ydk };
+    });
+    YGO.download(makeZip(files), 'decks_ydk.zip', 'application/zip');
+    YGO.toast(files.length + ' deck(s) dans decks_ydk.zip');
 });
 
 // ===== DOSSIER PROJECTIGNIS =====
