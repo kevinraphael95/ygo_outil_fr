@@ -1,9 +1,12 @@
 /* ============================================================
-   YGO Tools — utilitaires communs (thème, toasts, console, I/O)
+   YGO Tools — utilitaires communs (thème, toasts, console, I/O, données du dépôt)
    Chargé dans le <head> pour appliquer le thème avant l'affichage.
    ============================================================ */
 (function () {
     'use strict';
+
+    // Doit être lu tout de suite (currentScript est null plus tard)
+    const SCRIPT_SRC = document.currentScript && document.currentScript.src;
 
     const KEY = 'ygo_theme';
     const root = document.documentElement;
@@ -51,6 +54,15 @@
     YGO.$ = (id) => document.getElementById(id);
     YGO.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+    /** Minuscules + sans accents (pour les recherches). */
+    YGO.fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    /** Retarde un appel (ex. recherche pendant la frappe). */
+    YGO.debounce = function (fn, ms = 200) {
+        let t;
+        return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    };
+
     /** Création rapide d'éléments DOM (texte toujours échappé). */
     YGO.el = function (tag, props, ...children) {
         const node = document.createElement(tag);
@@ -79,9 +91,10 @@
     YGO.toast = function (message, type = 'ok') {
         let box = document.getElementById('toasts');
         if (!box) {
-            box = YGO.el('div', { className: 'toasts', id: 'toasts', 'aria-live': 'polite' });
+            box = YGO.el('div', { className: 'toasts', id: 'toasts' });
             document.body.append(box);
         }
+        box.setAttribute('aria-live', 'polite');
         const t = YGO.el('div', { className: 'toast ' + type, role: 'status' },
             YGO.el('i', { className: 'fa-solid ' + (type === 'ok' ? 'fa-circle-check' : 'fa-circle-exclamation') }),
             YGO.el('span', { text: message }));
@@ -135,6 +148,7 @@
 
     /** Copie dans le presse-papiers (avec repli pour les contextes non sécurisés). */
     YGO.copy = async function (text, okMessage = 'Copié dans le presse-papiers !') {
+        let ok = true;
         try {
             await navigator.clipboard.writeText(text);
         } catch (e) {
@@ -142,10 +156,12 @@
             ta.value = text;
             document.body.append(ta);
             ta.select();
-            document.execCommand('copy');
+            try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
             ta.remove();
         }
-        if (okMessage) YGO.toast(okMessage);
+        if (ok) { if (okMessage) YGO.toast(okMessage); }
+        else YGO.toast('Impossible de copier', 'err');
+        return ok;
     };
 
     /** Affiche "N fichier(s)" sous un champ fichier / dossier. */
@@ -157,10 +173,70 @@
         });
     };
 
+    /** Lit un fichier choisi par l'utilisateur : 'text' (défaut) ou 'arrayBuffer'. */
+    YGO.readFile = (file, type = 'text') => (type === 'arrayBuffer' ? file.arrayBuffer() : file.text());
+
+    /** fetch + JSON avec quelques réessais (utile pour les API externes). */
+    YGO.fetchJSON = async function (url, { retries = 2, delay = 800 } = {}) {
+        let lastErr;
+        for (let i = 0; i <= retries; i++) {
+            try {
+                const r = await fetch(url);
+                if (r.status === 429 || r.status >= 500) throw new Error('HTTP ' + r.status);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return await r.json();
+            } catch (e) {
+                lastErr = e;
+                if (i < retries) await YGO.sleep(delay * (i + 1));
+            }
+        }
+        throw lastErr;
+    };
+
     /** Initialise sql.js (le script sql-wasm.js doit être chargé). */
     YGO.initSql = () => initSqlJs({
         locateFile: (f) => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/' + f,
     });
+
+    /* ---------- Données du dépôt (dossier data/) ---------- */
+    // Racine du dépôt déduite de l'emplacement de ygo.js : marche depuis n'importe quel sous-dossier.
+    const BASE = SCRIPT_SRC ? new URL('../', SCRIPT_SRC).href : '../';
+    YGO.url = (path) => new URL(path, BASE).href;
+
+    /** Charge un fichier du dépôt : type = 'text' | 'json' | 'arrayBuffer'. */
+    YGO.fetchRepo = async function (path, type = 'text') {
+        const r = await fetch(YGO.url(path));
+        if (!r.ok) throw new Error(path + ' : HTTP ' + r.status);
+        return r[type]();
+    };
+
+    const cache = new Map();
+    const once = (key, fn) => {
+        if (!cache.has(key)) cache.set(key, fn().catch((e) => { cache.delete(key); throw e; }));
+        return cache.get(key);
+    };
+    const CARDINFO = { en: 'cardinfo_english.txt', fr: 'cardinfo_fr.txt' };
+    let sqlPromise;
+
+    YGO.data = {
+        cardsDb:     () => once('cards', () => YGO.fetchRepo('data/cards-db.json', 'json')),
+        yugipediaDb: () => once('yugipedia', () => YGO.fetchRepo('data/yugipedia-db.json', 'json')),
+        cardinfo:    (lang = 'en') => once('ci-' + lang, () => YGO.fetchRepo('data/' + CARDINFO[lang])),
+
+        /** Ouvre un CDB du dépôt, ex. YGO.data.cdb('fr', 'cards.cdb'). Nécessite sql-wasm.js. */
+        cdb: (lang, name) => once(`cdb-${lang}-${name}`, async () => {
+            sqlPromise = sqlPromise || YGO.initSql();
+            const [SQL, buf] = await Promise.all([
+                sqlPromise, YGO.fetchRepo(`data/cdb/${lang}/${name}`, 'arrayBuffer')]);
+            return new SQL.Database(new Uint8Array(buf));
+        }),
+
+        /** Script Lua d'une carte, ex. YGO.data.script('official', 12345678) ; null s'il n'existe pas. */
+        script: async (folder, id) => {
+            const r = await fetch(YGO.url(`data/script/${folder}/c${id}.lua`));
+            return r.ok ? r.text() : null;
+        },
+    };
 
     window.YGO = YGO;
 })();
