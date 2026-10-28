@@ -15,7 +15,7 @@
 
 <header class="app-header">
     <div class="app-header-inner">
-        <a class="brand" href="../index.html" title="Accueil">
+        <a class="brand" href="index.html" title="Accueil">
             <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
             <div>
                 <div class="brand-name">YGO Tools</div>
@@ -44,17 +44,17 @@
 
     <h2 class="tool-section">Bases de données</h2>
     <div class="tool-grid">
-        <a class="tool-card" href="generate_ygopro_db.html">
+        <a class="tool-card" href="data_generator/generate_ygopro_db.html">
             <div class="hero-icon"><i class="fa-solid fa-database"></i></div>
             <h3>Générateur cards-db.json</h3>
             <p>Récupère la base de données anglaise de YGOPRODeck (avec le français, allemand, italien, portugais en option) directement depuis ton navigateur.</p>
         </a>
-        <a class="tool-card" href="generate_yugipedia_db.html">
+        <a class="tool-card" href="data_generator/generate_yugipedia_db.html">
             <div class="hero-icon"><i class="fa-solid fa-scroll"></i></div>
             <h3>Générateur yugipedia-db.json</h3>
             <p>Récupère les cartes de la base de données de Yugipedia de 6 templates, directement depuis ton navigateur.</p>
         </a>
-        <a class="tool-card" href="cardsinfo_translator.html">
+        <a class="tool-card" href="data_generator/cardsinfo_translator.html">
             <div class="hero-icon"><i class="fa-solid fa-language"></i></div>
             <h3>Card Info Translator</h3>
             <p>Traduit les infos du card info anglais avec les infos officielles trouvées sur Yugipedia.</p>
@@ -63,80 +63,104 @@
 
     <h2 class="tool-section">Scripts &amp; CDB</h2>
     <div class="tool-grid">
-        <a class="tool-card" href="scripts_finder.html">
-            <div class="hero-icon"><i class="fa-solid fa-code-merge"></i></div>
-            <h3>Scripts Finder</h3>
-            <p>Pour chaque carte custom identique à l'officielle ou modifiée : trouve le script de la carte officielle du même nom dans les CDB officiels.</p>
+        <a class="tool-card" href="cdb/dbcdb.html">
+            <div class="hero-icon"><i class="fa-solid fa-file-import"></i></div>
+            <h3>DuelingBook vers CDB</h3>
+            <p>Génère un CDB pour EDOPro à partir des JSON de decks DuelingBook, avec les fiches officielles, les doublons et les IDs gérés.</p>
         </a>
-        <a class="tool-card" href="token_organiser.html">
+        <a class="tool-card" href="cdb/reparer_cdb.html">
+            <div class="hero-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+            <h3>Réparer un CDB</h3>
+            <p>Corrige la race et l'attribut manquants (« ??? » dans EDOPro) d'un CDB déjà créé, sans le recréer.</p>
+        </a>
+        <a class="tool-card" href="cdb/xmlcdb.html">
+            <div class="hero-icon"><i class="fa-solid fa-database"></i></div>
+            <h3>XML vers CDB</h3>
+            <p>Génère un CDB à partir d'une liste XML / CSV (id, passcode, card) en copiant les cartes depuis les CDB officiels.</p>
+        </a>
+        <a class="tool-card" href="cdb/token_organiser.html">
             <div class="hero-icon"><i class="fa-solid fa-clone"></i></div>
             <h3>Réorganisateur de tokens</h3>
             <p>Place chaque token juste après la carte qui l'invoque et renumérote les IDs.</p>
         </a>
-        <a class="tool-card" href="kartouche.html">
+        <a class="tool-card" href="scripts/scripts_finder.html">
+            <div class="hero-icon"><i class="fa-solid fa-code-merge"></i></div>
+            <h3>Scripts Finder</h3>
+            <p>Pour chaque carte custom identique à l'officielle ou modifiée : trouve le script de la carte officielle du même nom dans les CDB officiels.</p>
+        </a>
+        <a class="tool-card" href="scripts/kartouche.html">
             <div class="hero-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
             <h3>Kartouche</h3>
             <p>Test, créer des scripts lua custom.</p>
         </a>
-        </a>
-        <a class="tool-card" href="lua_reference.html">
+        <a class="tool-card" href="scripts/lua_reference.html">
             <div class="hero-icon"><i class="fa-solid fa-book-open"></i></div>
             <h3>Référence Lua EDOPro</h3>
             <p>Recettes de scripts prêtes à copier, fonctions du core, constantes et fonctions obsolètes.</p>
-        </a>
-        <a class="tool-card" href="xmlcdb.html">
-            <div class="hero-icon"><i class="fa-solid fa-database"></i></div>
-            <h3>XML vers CDB</h3>
-            <p>Génère un CDB à partir d'une liste XML / CSV (id, passcode, card) en copiant les cartes depuis les CDB officiels.</p>
         </a>
     </div>
 
     <h2 class="tool-section">Fichiers</h2>
     <div class="tool-grid">
-        <a class="tool-card" href="files_comparator.html">
+        <a class="tool-card" href="files/files_comparator.html">
             <div class="hero-icon"><i class="fa-solid fa-code-compare"></i></div>
             <h3>Comparateur de fichiers</h3>
             <p>Compare deux fichiers JSON / CSV / CDB.</p>
         </a>
-        <a class="tool-card" href="illustration_lien_weserv.html">
+        <a class="tool-card" href="files/file_spliter.html">
+            <div class="hero-icon"><i class="fa-solid fa-scissors"></i></div>
+            <h3>Découpeur de fichiers</h3>
+            <p>Coupe un gros CSV, JSON ou TXT en morceaux valides, par taille, nombre ou groupes.</p>
+        </a>
+        <a class="tool-card" href="deck/weseerv_link_pics.html">
             <div class="hero-icon"><i class="fa-solid fa-link"></i></div>
             <h3>Convertisseur d'URL images</h3>
             <p>URLs Yugipedia → liens directs et weserv.</p>
         </a>
-        <a class="tool-card" href="file_spliter.html">
-            <div class="hero-icon"><i class="fa-solid fa-scissors"></i></div>
-            <h3>Découpeur de fichiers</h3>
-            <p>Coupe un gros CSV, JSON ou TXT en morceaux valides, par taille, nombre ou groupes.</p>
+        <a class="tool-card" href="deck/temp_pics.html">
+            <div class="hero-icon"><i class="fa-solid fa-images"></i></div>
+            <h3>Images temporaires</h3>
+            <p>Images temporaires des cartes custom.</p>
         </a>
     </div>
 
     <h2 class="tool-section">Decks &amp; Cartes</h2>
     <div class="tool-grid">
-        <a class="tool-card" href="deck_anal.html">
+        <a class="tool-card" href="deck/createdeck.html">
+            <div class="hero-icon"><i class="fa-solid fa-layer-group"></i></div>
+            <h3>Créer un deck</h3>
+            <p>Crée un deck (.ydk).</p>
+        </a>
+        <a class="tool-card" href="infos/deck_anal.html">
             <div class="hero-icon"><i class="fa-solid fa-diagram-project"></i></div>
             <h3>Deck Explorer</h3>
             <p>Explore les interactions d'un deck (JSON + CSV d'effets) avec les images de ton dossier.</p>
         </a>
-        <a class="tool-card" href="translator.html">
+        <a class="tool-card" href="deck/translator.html">
             <div class="hero-icon"><i class="fa-solid fa-language"></i></div>
             <h3>Traducteur</h3>
             <p>Traduit une carte, une decklist ou un .cdb.</p>
         </a>
-        <a class="tool-card" href="transformer.html">
+        <a class="tool-card" href="deck/transformer.html">
             <div class="hero-icon"><i class="fa-solid fa-file-code"></i></div>
             <h3>Transformeur JSON</h3>
             <p>Transforme une carte, une decklist ou un .cdb en JSON ygopro.org (un fichier par carte, en ZIP) ou en CSV.</p>
         </a>
-        <a class="tool-card" href="card_info.html">
+        <a class="tool-card" href="infos/card_info.html">
             <div class="hero-icon"><i class="fa-solid fa-file-code"></i></div>
             <h3>Fiche de carte</h3>
             <p>Cherche une carte (nom dans n'importe quelle langue, ou code), vois ses noms et effets dans toutes les langues disponibles, et récupère son JSON.</p>
+        </a>
+        <a class="tool-card" href="infos/cdb_searcher.html">
+            <div class="hero-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+            <h3>Chercheur de CDB</h3>
+            <p>Cherche des cartes dans des CDB.</p>
         </a>
     </div>
 
     <h2 class="tool-section">Guides</h2>
     <div class="tool-grid">
-        <a class="tool-card" href="ygocarder_deploy_tuto.html">
+        <a class="tool-card" href="infos/ygocarder_deploy_tuto.html">
             <div class="hero-icon"><i class="fa-solid fa-book-open"></i></div>
             <h3>Déployer ygocarder</h3>
             <p>Tuto GitHub Pages pas-à-pas, sans terminal.</p>
