@@ -42,6 +42,19 @@
         <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Lancer l'extraction Yugipedia</h2>
         <p class="card-sub">Parcourt les 6 templates de cartes et génère <code>yugipedia-db.json</code>. ATTENTION : c'est long, très très long (limite de débit de l'API), genre plus d'une heure. <strong>Garde cet onglet visible</strong> pendant l'extraction.</p>
 
+        <label class="check" style="margin-bottom:8px;">
+            <input type="checkbox" id="updateMode">
+            Mise à jour rapide <span class="hint">(part d'une base existante : ajoute les cartes nouvelles et retire celles supprimées)</span>
+        </label>
+        <div id="updateBox" class="hidden" style="margin:0 0 16px;">
+            <div class="field" style="margin-bottom:8px;">
+                <label for="baseFile">Base de départ</label>
+                <input type="file" id="baseFile" accept=".json">
+                <span class="hint">Vide = le <code>data/yugipedia-db.json</code> du dépôt. Les langues sont reprises de cette base.</span>
+            </div>
+            <p class="hint" style="margin:0;"><i class="fa-solid fa-circle-info"></i> Les corrections faites sur des cartes déjà présentes ne sont pas récupérées : refais une extraction complète de temps en temps.</p>
+        </div>
+
         <h3 class="card-sub" style="margin:0 0 8px;"><i class="fa-solid fa-language"></i> Langues des descriptions à ajouter</h3>
         <p class="hint" style="margin:0 0 8px;">L'anglais (<code>desc_en</code>) est toujours inclus. Les noms de cartes sont toujours inclus dans toutes les langues. Une langue cochée ajoute <code>desc_xx</code> et, pour les Pendules, <code>pendulum_desc_xx</code>.</p>
         <div id="langs" style="display:flex;flex-wrap:wrap;gap:6px 22px;margin-bottom:16px;">
@@ -264,19 +277,69 @@ function parseCard(wikitext, title, langs) {
 const normalize = (s) => String(s || '').toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 
+/* ---------- Mode mise à jour rapide ---------- */
+const CODES = ['fr', 'de', 'it', 'pt', 'es', 'ja', 'ko', 'tc', 'sc'];
+
+function syncMode() {
+    const on = $('updateMode').checked;
+    $('updateBox').classList.toggle('hidden', !on);
+    langBoxes.forEach((b) => { b.disabled = on; });   // en mise à jour, les langues sont reprises de la base existante
+    btn.innerHTML = on
+        ? '<i class="fa-solid fa-play"></i> Lancer la mise à jour'
+        : '<i class="fa-solid fa-play"></i> Démarrer l\'extraction des 6 templates';
+}
+$('updateMode').addEventListener('change', syncMode);
+syncMode();
+
+/** Langues déjà présentes dans une base (clés desc_xx). */
+function detectLangs(db) {
+    const vals = Object.values(db);
+    return CODES.filter((l) => vals.some((c) => c && ('desc_' + l) in c));
+}
+
+/** Base de départ : fichier choisi, sinon data/yugipedia-db.json du dépôt. */
+async function loadBase() {
+    const f = $('baseFile').files[0];
+    let base;
+    if (f) {
+        out.log('📂 Base de départ : ' + f.name);
+        base = JSON.parse(await f.text());
+    } else {
+        out.log('📂 Base de départ : data/yugipedia-db.json du dépôt…');
+        base = await YGO.fetchRepo('data/yugipedia-db.json', 'json');
+    }
+    if (!base || typeof base !== 'object' || Array.isArray(base)) throw new Error('Base invalide (un objet JSON est attendu).');
+    const vals = Object.values(base);
+    const withTitle = vals.filter((c) => c && c.title).length;
+    if (!vals.length || withTitle < vals.length * 0.9) {
+        throw new Error('Cette base n\'a pas de champ « title » : fais une extraction complète.');
+    }
+    return base;
+}
+
 btn.addEventListener('click', async () => {
-    const langs = langBoxes.filter((b) => b.checked).map((b) => b.value);
+    const update = $('updateMode').checked;
+    let langs = langBoxes.filter((b) => b.checked).map((b) => b.value);
+    let db = {};
 
     btn.disabled = true;
+    $('updateMode').disabled = true;
+    $('baseFile').disabled = true;
     langBoxes.forEach((b) => { b.disabled = true; });
     progress.show();
     out.clear();
     try {
+        if (update) {
+            db = await loadBase();
+            langs = detectLangs(db);
+            out.log(`♻️ Mise à jour d'une base de ${Object.keys(db).length} entrées.`);
+        }
         out.log(`🌐 Descriptions : EN${langs.length ? ' + ' + langs.map((l) => l.toUpperCase()).join(', ') : ' seulement'}`);
 
         /* Étape 1 : titres (en cas d'erreur : on passe au template suivant, comme le script) */
         out.log('📥 Récupération des pages de cartes (6 templates)...');
         const titles = new Set();
+        let titlesComplete = true;
         for (let t = 0; t < TEMPLATES.length; t++) {
             const tpl = 'Template:' + TEMPLATES[t];
             progress.set(2 + (t / TEMPLATES.length) * 8, 'Titres : ' + TEMPLATES[t]);
@@ -288,6 +351,7 @@ btn.addEventListener('click', async () => {
                 if (cont) params.eicontinue = cont;
                 try {
                     const data = await fetchJson(params);
+                    if (data?.error) throw new Error(data.error.code || 'erreur API');
                     const members = data?.query?.embeddedin || [];
                     for (const m of members) titles.add(m.title);
                     tplCount += members.length;
@@ -296,6 +360,7 @@ btn.addEventListener('click', async () => {
                     if (!cont) break;
                 } catch (e) {
                     out.log('  ⚠️ Erreur: ' + e.message, 'warn');
+                    titlesComplete = false;
                     break;
                 }
                 await YGO.sleep(DELAY);
@@ -304,8 +369,32 @@ btn.addEventListener('click', async () => {
         if (!titles.size) throw new Error('Aucun titre trouvé.');
         out.log(`✅ ${titles.size} titres collectés au total`, 'ok');
 
+        /* Mise à jour : on ne récupère que les pages nouvelles, on retire les pages disparues */
+        let toFetch = [...titles];
+        let removed = 0;
+        if (update) {
+            const known = new Map();   // titre de page -> clés de la base
+            for (const [k, c] of Object.entries(db)) {
+                if (!c || !c.title) continue;
+                if (!known.has(c.title)) known.set(c.title, []);
+                known.get(c.title).push(k);
+            }
+            toFetch = [...titles].filter((t) => !known.has(t));
+            const gone = [...known.keys()].filter((t) => !titles.has(t));
+            out.log(`→ ${toFetch.length} nouvelle(s) page(s), ${gone.length} disparue(s), ${known.size - gone.length} inchangée(s).`);
+            if (gone.length) {
+                // Garde-fou : rien n'est retiré si la liste des titres est incomplète ou si ça paraît énorme
+                if (titlesComplete && gone.length <= Math.max(50, known.size * 0.05)) {
+                    for (const t of gone) for (const k of known.get(t)) delete db[k];
+                    removed = gone.length;
+                } else {
+                    out.log(`⚠️ ${gone.length} page(s) disparue(s) NON retirées (${titlesComplete ? 'beaucoup trop nombreuses, vérifie-les' : 'liste des titres incomplète'}).`, 'warn');
+                }
+            }
+        }
+
         /* Étape 2 : wikitexts (en cas d'erreur : on saute le lot, comme le script) */
-        const arr = [...titles];
+        const arr = toFetch;
         out.log(`📥 Récupération du contenu de ${arr.length} pages...`);
         const wikitexts = new Map();
         let i = 0;
@@ -337,7 +426,6 @@ btn.addEventListener('click', async () => {
         /* Étape 3 : parsing */
         out.log('🔄 Parsing...');
         progress.set(84, 'Parsing des cartes…');
-        const db = {};
         let count = 0;
         for (const [title, wt] of wikitexts) {
             const card = parseCard(wt, title, langs);
@@ -350,6 +438,14 @@ btn.addEventListener('click', async () => {
         }
         out.log(`✅ ${count} cartes uniques parsées`, 'ok');
         out.log(`✅ ${Object.keys(db).length} entrées totales`, 'ok');
+
+        if (update && !count && !removed) {
+            progress.set(100, 'Déjà à jour');
+            out.log('✅ Déjà à jour : rien à ajouter ni à retirer, aucun fichier généré.', 'ok');
+            YGO.toast('Déjà à jour !');
+            return;
+        }
+        if (update) out.log(`♻️ ${count} carte(s) ajoutée(s), ${removed} retirée(s).`, 'ok');
 
         /* Export */
         progress.set(95, 'Génération du fichier…');
@@ -365,7 +461,9 @@ btn.addEventListener('click', async () => {
         YGO.toast("Erreur pendant l'extraction", 'err');
     } finally {
         btn.disabled = false;
-        langBoxes.forEach((b) => { b.disabled = false; });
+        $('updateMode').disabled = false;
+        $('baseFile').disabled = false;
+        langBoxes.forEach((b) => { b.disabled = $('updateMode').checked; });
     }
 });
 </script>
