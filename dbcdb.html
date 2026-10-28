@@ -106,30 +106,28 @@ const RACE = {};
 const ATTR = {};
 const ABILITY = { tuner: 0x1000, spirit: 0x200, union: 0x400, gemini: 0x800, toon: 0x400000 };
 
-// --- CHARGEMENT DES TRADUCTIONS ---
+// --- CHARGEMENT DES NOMS ANGLAIS (races, attributs) depuis le dépôt ---
+// DuelingBook donne les races et attributs en anglais : il faut cardinfo_english.txt (et non cardinfo_fr.txt).
 async function loadTranslations() {
-    out.log('🌐 Téléchargement des traductions…');
-    try {
-        const url = 'https://raw.githubusercontent.com/kevinraphael95/ygo_outil_fr/main/data/cardinfo_fr.txt';
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const text = await resp.text();
-        let section = '';
-        for (const line of text.split('\n')) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('##')) { section = trimmed.substring(2); continue; }
-            if (!section || !trimmed || trimmed.startsWith('#')) continue;
-            const parts = trimmed.split(/\t+/);
-            if (parts.length < 2) continue;
-            const code = parseInt(parts[0], 16);
-            const name = parts[1].trim().toLowerCase();
-            if (section === 'race') RACE[name] = code;
-            else if (section === 'attribute') ATTR[name] = code;
-        }
-        out.log('✅ Traductions chargées.', 'ok');
-    } catch (e) {
-        out.log('❌ Erreur de téléchargement des traductions : ' + e.message, 'err');
+    out.log('🌐 Téléchargement de cardinfo_english.txt…');
+    const url = 'https://raw.githubusercontent.com/kevinraphael95/ygo_outil_fr/main/data/cardinfo_english.txt';
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('cardinfo_english.txt : HTTP ' + resp.status);
+    const text = await resp.text();
+    let section = '';
+    for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('##')) { section = trimmed.substring(2); continue; }
+        if (!section || !trimmed || trimmed.startsWith('#')) continue;
+        const parts = trimmed.split(/\t+/);
+        if (parts.length < 2) continue;
+        const code = parseInt(parts[0], 16);
+        const name = parts[1].trim().toLowerCase();
+        if (section === 'race') RACE[name] = code;
+        else if (section === 'attribute') ATTR[name] = code;
     }
+    if (!Object.keys(RACE).length || !Object.keys(ATTR).length) throw new Error('races/attributs introuvables dans cardinfo_english.txt');
+    out.log('✅ Races et attributs chargés.', 'ok');
 }
 
 // --- CHARGEMENT DES CDB OFFICIELS (TOUS LES CDB DU DEPOT) ---
@@ -198,14 +196,16 @@ function toCdb(c) {
         if (col.includes('xyz')) type |= 0x800000;
         if (col.includes('link')) type |= 0x4000000;
         if (col.includes('token')) type |= 0x4000;
-        if (col.includes('pendulum') || c.pendulum) type |= 0x1000000;
+        if (col.includes('pendulum') || Number(c.pendulum)) type |= 0x1000000;
         if (c.is_effect && !col.includes('normal')) type |= 0x20;
-        if (c.flip) type |= 0x200000;
+        if (Number(c.flip)) type |= 0x200000;
         for (const a of String(c.ability || '').toLowerCase().split(/[\/,]/)) {
             if (ABILITY[a.trim()]) type |= ABILITY[a.trim()];
         }
         race = RACE[sub] || 0;
         attribute = ATTR[String(c.attribute || '').toLowerCase()] || 0;
+        if (!race) out.log(`⚠️ Race inconnue « ${c.type} » pour ${c.name}`, 'warn');
+        if (!attribute) out.log(`⚠️ Attribut inconnu « ${c.attribute} » pour ${c.name}`, 'warn');
         level = num(c.level);
         const scale = num(c.scale);
         if (type & 0x1000000) level = level | (scale << 24) | (scale << 16);
@@ -258,7 +258,7 @@ btn.addEventListener('click', async () => {
 
         let list = [];
 
-        // 1. Lecture des JSON (avec vérification des doublons internes)
+        // 1. Lecture des JSON (ordre Main, Side, Extra comme les XML)
         for (const f of files) {
             out.log('📄 Lecture de ' + f.name + '…');
             let data;
@@ -269,8 +269,8 @@ btn.addEventListener('click', async () => {
             if (Array.isArray(data)) for (const c of data) rows.push(c);
             else if (data) {
                 if (data.main) for (const c of data.main) rows.push(c);
-                if (data.extra) for (const c of data.extra) rows.push(c);
                 if (data.side) for (const c of data.side) rows.push(c);
+                if (data.extra) for (const c of data.extra) rows.push(c);
             }
 
             for (const c of rows) {
@@ -369,6 +369,8 @@ btn.addEventListener('click', async () => {
     } catch (err) {
         out.log('❌ Erreur : ' + err.message, 'err');
     } finally {
+        officialDbs.forEach((d) => { try { d.close(); } catch (e) {} });
+        officialDbs.length = 0;
         btn.disabled = false;
     }
 });
