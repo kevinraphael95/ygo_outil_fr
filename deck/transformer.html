@@ -134,7 +134,7 @@ function scanKeys(url) {
 
 async function loadDb() {
     try {
-        const r = await const r = await fetch('../data/cards-db.json');;
+        const r = await const r = await fetch('../data/cards-db.json');
         if (r.ok) for (const [rawId, c] of Object.entries(await r.json())) {
             const id = String(rawId);
             DB.cards.set(id, c);
@@ -144,7 +144,7 @@ async function loadDb() {
         }
     } catch (e) { out.log('cards-db.json indisponible : ' + e.message, 'warn'); }
     try {
-        const r = await const r = await fetch('../data/yugipedia-db.json');;
+        const r = await const r = await fetch('../data/yugipedia-db.json');
         if (r.ok) for (const [k, c] of Object.entries(await r.json())) {
             if (!c.en && !c.fr) continue;
             DB.yugi.set(k, c);
