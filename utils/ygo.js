@@ -57,6 +57,21 @@
     /** Minuscules + sans accents (pour les recherches). */
     YGO.fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+    /** Normalise un nom : espaces compactés, minuscules (comparaison de noms de cartes). */
+    YGO.norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+    /** Retire le suffixe entre parenthèses : « Gold Gadget (Buff) » → « Gold Gadget ». */
+    YGO.stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
+
+    /** Exécute fn sur chaque élément avec au plus `limit` appels en parallèle. */
+    YGO.pool = async function (items, limit, fn) {
+        let i = 0;
+        const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+            while (i < items.length) await fn(items[i++]);
+        });
+        await Promise.all(workers);
+    };
+
     /** Retarde un appel (ex. recherche pendant la frappe). */
     YGO.debounce = function (fn, ms = 200) {
         let t;
@@ -200,8 +215,8 @@
 
     /* ---------- Données du dépôt (dossier data/) ---------- */
     // Racine du dépôt déduite de l'emplacement de ygo.js : marche depuis n'importe quel sous-dossier.
-    const BASE = SCRIPT_SRC ? new URL('../', SCRIPT_SRC).href : '../';
-    YGO.url = (path) => new URL(path, BASE).href;
+    const BASE = new URL('../', SCRIPT_SRC || document.baseURI).href;
+    YGO.url = (path) => new URL(path.split('/').map(encodeURIComponent).join('/'), BASE).href;
 
     /** Charge un fichier du dépôt : type = 'text' | 'json' | 'arrayBuffer'. */
     YGO.fetchRepo = async function (path, type = 'text') {
@@ -235,6 +250,85 @@
         script: async (folder, id) => {
             const r = await fetch(YGO.url(`data/script/${folder}/c${id}.lua`));
             return r.ok ? r.text() : null;
+        },
+    };
+
+    /* ---------- Liste des fichiers du dépôt (data/manifest.json) ---------- */
+    // Un site statique ne peut pas lister un dossier : data/manifest.json (généré par la
+    // GitHub Action) contient la liste des CDB par langue et des dossiers de scripts.
+    function inferRepo() {
+        const h = location.hostname;
+        if (!h.endsWith('.github.io')) return null;
+        const owner = h.split('.')[0];
+        const repo = location.pathname.split('/').filter(Boolean)[0];
+        return owner && repo ? { owner, repo } : null;
+    }
+
+    async function manifestFromGitHub() {
+        const r = inferRepo();
+        if (!r) throw new Error('data/manifest.json introuvable (voir le workflow « manifest »)');
+        const resp = await fetch(`https://api.github.com/repos/${r.owner}/${r.repo}/git/trees/main?recursive=1`);
+        if (!resp.ok) {
+            throw new Error(resp.status === 403
+                ? "data/manifest.json introuvable et limite de l'API GitHub atteinte"
+                : 'data/manifest.json introuvable (API GitHub : HTTP ' + resp.status + ')');
+        }
+        const m = { cdb: {}, script: [] };
+        const folders = new Set();
+        for (const t of (await resp.json()).tree) {
+            if (t.type !== 'blob') continue;
+            let x = /^data\/cdb\/([^/]+)\/([^/]+\.cdb)$/i.exec(t.path);
+            if (x) (m.cdb[x[1]] = m.cdb[x[1]] || []).push(x[2]);
+            x = /^data\/script\/([^/]+)\//.exec(t.path);
+            if (x) folders.add(x[1]);
+        }
+        m.script = [...folders].sort();
+        return m;
+    }
+
+    YGO.data.manifest = () => once('manifest', async () => {
+        try { return await YGO.fetchRepo('data/manifest.json', 'json'); }
+        catch (e) { return manifestFromGitHub(); }
+    });
+
+    /** Fichier du dépôt présenté comme un File : { name, arrayBuffer() } (téléchargé une seule fois). */
+    function repoFile(path) {
+        let buf = null;
+        return {
+            name: path.split('/').pop(),
+            arrayBuffer() {
+                if (!buf) buf = YGO.fetchRepo(path, 'arrayBuffer').catch((e) => { buf = null; throw e; });
+                return buf;
+            },
+        };
+    }
+
+    /** CDB du dépôt pour une langue, ex. YGO.data.cdbFiles('en', { ignore: ['vaact'] }). */
+    YGO.data.cdbFiles = async function (lang = 'en', { ignore = [] } = {}) {
+        const m = await YGO.data.manifest();
+        const skip = ignore.map((t) => String(t).toLowerCase()).filter(Boolean);
+        return ((m.cdb && m.cdb[lang]) || [])
+            .filter((n) => !skip.some((t) => n.toLowerCase().includes(t)))
+            .map((n) => repoFile(`data/cdb/${lang}/${n}`));
+    };
+
+    /* ---------- Format CDB (partagé par les outils de génération) ---------- */
+    const DATAS_COLS = ['id', 'ot', 'alias', 'setcode', 'type', 'atk', 'def', 'level', 'race', 'attribute', 'category'];
+    const TEXTS_COLS = ['id', 'name', 'desc', ...Array.from({ length: 16 }, (_, i) => 'str' + (i + 1))];
+    YGO.cdb = {
+        DATAS_COLS,
+        TEXTS_COLS,
+        SCHEMA: `
+CREATE TABLE datas(id integer primary key, ot integer, alias integer, setcode integer, type integer, atk integer, def integer, level integer, race integer, attribute integer, category integer);
+CREATE TABLE texts(id integer primary key, name text, "desc" text, ${TEXTS_COLS.slice(3).map((c) => c + ' text').join(', ')});`,
+        /** Priorité d'un CDB quand une carte existe dans plusieurs (0 = prioritaire). */
+        rank(name) {
+            const n = String(name).toLowerCase();
+            if (n === 'cards.delta.cdb') return 0;
+            if (n === 'cards.cdb') return 1;
+            if (/rush|skill|goat/.test(n)) return 4;
+            if (/prerelease|release|unofficial/.test(n)) return 3;
+            return 2;
         },
     };
 

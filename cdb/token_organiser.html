@@ -46,6 +46,7 @@
         </div>
         <div class="actions">
             <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Réorganiser et télécharger</button>
+            <button id="mapBtn" class="btn hidden" type="button"><i class="fa-solid fa-list-ol"></i> Télécharger la correspondance des IDs</button>
         </div>
     </div>
 
@@ -70,11 +71,20 @@ YGO.initSql()
     .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
     .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
 
-/** Lit toute une table en un seul passage : { columns, rows }. */
+/** Lit toute une table en un seul passage : { columns, rows }. setcode est lu en texte (64 bits). */
 function readTable(db, table) {
-    const res = db.exec(`SELECT * FROM ${table} ORDER BY id`);
-    return res.length ? { columns: res[0].columns, rows: res[0].values } : { columns: [], rows: [] };
+    const info = db.exec(`PRAGMA table_info(${table})`);
+    if (!info.length) return { columns: [], rows: [] };
+    const columns = info[0].values.map((r) => r[1]);
+    const select = columns.map((c) => (c === 'setcode' ? 'CAST("setcode" AS TEXT) AS "setcode"' : `"${c}"`)).join(', ');
+    const res = db.exec(`SELECT ${select} FROM ${table} ORDER BY id`);
+    return { columns, rows: res.length ? res[0].values : [] };
 }
+
+let mapText = '';
+$('mapBtn').addEventListener('click', () => {
+    if (mapText) YGO.download(mapText, 'correspondance_ids.txt', 'text/plain;charset=utf-8');
+});
 
 btn.addEventListener('click', async () => {
     if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
@@ -83,6 +93,8 @@ btn.addEventListener('click', async () => {
 
     btn.disabled = true;
     out.clear();
+    $('mapBtn').classList.add('hidden');
+    mapText = '';
     let srcDb = null, dstDb = null;
     try {
         out.log('📂 Chargement du fichier CDB…');
@@ -98,14 +110,23 @@ btn.addEventListener('click', async () => {
         }
 
         const textById = new Map(texts.rows.map((r) => [r[T.id], r]));
+        const dataIds = new Set(datas.rows.map((r) => r[D.id]));
         const entries = [];
+        let noText = 0, noData = 0;
         for (const d of datas.rows) {
-            const t = textById.get(d[D.id]);
-            if (!t) continue;
-            entries.push({ id: d[D.id], type: d[D.type], d, t, name: t[T.name] || '', desc: t[T.desc] || '' });
+            const t = textById.get(d[D.id]) || null;
+            if (!t) noText++;
+            entries.push({ id: d[D.id], type: d[D.type], d, t, name: t ? t[T.name] || '' : '', desc: t ? t[T.desc] || '' : '' });
+        }
+        for (const t of texts.rows) {
+            if (dataIds.has(t[T.id])) continue;
+            noData++;
+            entries.push({ id: t[T.id], type: 0, d: null, t, name: t[T.name] || '', desc: t[T.desc] || '' });
         }
         if (!entries.length) throw new Error('Aucune carte trouvée dans ce CDB.');
         out.log(`→ ${entries.length} entrées lues.`);
+        if (noText) out.log(`! ${noText} carte(s) sans texte : conservées telles quelles.`, 'warn');
+        if (noData) out.log(`! ${noData} texte(s) sans données : conservés.`, 'warn');
 
         const cards = entries.filter((e) => !(e.type & TOKEN_TYPE));
         const tokens = entries.filter((e) => e.type & TOKEN_TYPE);
@@ -120,7 +141,7 @@ btn.addEventListener('click', async () => {
         const after = new Map();
         const orphans = [];
         for (const tk of tokens) {
-            const m = tk.desc.match(/"([^"]+)"/);
+            const m = tk.desc.match(/["“«]([^"“”«»]+)["”»]/);
             const cands = m ? byName.get(m[1]) : null;
             if (!cands) { orphans.push(tk); continue; }
             let pool = cands;
@@ -139,7 +160,7 @@ btn.addEventListener('click', async () => {
         for (const c of cards) { order.push(c); if (after.has(c.id)) order.push(...after.get(c.id)); }
         order.push(...orphans);
 
-        const startId = entries[0].id;
+        const startId = entries.reduce((m, e) => Math.min(m, e.id), Infinity);
         const mapping = new Map(order.map((e, i) => [e.id, startId + i]));
 
         /* Base de sortie : mêmes schémas, lignes réinsérées dans le nouvel ordre */
@@ -153,11 +174,15 @@ btn.addEventListener('click', async () => {
         dstDb.run('BEGIN TRANSACTION;');
         for (const e of order) {
             const newId = mapping.get(e.id);
-            const d = e.d.slice(); d[D.id] = newId;
-            if (d[D.alias]) d[D.alias] = mapping.get(d[D.alias]) ?? d[D.alias];
-            insD.run(d);
-            const t = e.t.slice(); t[T.id] = newId;
-            insT.run(t);
+            if (e.d) {
+                const d = e.d.slice(); d[D.id] = newId;
+                if (d[D.alias]) d[D.alias] = mapping.get(d[D.alias]) ?? d[D.alias];
+                insD.run(d);
+            }
+            if (e.t) {
+                const t = e.t.slice(); t[T.id] = newId;
+                insT.run(t);
+            }
         }
         dstDb.run('COMMIT;');
         insD.free(); insT.free();
@@ -167,6 +192,14 @@ btn.addEventListener('click', async () => {
 
         out.log(`✅ ${tokens.length - orphans.length} tokens replacés, ${orphans.length} orphelin(s) · ${YGO.fmtBytes(size)}.`, 'ok');
         orphans.forEach((o) => out.log(`  orphelin : ${o.name} (${o.id})`, 'warn'));
+        const changed = order.filter((e) => mapping.get(e.id) !== e.id);
+        if (changed.length) {
+            mapText = ['ancien ID → nouvel ID | nom', ...changed.map((e) => `${e.id} → ${mapping.get(e.id)} | ${e.name}`)].join('\n');
+            $('mapBtn').classList.remove('hidden');
+            out.log(`🔢 ${changed.length} ID(s) modifié(s) : pense à renommer les scripts c<ID>.lua (correspondance téléchargeable).`, 'warn');
+        } else {
+            out.log('🔢 Aucun ID modifié.');
+        }
         out.log('→ Fichier téléchargé avec succès !', 'ok');
         YGO.toast('Réorganisation terminée !');
     } catch (err) {

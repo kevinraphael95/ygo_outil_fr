@@ -54,7 +54,7 @@
 
         <div class="field">
             <label for="excludeFile">Fichier d'exclusion <small>(ex: ton VAACT S1.cdb)</small></label>
-            <input type="file" id="excludeFile" accept=".cdb, .json, .xml, .csv, .tsv" multiple>
+            <input type="file" id="excludeFile" accept=".cdb" multiple>
             <span class="hint">Si une carte de ton deck a le même nom de base et le même effet qu'une carte de ce fichier, elle sera ignorée.</span>
         </div>
 
@@ -98,8 +98,7 @@ YGO.initSql()
     .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
     .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
 
-const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
-const stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
+const { norm, stripParens } = YGO;
 const statSig = (d) => [d.type, d.atk, d.def, d.level, d.race, d.attribute].map((v) => Number(v) || 0).join('/');
 
 const RACE = {};
@@ -109,11 +108,8 @@ const ABILITY = { tuner: 0x1000, spirit: 0x200, union: 0x400, gemini: 0x800, too
 // --- CHARGEMENT DES NOMS ANGLAIS (races, attributs) depuis le dépôt ---
 // DuelingBook donne les races et attributs en anglais : il faut cardinfo_english.txt (et non cardinfo_fr.txt).
 async function loadTranslations() {
-    out.log('🌐 Téléchargement de cardinfo_english.txt…');
-    const url = 'https://raw.githubusercontent.com/kevinraphael95/ygo_outil_fr/main/data/cardinfo_english.txt';
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('cardinfo_english.txt : HTTP ' + resp.status);
-    const text = await resp.text();
+    out.log('📖 Lecture de cardinfo_english.txt…');
+    const text = await YGO.data.cardinfo('en');
     let section = '';
     for (const line of text.split('\n')) {
         const trimmed = line.trim();
@@ -130,47 +126,49 @@ async function loadTranslations() {
     out.log('✅ Races et attributs chargés.', 'ok');
 }
 
-// --- CHARGEMENT DES CDB OFFICIELS (TOUS LES CDB DU DEPOT) ---
-const officialDbs = [];
-async function loadOfficialDbs() {
-    out.log('📚 Recherche des CDB officiels sur le dépôt…');
+// --- INDEX DES CDB OFFICIELS (lus depuis data/cdb/en, une seule fois puis gardés en cache) ---
+// On ne garde que setcode et category : un CDB parcouru une fois suffit, pas de requête SQL par carte.
+let officialIndex = null; // { byId: Map(id → info), byName: Map(nom → info) }
+async function loadOfficialIndex() {
+    if (officialIndex) return;
+    out.log('📚 Lecture des CDB officiels du dépôt…');
     try {
-        const apiUrl = 'https://api.github.com/repos/kevinraphael95/ygo_outil_fr/contents/data/cdb/en';
-        const resp = await fetch(apiUrl);
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const files = await resp.json();
-        
-        for (const file of files) {
-            if (!file.name.endsWith('.cdb')) continue;
-            out.log(`   Téléchargement de ${file.name}…`);
-            const dbResp = await fetch(file.download_url);
-            const buffer = await dbResp.arrayBuffer();
-            officialDbs.push(new SQL.Database(new Uint8Array(buffer)));
+        const files = (await YGO.data.cdbFiles('en')).sort((a, b) => YGO.cdb.rank(a.name) - YGO.cdb.rank(b.name));
+        if (!files.length) throw new Error('aucun CDB dans data/cdb/en');
+        await YGO.pool(files, 4, async (f) => {
+            try { await f.arrayBuffer(); } catch (e) { out.log(`   échec ${f.name} : ${e.message}`, 'warn'); }
+        });
+        const byId = new Map(), byName = new Map();
+        for (const f of files) {
+            let db;
+            try {
+                db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+                // setcode lu en texte : un nombre JS perd la précision au-delà de 2^53 (cartes à 4 archétypes)
+                const res = db.exec('SELECT d.id, CAST(d.setcode AS TEXT), d.category, t.name FROM datas d JOIN texts t ON t.id = d.id');
+                if (res.length) for (const [id, setcode, category, name] of res[0].values) {
+                    const info = { setcode, category };
+                    if (!byId.has(id)) byId.set(id, info);
+                    const full = norm(name);
+                    const base = norm(String(name).split(' (')[0]);
+                    if (full && !byName.has(full)) byName.set(full, info);
+                    if (base && !byName.has(base)) byName.set(base, info);
+                }
+                out.log(`   ${f.name} indexé`);
+            } catch (e) {
+                out.log(`   ignoré ${f.name} : ${e.message}`, 'warn');
+            } finally { if (db) db.close(); }
         }
-        out.log(`✅ ${officialDbs.length} CDB officiels chargés.`, 'ok');
+        officialIndex = { byId, byName };
+        out.log(`✅ ${byId.size} cartes officielles indexées.`, 'ok');
     } catch (e) {
         out.log('❌ Impossible de charger les CDB officiels : ' + e.message, 'warn');
     }
 }
 
 function findInOfficials(name, serial) {
-    if (!officialDbs.length) return null;
-    
-    // 1. Recherche par passcode
-    if (serial) {
-        for (const db of officialDbs) {
-            const t = db.exec(`SELECT id, setcode, category, name FROM datas JOIN texts USING(id) WHERE id = ?`, [serial]);
-            if (t.length && t[0].values.length) return t[0].values[0];
-        }
-    }
-    
-    // 2. Recherche par nom
-    const baseName = norm(stripParens(name));
-    for (const db of officialDbs) {
-        const t = db.exec(`SELECT id, setcode, category, name FROM datas JOIN texts USING(id) WHERE LOWER(name) = ? OR LOWER(name) LIKE ?`, [baseName, baseName + ' (%']);
-        if (t.length && t[0].values.length) return t[0].values[0];
-    }
-    return null;
+    if (!officialIndex) return null;
+    if (serial && officialIndex.byId.has(serial)) return officialIndex.byId.get(serial); // 1. passcode
+    return officialIndex.byName.get(norm(stripParens(name))) || null;                     // 2. nom
 }
 
 const num = (v) => {
@@ -231,11 +229,8 @@ function toCdb(c) {
     return { datas: { alias: 0, setcode: 0, type, atk, def, level, race, attribute, category: 0 }, desc };
 }
 
-const DATAS_COLS = ['id', 'ot', 'alias', 'setcode', 'type', 'atk', 'def', 'level', 'race', 'attribute', 'category'];
-const TEXTS_COLS = ['id', 'name', 'desc', ...Array.from({ length: 16 }, (_, i) => 'str' + (i + 1))];
-const SCHEMA = `
-CREATE TABLE datas(id integer primary key, ot integer, alias integer, setcode integer, type integer, atk integer, def integer, level integer, race integer, attribute integer, category integer);
-CREATE TABLE texts(id integer primary key, name text, "desc" text, ${Array.from({ length: 16 }, (_, i) => 'str' + (i + 1) + ' text').join(', ')});`;
+const { DATAS_COLS, TEXTS_COLS, SCHEMA } = YGO.cdb;
+const conv = (e) => e.conv || (e.conv = toCdb(e.card)); // calculé une seule fois par carte
 
 btn.addEventListener('click', async () => {
     if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
@@ -253,7 +248,7 @@ btn.addEventListener('click', async () => {
     try {
         await Promise.all([
             Object.keys(RACE).length === 0 ? loadTranslations() : Promise.resolve(),
-            loadOfficialDbs()
+            loadOfficialIndex()
         ]);
 
         let list = [];
@@ -286,19 +281,23 @@ btn.addEventListener('click', async () => {
             out.log('🚫 Lecture du fichier d\'exclusion…');
             const exNames = new Map();
             for (const f of excludeFiles) {
-                const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
-                const t = db.exec('SELECT name, desc FROM texts');
-                if (t.length) for (const [name, desc] of t[0].values) {
-                    const k = norm(stripParens(name));
-                    if (!exNames.has(k)) exNames.set(k, []);
-                    exNames.get(k).push(String(desc || '').replace(/\s+/g, ' ').trim().toLowerCase());
-                }
-                db.close();
+                let db;
+                try {
+                    db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+                    const t = db.exec('SELECT name, desc FROM texts');
+                    if (t.length) for (const [name, desc] of t[0].values) {
+                        const k = norm(stripParens(name));
+                        if (!exNames.has(k)) exNames.set(k, []);
+                        exNames.get(k).push(String(desc || '').replace(/\s+/g, ' ').trim().toLowerCase());
+                    }
+                } catch (e) {
+                    out.log(`Exclusion ignorée ${f.name} : ${e.message}`, 'warn');
+                } finally { if (db) db.close(); }
             }
 
             list = list.filter(e => {
                 const k = norm(stripParens(e.card.name));
-                const desc = toCdb(e.card).desc.replace(/\s+/g, ' ').trim().toLowerCase();
+                const desc = conv(e).desc.replace(/\s+/g, ' ').trim().toLowerCase();
                 if (exNames.has(k) && exNames.get(k).includes(desc)) {
                     out.log(`⏭️ Ignoré : ${e.card.name} (déjà dans l'exclusion)`);
                     return false;
@@ -311,7 +310,7 @@ btn.addEventListener('click', async () => {
         const seenFx = new Map();
         list = list.filter(e => {
             const c = e.card;
-            const { datas, desc } = toCdb(c);
+            const { datas, desc } = conv(e);
             e.datas = datas;
             e.desc = desc;
             e.name = String(c.name).trim();
@@ -322,8 +321,8 @@ btn.addEventListener('click', async () => {
             const serial = parseInt(String(c.serial_number || '').replace(/\D/g, ''), 10) || 0;
             const official = findInOfficials(c.name, serial);
             if (official) {
-                e.datas.setcode = official[1];
-                e.datas.category = official[2];
+                e.datas.setcode = official.setcode;
+                e.datas.category = official.category;
             }
 
             // Vérification des doublons internes (même nom de base + même effet + mêmes stats)
@@ -368,9 +367,8 @@ btn.addEventListener('click', async () => {
 
     } catch (err) {
         out.log('❌ Erreur : ' + err.message, 'err');
+        YGO.toast('Une erreur est survenue.', 'err');
     } finally {
-        officialDbs.forEach((d) => { try { d.close(); } catch (e) {} });
-        officialDbs.length = 0;
         btn.disabled = false;
     }
 });

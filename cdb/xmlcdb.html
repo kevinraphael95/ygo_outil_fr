@@ -27,7 +27,7 @@
     .dup-item input[type="checkbox"] { margin-top: 4px; width: 20px; height: 20px; }
     .dup-item-info { flex: 1; font-size: 13px; }
     .dup-item-info strong { display: block; font-size: 14px; color: var(--text); }
-    .dup-item-info small { display: block; color: var(--text-muted); margin-top: 2px; }
+    .dup-item-info small { display: block; color: var(--text-muted); margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
     .dup-item-keep { color: var(--success); font-weight: 600; margin-left: 5px; }
 </style>
 </head>
@@ -120,12 +120,13 @@
 <div class="toasts" id="toasts"></div>
 
 <!-- Fenêtre de choix pour les doublons -->
-<div id="dup-modal" class="modal hidden">
+<div id="dup-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="dup-title">
     <div class="modal-content">
-        <h2 class="card-title"><i class="fa-solid fa-code-branch"></i> Cartes similaires trouvées</h2>
-        <p class="hint">Ces cartes ont le même nom de base que des cartes dans vos fichiers d'exclusion. Cochez celles que vous voulez <strong>garder</strong> dans le CDB final. (Décoché = supprimé).</p>
+        <h2 class="card-title" id="dup-title"><i class="fa-solid fa-code-branch"></i> Cartes similaires trouvées</h2>
+        <p class="hint">Ces cartes ont le même nom de base que des cartes dans vos fichiers d'exclusion. Cochez celles que vous voulez <strong>garder</strong> dans le CDB final. (Décoché = supprimé). <kbd>Échap</kbd> = tout ignorer.</p>
         <div id="dup-list" class="dup-list"></div>
         <div class="actions" style="margin-top: 15px; justify-content: flex-end; padding: 0 20px 20px;">
+            <button id="dup-skip" class="btn" type="button"><i class="fa-solid fa-xmark"></i> Tout ignorer</button>
             <button id="dup-validate" class="btn btn-primary" type="button"><i class="fa-solid fa-check"></i> Valider et continuer</button>
         </div>
     </div>
@@ -159,52 +160,8 @@ $('reportBtn').addEventListener('click', () => {
 // ============================================================
 // OUTILS
 // ============================================================
-const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
-const tick = () => new Promise((r) => setTimeout(r, 0));
-const stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
-
-async function pool(items, limit, fn) {
-    let i = 0;
-    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-        while (i < items.length) await fn(items[i++]);
-    });
-    await Promise.all(workers);
-}
-
-// ---- Dépôt GitHub (source par défaut des CDB officiels) ----
-const REPO = { owner: 'kevinraphael95', repo: 'ygo_outil_fr', branch: 'main' };
-const RAW = `https://raw.githubusercontent.com/${REPO.owner}/${REPO.repo}/${REPO.branch}/`;
-let treeCache = null;
-
-async function loadRepoTree() {
-    if (treeCache) return treeCache;
-    const r = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.repo}/git/trees/${REPO.branch}?recursive=1`);
-    if (!r.ok) {
-        throw new Error(r.status === 403
-            ? "limite de l'API GitHub atteinte, réessaie plus tard ou sélectionne les CDB à la main"
-            : `API GitHub : HTTP ${r.status}`);
-    }
-    const j = await r.json();
-    if (j.truncated) out.log('ATTENTION : arborescence tronquée par GitHub, liste incomplète.', 'warn');
-    treeCache = j.tree.filter((t) => t.type === 'blob').map((t) => t.path);
-    return treeCache;
-}
-
-function remoteFile(path) {
-    const url = RAW + path.split('/').map(encodeURIComponent).join('/');
-    let buf = null;
-    return {
-        name: path.split('/').pop(),
-        arrayBuffer() {
-            if (!buf) {
-                buf = fetch(url)
-                    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status} (${path})`); return r.arrayBuffer(); })
-                    .catch((e) => { buf = null; throw e; });
-            }
-            return buf;
-        },
-    };
-}
+const { norm, stripParens, pool } = YGO;
+const tick = () => YGO.sleep(0);
 
 // ============================================================
 // 1) LECTURE DU FICHIER SOURCE (XML / CSV / TSV)
@@ -299,14 +256,7 @@ function parseFile(name, text, needId = true) {
 // ============================================================
 // 2) CDB OFFICIELS (index id -> base, nom -> ids)
 // ============================================================
-function fileRank(n) {
-    n = n.toLowerCase();
-    if (n === 'cards.delta.cdb') return 0;
-    if (n === 'cards.cdb') return 1;
-    if (/rush|skill|goat/.test(n)) return 4;
-    if (/prerelease|release|unofficial/.test(n)) return 3;
-    return 2;
-}
+const fileRank = YGO.cdb.rank;
 
 async function loadOfficial(files) {
     const dbs = [];
@@ -392,11 +342,7 @@ function byName(nameMap, name) {
 // ============================================================
 // 3) COPIE D'UNE CARTE + CRÉATION DU CDB
 // ============================================================
-const DATAS_COLS = ['id', 'ot', 'alias', 'setcode', 'type', 'atk', 'def', 'level', 'race', 'attribute', 'category'];
-const TEXTS_COLS = ['id', 'name', 'desc', ...Array.from({ length: 16 }, (_, i) => 'str' + (i + 1))];
-const SCHEMA = `
-CREATE TABLE datas(id integer primary key, ot integer, alias integer, setcode integer, type integer, atk integer, def integer, level integer, race integer, attribute integer, category integer);
-CREATE TABLE texts(id integer primary key, name text, "desc" text, ${Array.from({ length: 16 }, (_, i) => 'str' + (i + 1) + ' text').join(', ')});`;
+const { DATAS_COLS, TEXTS_COLS, SCHEMA } = YGO.cdb;
 
 function oneRow(db, sql, id) {
     const st = db.prepare(sql);
@@ -501,13 +447,11 @@ btn.addEventListener('click', async () => {
 
         // ---- CDB officiels ----
         if (!officialFiles.length) {
-            out.log('🌐 Lecture du dépôt GitHub…');
-            const paths = await loadRepoTree();
-            const all = paths.filter((p) => /^data\/cdb\/en\/[^/]+\.cdb$/i.test(p));
-            const kept = all.filter((p) => !ignore.some((t) => p.split('/').pop().toLowerCase().includes(t)));
-            if (!kept.length) throw new Error('aucun CDB officiel trouvé dans data/cdb/en du dépôt');
-            officialFiles = kept.map(remoteFile);
-            out.log(`→ ${kept.length} CDB officiels du dépôt` + (all.length !== kept.length ? ` (${all.length - kept.length} ignoré(s))` : '') + ', téléchargement…');
+            out.log('📚 Lecture des CDB officiels du dépôt…');
+            const all = await YGO.data.cdbFiles('en');
+            officialFiles = await YGO.data.cdbFiles('en', { ignore });
+            if (!officialFiles.length) throw new Error('aucun CDB officiel trouvé dans data/cdb/en du dépôt');
+            out.log(`→ ${officialFiles.length} CDB officiels du dépôt` + (all.length !== officialFiles.length ? ` (${all.length - officialFiles.length} ignoré(s))` : '') + ', téléchargement…');
             await pool(officialFiles, 4, async (f) => {
                 try { await f.arrayBuffer(); } catch (e) { out.log(`échec ${f.name} : ${e.message}`, 'warn'); }
             });
@@ -526,7 +470,7 @@ btn.addEventListener('click', async () => {
         const addPlaceholder = (e) => {
             nMissing++;
             found.push({
-                cid: e.cid, card: e.card, missing: true, datas: {},
+                cid: e.cid, card: e.card, index: e.index, missing: true, datas: {},
                 texts: {
                     name: e.card || ('Carte ' + e.cid),
                     desc: `[Carte non trouvée dans les CDB officiels]\nID : ${e.cid}\nPasscode : ${e.pc || '-'}\nSource : ${e.file}`,
@@ -713,47 +657,42 @@ btn.addEventListener('click', async () => {
     }
 });
 
-// Fonction pour afficher la modale de choix des doublons
+// Fenêtre de choix pour les doublons (tout le texte est inséré via le DOM : aucun HTML interprété)
 async function askUserForDuplicates(toVerify) {
-    if (toVerify.length === 0) return [];
-    
+    if (!toVerify.length) return [];
+
     const modal = $('dup-modal');
     const list = $('dup-list');
-    list.innerHTML = '';
-    
-    toVerify.forEach((item, index) => {
-        const wrapper = document.createElement('label');
-        wrapper.className = 'dup-item';
-        
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = false; // Par défaut, on ne garde pas
-        cb.dataset.index = index;
-        
-        const info = document.createElement('div');
-        info.className = 'dup-item-info';
-        info.innerHTML = `<strong>${item.e.card}</strong> <span class="dup-item-keep">(sera gardé si coché)</span>
-            <small>Fichier source : <b>${item.e.file}</b> | ID: ${item.e.cid}</small>
-            <small>Nom dans l'exclusion: ${item.excl.card} (${item.excl.source} - ID: ${item.excl.id})</small>
-            <small>Effet Officiel (copié): ${item.texts.desc || 'Aucun effet (officiel copié)'}</small>
-            <small>Effet Exclusion: ${item.excl.desc || 'Aucun effet'}</small>`;
-        
-        wrapper.appendChild(cb);
-        wrapper.appendChild(info);
-        list.appendChild(wrapper);
+    list.textContent = '';
+
+    const boxes = toVerify.map((item) => {
+        const cb = YGO.el('input', { type: 'checkbox' }); // décoché = on ne garde pas
+        const info = YGO.el('div', { className: 'dup-item-info' },
+            YGO.el('strong', { text: item.e.card }),
+            YGO.el('span', { className: 'dup-item-keep', text: '(sera gardé si coché)' }),
+            YGO.el('small', {}, 'Fichier source : ', YGO.el('b', { text: item.e.file }), ' | ID: ' + item.e.cid),
+            YGO.el('small', { text: `Nom dans l'exclusion: ${item.excl.card} (${item.excl.source} - ID: ${item.excl.id})` }),
+            YGO.el('small', { text: 'Effet officiel (copié) : ' + (item.texts.desc || 'Aucun effet') }),
+            YGO.el('small', { text: 'Effet exclusion : ' + (item.excl.desc || 'Aucun effet') }));
+        list.append(YGO.el('label', { className: 'dup-item' }, cb, info));
+        return cb;
     });
-    
+
+    const previous = document.activeElement;
     modal.classList.remove('hidden');
-    
-    return new Promise(resolve => {
-        $('dup-validate').onclick = () => {
-            const kept = [];
-            document.querySelectorAll('#dup-list input[type="checkbox"]').forEach(cb => {
-                if (cb.checked) kept.push(toVerify[cb.dataset.index]);
-            });
+    $('dup-validate').focus();
+
+    return new Promise((resolve) => {
+        const close = (kept) => {
+            document.removeEventListener('keydown', onKey);
             modal.classList.add('hidden');
+            if (previous && previous.focus) previous.focus();
             resolve(kept);
         };
+        const onKey = (ev) => { if (ev.key === 'Escape') close([]); };
+        document.addEventListener('keydown', onKey);
+        $('dup-validate').onclick = () => close(toVerify.filter((_, i) => boxes[i].checked));
+        $('dup-skip').onclick = () => close([]);
     });
 }
 
