@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Réparer un CDB · YGO Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="utils/ygo.css">
+<script src="utils/ygo.js"></script>
+<style>
+    .opts { display: grid; gap: 10px; margin: 6px 0 16px; }
+    .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+    .opt input { margin-top: 4px; }
+    .opt small { display: block; opacity: .7; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <div class="hero-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+        <div>
+            <h1>Réparer un CDB</h1>
+            <p>Corrige la race et l'attribut manquants (« ??? » dans EDOPro) d'un CDB déjà créé, sans le recréer. Les IDs, les noms, les effets et tout le reste ne sont pas touchés.</p>
+        </div>
+    </section>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-gear"></i> Configuration</h2>
+
+        <div class="field">
+            <label for="cdbFiles">CDB à réparer *</label>
+            <input type="file" id="cdbFiles" accept=".cdb" multiple>
+            <span class="hint">Un nouveau fichier « nom_repare.cdb » est téléchargé pour chacun. Ton CDB d'origine n'est pas modifié.</span>
+        </div>
+
+        <div class="field">
+            <label for="jsonFiles">JSON DuelingBook <small>(optionnel, source la plus fiable)</small></label>
+            <input type="file" id="jsonFiles" accept=".json,.txt" multiple>
+            <span class="hint">Les JSON dont viennent les cartes. Utiles pour les cartes custom. Les cartes sont retrouvées par leur nom, avec ou sans « (Buff) », puis départagées par ATK/DEF/niveau.</span>
+        </div>
+
+        <div class="field">
+            <label for="cdbOfficial">CDB officiels <small>(optionnel)</small></label>
+            <input type="file" id="cdbOfficial" accept=".cdb" multiple>
+            <span class="hint" id="cdbOfficialHint">Vide = tous les CDB de data/cdb/en du dépôt GitHub ygo_outil_fr. Servent aux cartes officielles et à celles que le JSON ne couvre pas.</span>
+        </div>
+
+        <div class="field">
+            <label for="ignoreTags">Ignorer les CDB du dépôt dont le nom contient</label>
+            <input type="text" id="ignoreTags" value="VAACT" placeholder="ex : VAACT ; patch" autocomplete="off">
+            <span class="hint">Séparés par « ; ».</span>
+        </div>
+
+        <div class="actions">
+            <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Réparer</button>
+            <button id="reportBtn" class="btn hidden" type="button"><i class="fa-solid fa-file-lines"></i> Télécharger le rapport</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Console d'exécution</h2>
+        <div id="console" class="console" role="log"></div>
+    </div>
+</main>
+
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
+<div class="toasts" id="toasts"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<script>
+// <CORE>
+const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const stripParens = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
+const normDesc = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const num = (v) => {
+    if (v == null || v === '') return 0;
+    if (String(v).trim() === '?') return -2;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : 0;
+};
+
+/** Lit cardinfo_english.txt : sections ##race et ##attribute (nom anglais en minuscules -> code). */
+function parseCardinfo(text) {
+    const RACE = {}, ATTR = {};
+    let section = '';
+    for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('##')) { section = trimmed.substring(2).trim(); continue; }
+        if (!section || !trimmed || trimmed.startsWith('#')) continue;
+        const parts = trimmed.split(/\t+/);
+        if (parts.length < 2) continue;
+        const code = parseInt(parts[0], 16);
+        const name = parts[1].trim().toLowerCase();
+        if (section === 'race') RACE[name] = code;
+        else if (section === 'attribute') ATTR[name] = code;
+    }
+    if (!Object.keys(RACE).length || !Object.keys(ATTR).length) throw new Error('races/attributs introuvables dans cardinfo_english.txt');
+    return { RACE, ATTR };
+}
+
+/** Même texte que l'outil de création : effet pendule + effet monstre. */
+function fullDesc(c) {
+    const eff = String(c.effect || '').trim();
+    const pe = String(c.pendulum_effect || '').trim();
+    return pe ? `[ Pendulum Effect ]\n${pe}\n----------------------------------------\n[ Monster Effect ]\n${eff}` : eff;
+}
+
+/** Index des cartes monstres des JSON DuelingBook : nom de base -> [{ name, race, attribute, atk, def, level }]. */
+function buildJsonIndex(jsonTexts, tables, log) {
+    const idx = new Map();
+    let n = 0;
+    for (const f of jsonTexts) {
+        let data;
+        try { data = JSON.parse(f.text.replace(/^\uFEFF/, '')); }
+        catch (e) { log(`JSON ignoré ${f.fileName} : ${e.message}`, 'warn'); continue; }
+        const arr = Array.isArray(data) ? data : [...(data.main || []), ...(data.side || []), ...(data.extra || [])];
+        for (const c of arr) {
+            if (!c || !c.name || String(c.card_type || '').toLowerCase() !== 'monster') continue;
+            const rec = {
+                name: String(c.name).trim(),
+                race: tables.RACE[String(c.type || '').toLowerCase()] || 0,
+                attribute: tables.ATTR[String(c.attribute || '').toLowerCase()] || 0,
+                atk: num(c.atk), def: num(c.def), level: num(c.level),
+                desc: fullDesc(c),
+            };
+            const k = norm(stripParens(c.name));
+            if (!idx.has(k)) idx.set(k, []);
+            idx.get(k).push(rec);
+            n++;
+        }
+    }
+    log(`   ${n} monstre(s) lus dans les JSON.`);
+    return idx;
+}
+
+// ---- CDB officiels ----
+function fileRank(n) {
+    n = n.toLowerCase();
+    if (n === 'cards.delta.cdb') return 0;
+    if (n === 'cards.cdb') return 1;
+    if (/rush|skill|goat/.test(n)) return 4;
+    if (/prerelease|release|unofficial/.test(n)) return 3;
+    return 2;
+}
+async function loadOfficial(files, SQL, log) {
+    const dbs = [], nameMap = new Map();
+    let total = 0;
+    for (const f of files) {
+        try {
+            const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+            const rank = fileRank(f.name);
+            const di = dbs.push({ db, name: f.name }) - 1;
+            const ids = new Set();
+            const d = db.exec('SELECT id FROM datas WHERE (type & 1) = 1');
+            if (d.length) for (const [id] of d[0].values) ids.add(id);
+            const t = db.exec('SELECT id, name FROM texts');
+            if (t.length) for (const [id, name] of t[0].values) {
+                if (!ids.has(id)) continue;
+                const k = norm(name);
+                if (!k) continue;
+                if (!nameMap.has(k)) nameMap.set(k, []);
+                nameMap.get(k).push({ id, di, rank });
+            }
+            total += ids.size;
+            log(`   ${f.name} : ${ids.size} monstres`);
+        } catch (e) {
+            log(`ignoré ${f.name} : ${e.message}`, 'warn');
+        }
+        await tick();
+    }
+    return { dbs, nameMap, total };
+}
+function officialCands(off, rowName) {
+    const keys = [norm(rowName)];
+    const base = norm(stripParens(rowName));
+    if (base !== keys[0]) keys.push(base);
+    const out = [];
+    const seen = new Set();
+    for (const k of keys) {
+        for (const h of (off.nameMap.get(k) || [])) {
+            if (seen.has(h.id)) continue;
+            seen.add(h.id);
+            const st = off.dbs[h.di].db.prepare('SELECT name, "desc" AS desc, race, attribute, atk, def, level FROM datas JOIN texts USING(id) WHERE id = ?');
+            try {
+                st.bind([h.id]);
+                if (st.step()) {
+                    const r = st.getAsObject();
+                    out.push({ name: r.name, desc: r.desc, race: r.race, attribute: r.attribute, atk: r.atk, def: r.def, level: r.level });
+                }
+            } finally { st.free(); }
+        }
+    }
+    return out;
+}
+
+/** Choisit la meilleure candidate : nom exact, puis ATK, DEF, niveau identiques. */
+function best(cands, row) {
+    let top = null, topScore = -1;
+    for (const c of cands) {
+        let s = 0;
+        if (c.desc && row.desc && normDesc(c.desc) === normDesc(row.desc)) s += 16;
+        if (norm(c.name) === norm(row.name)) s += 8;
+        if (Number(c.atk) === Number(row.atk)) s += 4;
+        if (Number(c.def) === Number(row.def)) s += 2;
+        if ((Number(c.level) & 0xff) === (Number(row.level) & 0xff)) s += 1;
+        if (s > topScore) { top = c; topScore = s; }
+    }
+    if (!top) return null;
+    const descSame = !!(top.desc && row.desc && normDesc(top.desc) === normDesc(row.desc));
+    const statsSame = Number(top.atk) === Number(row.atk) && Number(top.def) === Number(row.def);
+    return { cand: top, exact: descSame || (norm(top.name) === norm(row.name) && statsSame) };
+}
+
+/** Répare une base ouverte. Retourne { checked, fixed, byJson, byOfficial, approx[], unresolved[] }. */
+function repairDb(db, jsonIdx, off) {
+    const res = { checked: 0, fixed: 0, byJson: 0, byOfficial: 0, approx: [], unresolved: [] };
+    const q = db.exec('SELECT d.id, t.name, t."desc", d.atk, d.def, d.level, d.race, d.attribute FROM datas d JOIN texts t ON t.id = d.id WHERE (d.type & 1) = 1 AND (d.race = 0 OR d.attribute = 0)');
+    if (!q.length) return res;
+    for (const [id, name, desc, atk, def, level, race, attribute] of q[0].values) {
+        res.checked++;
+        const row = { id, name, desc, atk, def, level };
+        let newRace = race, newAttr = attribute;
+        let usedJson = false, usedOff = false, approx = false;
+        const sources = [];
+        if (jsonIdx) sources.push(['json', () => jsonIdx.get(norm(stripParens(name))) || []]);
+        if (off) sources.push(['off', () => officialCands(off, name)]);
+        for (const [kind, getCands] of sources) {
+            if (newRace && newAttr) break;
+            const b = best(getCands(), row);
+            if (!b) continue;
+            let used = false;
+            if (!newRace && b.cand.race) { newRace = b.cand.race; used = true; }
+            if (!newAttr && b.cand.attribute) { newAttr = b.cand.attribute; used = true; }
+            if (used) {
+                if (kind === 'json') usedJson = true; else usedOff = true;
+                if (!b.exact) approx = true;
+            }
+        }
+        if (newRace === race && newAttr === attribute) {
+            res.unresolved.push(`${id} | ${name} | introuvable (race ${race ? 'ok' : 'manquante'}, attribut ${attribute ? 'ok' : 'manquant'})`);
+            continue;
+        }
+        db.run('UPDATE datas SET race = ?, attribute = ? WHERE id = ?', [newRace, newAttr, id]);
+        res.fixed++;
+        if (usedJson) res.byJson++; else if (usedOff) res.byOfficial++;
+        if (approx) res.approx.push(`${id} | ${name} | trouvée par le nom, mais effet ou stats différents : à vérifier (race ${newRace}, attribut ${newAttr})`);
+        if (!newRace || !newAttr) res.unresolved.push(`${id} | ${name} | réparée en partie (race ${newRace ? 'ok' : 'manquante'}, attribut ${newAttr ? 'ok' : 'manquant'})`);
+    }
+    return res;
+}
+// </CORE>
+
+// ============================================================
+// INTERFACE
+// ============================================================
+const { $ } = YGO;
+const out = YGO.console($('console'));
+const btn = $('startBtn');
+
+let SQL = null;
+YGO.initSql()
+    .then((s) => { SQL = s; out.log('Moteur SQL prêt.', 'ok'); })
+    .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
+
+let reportText = '';
+$('reportBtn').addEventListener('click', () => {
+    if (reportText) YGO.download(new Blob([reportText], { type: 'text/plain;charset=utf-8' }), 'rapport_reparation.txt');
+});
+$('cdbOfficial').addEventListener('change', (e) => {
+    const n = e.target.files.length;
+    $('cdbOfficialHint').textContent = n ? `${n} fichier(s) CDB sélectionné(s)` : 'Vide = tous les CDB de data/cdb/en du dépôt GitHub ygo_outil_fr. Servent aux cartes officielles et à celles que le JSON ne couvre pas.';
+});
+
+const REPO = { owner: 'kevinraphael95', repo: 'ygo_outil_fr', branch: 'main' };
+const RAW = `https://raw.githubusercontent.com/${REPO.owner}/${REPO.repo}/${REPO.branch}/`;
+
+async function pool(items, limit, fn) {
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (i < items.length) await fn(items[i++]);
+    }));
+}
+async function repoCdbPaths() {
+    const r = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.repo}/git/trees/${REPO.branch}?recursive=1`);
+    if (!r.ok) throw new Error(r.status === 403 ? "limite de l'API GitHub atteinte, réessaie plus tard ou sélectionne les CDB à la main" : `API GitHub : HTTP ${r.status}`);
+    const j = await r.json();
+    return j.tree.filter((t) => t.type === 'blob').map((t) => t.path).filter((p) => /^data\/cdb\/en\/[^/]+\.cdb$/i.test(p));
+}
+function remoteFile(path) {
+    const url = RAW + path.split('/').map(encodeURIComponent).join('/');
+    let buf = null;
+    return {
+        name: path.split('/').pop(),
+        arrayBuffer() {
+            if (!buf) {
+                buf = fetch(url)
+                    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status} (${path})`); return r.arrayBuffer(); })
+                    .catch((e) => { buf = null; throw e; });
+            }
+            return buf;
+        },
+    };
+}
+
+btn.addEventListener('click', async () => {
+    if (!SQL) return YGO.toast('Moteur SQL en cours de chargement…', 'err');
+    const cdbs = [...$('cdbFiles').files];
+    if (!cdbs.length) return YGO.toast('Sélectionne au moins un CDB à réparer.', 'err');
+    const jsons = [...$('jsonFiles').files];
+
+    btn.disabled = true;
+    out.clear();
+    $('reportBtn').classList.add('hidden');
+    reportText = '';
+    let off = null;
+    try {
+        const log = (m, k) => out.log(m, k);
+
+        out.log('🌐 Téléchargement de cardinfo_english.txt…');
+        const r = await fetch(RAW + 'data/cardinfo_english.txt');
+        if (!r.ok) throw new Error('cardinfo_english.txt : HTTP ' + r.status);
+        const tables = parseCardinfo(await r.text());
+        out.log('✅ Races et attributs chargés.', 'ok');
+
+        let jsonIdx = null;
+        if (jsons.length) {
+            out.log('📄 Lecture des JSON…');
+            const texts = [];
+            for (const f of jsons) texts.push({ fileName: f.name, text: await f.text() });
+            jsonIdx = buildJsonIndex(texts, tables, log);
+        }
+
+        let official = [...$('cdbOfficial').files];
+        if (!official.length) {
+            out.log('🌐 Lecture du dépôt GitHub…');
+            const ignore = $('ignoreTags').value.split(';').map((t) => t.trim().toLowerCase()).filter(Boolean);
+            const all = await repoCdbPaths();
+            const kept = all.filter((p) => !ignore.some((t) => p.split('/').pop().toLowerCase().includes(t)));
+            if (!kept.length) throw new Error('aucun CDB officiel trouvé dans data/cdb/en du dépôt');
+            official = kept.map(remoteFile);
+            out.log(`→ ${kept.length} CDB du dépôt` + (all.length !== kept.length ? ` (${all.length - kept.length} ignoré(s))` : '') + ', téléchargement…');
+            await pool(official, 4, async (f) => {
+                try { await f.arrayBuffer(); } catch (e) { out.log(`échec ${f.name} : ${e.message}`, 'warn'); }
+            });
+        }
+        out.log('📂 Lecture des CDB officiels…');
+        off = await loadOfficial(official, SQL, log);
+        out.log(`→ ${off.total} monstres officiels indexés.`);
+
+        const rapport = [];
+        let totalFixed = 0;
+        for (const f of cdbs) {
+            out.log(`🔧 Réparation de ${f.name}…`);
+            const db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
+            let res;
+            try {
+                res = repairDb(db, jsonIdx, off);
+                out.log(`   ${res.checked} monstre(s) à réparer : ${res.fixed} réparé(s) (${res.byJson} par JSON, ${res.byOfficial} par CDB officiel), ${res.unresolved.length} non résolu(s), ${res.approx.length} à vérifier.`,
+                    res.unresolved.length ? 'warn' : 'ok');
+                res.approx.forEach((l) => out.log('   ~ ' + l, 'warn'));
+                res.unresolved.forEach((l) => out.log('   ! ' + l, 'warn'));
+                rapport.push(`== ${f.name} ==`, `${res.checked} à réparer, ${res.fixed} réparés (${res.byJson} JSON, ${res.byOfficial} officiel)`,
+                    ...(res.approx.length ? ['-- à vérifier --', ...res.approx] : []),
+                    ...(res.unresolved.length ? ['-- non résolus --', ...res.unresolved] : []), '');
+                totalFixed += res.fixed;
+                if (res.fixed) {
+                    const bytes = db.export();
+                    const name = f.name.replace(/\.cdb$/i, '') + '_repare.cdb';
+                    await YGO.download(new Blob([bytes], { type: 'application/x-sqlite3' }), name);
+                    out.log(`   ✅ ${name} téléchargé.`, 'ok');
+                } else {
+                    out.log('   Rien à enregistrer pour ce fichier.');
+                }
+            } finally { db.close(); }
+        }
+        reportText = rapport.join('\n');
+        $('reportBtn').classList.remove('hidden');
+        YGO.toast(totalFixed ? `${totalFixed} carte(s) réparée(s) !` : 'Rien à réparer.', totalFixed ? undefined : 'err');
+    } catch (err) {
+        out.log('❌ Erreur : ' + err.message, 'err');
+        YGO.toast('Une erreur est survenue.', 'err');
+    } finally {
+        if (off) off.dbs.forEach((d) => { try { d.db.close(); } catch (e) { /* déjà fermé */ } });
+        btn.disabled = false;
+    }
+});
+
+out.log('Sélectionne le(s) CDB à réparer. Ajoute les JSON DuelingBook pour les cartes custom.');
+</script>
+</body>
+</html>
