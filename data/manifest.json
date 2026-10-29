@@ -1,0 +1,53 @@
+{
+ "cdb": {
+  "en": [
+   "VAACT S3 patch.cdb",
+   "cards-rush.cdb",
+   "cards-rush.delta.cdb",
+   "cards-skills-unofficial.cdb",
+   "cards-skills.cdb",
+   "cards-skills.delta.cdb",
+   "cards-unofficial-new.cdb",
+   "cards-unofficial.cdb",
+   "cards-unofficial.delta.cdb",
+   "cards.cdb",
+   "cards.delta.cdb",
+   "goat-entries.cdb",
+   "goat-entries.delta.cdb",
+   "prerelease-betb-en.cdb",
+   "prerelease-cards-rush.cdb",
+   "prerelease-dbgv.cdb",
+   "prerelease-imph.cdb",
+   "prerelease-mvb1.cdb",
+   "prerelease-others.cdb",
+   "prerelease-rv02.cdb",
+   "prerelease-yac1.cdb",
+   "release-betb.cdb"
+  ],
+  "fr": [
+   "VAACT S1.cdb",
+   "VAACT S3 patch_fr.cdb",
+   "cards-rush.cdb",
+   "cards-skills-unofficial.cdb",
+   "cards-skills.cdb",
+   "cards-unofficial.cdb",
+   "cards.cdb",
+   "goat-entries.cdb",
+   "prerelease-cards-rush.cdb",
+   "prerelease-cori.cdb",
+   "prerelease-loch.cdb",
+   "prerelease-locr.cdb",
+   "prerelease-mzmu.cdb",
+   "prerelease-others.cdb"
+  ]
+ },
+ "script": [
+  "goat",
+  "official",
+  "pre-errata",
+  "pre-release",
+  "rush",
+  "skill",
+  "unofficial"
+ ]
+}
