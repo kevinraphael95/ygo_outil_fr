@@ -427,14 +427,16 @@ async function runCdb() {
         const rows = res.length ? res[0].values : [];
         out.log(`📂 ${f.name} : ${rows.length} cartes.`);
         prog.show();
+        const DEFAULTS = { type: 'Effect Monster', frameType: 'effect', atk: 0, def: 0, level: 0, race: 'Warrior', attribute: 'DARK' };
         for (let i = 0; i < rows.length; i++) {
             const [id, name, desc, ty, atk, def, lvl, race, attr] = rows[i];
             const d = desc || '';
             const tilde = (d.match(/~([^~]+)~/) || [])[1];
-            const m = find(name, 'fr') || (tilde && find(tilde.trim(), 'fr'));   // sert surtout à l'illustration
-            const base = m || { type: 'Effect Monster', frameType: 'effect', atk: 0, def: 0, level: 0, race: 'Warrior', attribute: 'DARK' };
-            const st = ty != null ? decodeCdb(ty, race, attr, lvl, atk, def) : {};
-            cards.push({ ...base, ...st, id, name, desc: d, art: m ? m.art : '' });
+            // Les bases locales ne servent QU'À récupérer l'illustration.
+            const m = find(name, 'fr') || (tilde && find(tilde.trim(), 'fr'));
+            // Tout le reste (nom, effet, stats, type, pendule…) vient du .cdb.
+            const st = ty != null ? decodeCdb(ty, race, attr, lvl, atk, def) : DEFAULTS;
+            cards.push({ ...st, id, name, desc: d, art: m ? m.art : '' });
             if (i % 200 === 0) { prog.set((i / rows.length) * 100, `Analyse ${i + 1} / ${rows.length}…`); await tick(); }
         }
         prog.set(100, 'Terminé !');
