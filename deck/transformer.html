@@ -164,11 +164,27 @@ let ART = new Map();
 const ARTP = YGO.data.customArt()
     .then((m) => { ART = m; out.log(`${m.size} illustration(s) custom trouvée(s).`, 'ok'); })
     .catch((e) => out.log('Illustrations custom indisponibles : ' + e.message, 'warn'));
+// Nom de carte (français ou autre) -> nom du fichier image (sans extension). Ajoute tes cas ici.
+const ALIAS = {
+    'Orgueil Perdu': 'LostPride',
+    'Miroir Farceur': 'TrickMiror',
+    'Ouragan Photon': 'PhotonHurricane',
+    'D/D Savant Shrodinger': 'DDSavantSchrodinger',
+    'Jeton Sélection': 'NaturalSelection',
+    'Jeton Ojamachine Jaune': 'OjamachineYellow',
+};
+const ALIAS_K = new Map(Object.entries(ALIAS).map(([a, b]) => [nk(a), nk(b)]));
+const loose = (k) => k.replace(/s/g, ''); // tolère « Card » / « Cards »
 const customArt = (...names) => {
-    for (const n of names) {
-        if (!n) continue;
-        const a = ART.get(nk(n)) || ART.get(nk(String(n).replace(/\s*\([^)]*\)\s*$/, '')));
-        if (a) return a;
+    const keys = names.filter(Boolean).flatMap((n) => [nk(n), nk(String(n).replace(/\s*\([^)]*\)\s*$/, ''))]).filter(Boolean);
+    for (const k of keys) { const a = ALIAS_K.get(k); if (a && ART.has(a)) return ART.get(a); }
+    for (const k of keys) if (ART.has(k)) return ART.get(k);
+    for (const k of keys) {
+        const lk = loose(k);
+        for (const [ak, url] of ART) {
+            const la = loose(ak);
+            if (la === lk || (lk.length >= 10 && la.endsWith(lk)) || (la.length >= 10 && lk.endsWith(la))) return url;
+        }
     }
     return '';
 };
@@ -450,7 +466,7 @@ async function runCdb() {
         for (let i = 0; i < rows.length; i++) {
             const [id, name, desc, ty, atk, def, lvl, race, attr] = rows[i];
             const d = desc || '';
-            const tilde = (d.match(/~([^~]+)~/) || [])[1];
+            const tilde = (d.match(/(?:^|\]\s*)~?([^~\n\]]+)~/) || [])[1];
             // Les bases locales ne servent QU'À récupérer l'illustration.
             const m = find(name, 'fr') || (tilde && find(tilde.trim(), 'fr'));
             // Tout le reste (nom, effet, stats, type, pendule…) vient du .cdb.
