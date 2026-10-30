@@ -8,161 +8,89 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="../utils/ygo.css">
+<script src="../utils/ygo.js"></script>
 <style>
-:root, [data-theme="dark"] { color-scheme: dark; --bg: #0d0a1a; --bg-glow: rgba(212, 175, 55, 0.05); --surface: #16112a; --surface-2: #1f1838; --surface-3: #2a2148; --border: #3a2d5c; --border-strong: #4d3d75; --text: #f5ecd8; --text-muted: #a89b82; --text-dim: #7a705c; --gold: #d4af37; --gold-light: #e8c85a; --gold-dark: #a67c00; --gold-soft: rgba(212, 175, 55, 0.12); --gold-glow: rgba(212, 175, 55, 0.35); --success: #5fd07f; --success-soft: rgba(95, 208, 127, 0.13); --warning: #e0b64c; --warning-soft: rgba(224, 182, 76, 0.13); --danger: #e07a7a; --danger-soft: rgba(224, 122, 122, 0.13); --info: #b88ae0; --info-soft: rgba(155, 107, 196, 0.15); --shadow-sm: 0 1px 3px rgba(0,0,0,.5); --shadow-md: 0 6px 24px rgba(0,0,0,.5); --shadow-lg: 0 18px 50px rgba(0,0,0,.7); --code-bg: #0a0715; }
-[data-theme="light"] { color-scheme: light; --bg: #f0e8d8; --bg-glow: rgba(166, 124, 0, 0.07); --surface: #faf5e8; --surface-2: #f2ebd9; --surface-3: #e8dfc5; --border: #d9cdb4; --border-strong: #bcab88; --text: #2a1f14; --text-muted: #6b5d47; --text-dim: #94856a; --gold: #a67c00; --gold-light: #c49616; --gold-dark: #7a5a00; --gold-soft: rgba(166, 124, 0, 0.10); --gold-glow: rgba(166, 124, 0, 0.28); --success: #1f8a3d; --success-soft: rgba(31, 138, 61, 0.11); --warning: #8f6a00; --warning-soft: rgba(166, 124, 0, 0.12); --danger: #c33a3a; --danger-soft: rgba(195, 58, 58, 0.10); --info: #6a3a9a; --info-soft: rgba(106, 58, 154, 0.10); --shadow-sm: 0 1px 2px rgba(60,40,10,.08); --shadow-md: 0 6px 20px rgba(60,40,10,.12); --shadow-lg: 0 18px 50px rgba(60,40,10,.2); --code-bg: #f6f0df; }
-:root { --radius: 16px; --radius-sm: 10px; --font-display: 'Cinzel', Georgia, serif; --font-body: 'Inter', system-ui, -apple-system, sans-serif; --font-mono: ui-monospace, monospace; --ease: cubic-bezier(.2, .7, .3, 1); }
-*, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body { margin: 0; min-height: 100vh; font-family: var(--font-body); font-size: 15px; line-height: 1.55; color: var(--text); background-color: var(--bg); background-image: radial-gradient(circle at 15% 0%, var(--bg-glow) 0%, transparent 45%), radial-gradient(circle at 85% 100%, var(--bg-glow) 0%, transparent 45%); background-attachment: fixed; display: flex; flex-direction: column; }
-a { color: var(--gold); text-decoration: none; } a:hover { color: var(--gold-light); text-decoration: underline; }
-code { background: var(--gold-soft); color: var(--gold-light); padding: 1px 7px; border-radius: 6px; font-size: .88em; }
-[data-theme="light"] code { color: var(--gold-dark); }
-::selection { background: var(--gold-glow); }
-:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.hidden { display: none !important; }
-* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
-.app-header { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); box-shadow: 0 1px 0 var(--gold-soft), var(--shadow-sm); }
-.app-header-inner { max-width: 1240px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.brand { display: flex; align-items: center; gap: 12px; color: inherit; } .brand:hover { text-decoration: none; }
-.brand-logo { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 1.15rem; color: #1a1408; background: linear-gradient(135deg, var(--gold-light), var(--gold-dark)); box-shadow: 0 0 18px var(--gold-glow); }
-.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; color: var(--gold); line-height: 1.1; }
-.brand-sub { font-size: 11.5px; color: var(--text-muted); }
-.icon-btn { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font-size: 1rem; transition: all .18s var(--ease); }
-.icon-btn:hover { background: var(--gold-soft); border-color: var(--gold); color: var(--gold); }
-.container { width: 100%; max-width: 1240px; margin: 0 auto; padding: 32px 20px 64px; flex: 1; }
-.hero { display: flex; align-items: center; gap: 18px; margin-bottom: 28px; }
-.hero-icon { flex: none; width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center; font-size: 1.6rem; color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold); box-shadow: 0 0 24px var(--gold-soft); }
-.hero h1 { font-family: var(--font-display); font-size: clamp(1.35rem, 3.4vw, 1.9rem); line-height: 1.2; margin: 0 0 4px; }
-.hero p { margin: 0; color: var(--text-muted); max-width: 70ch; }
-.grad { background: linear-gradient(90deg, var(--gold-light), var(--gold) 50%, var(--info)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
-.card-title { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 1.02rem; font-weight: 700; color: var(--gold); margin: 0 0 6px; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 20px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 600 14px/1.1 var(--font-body); white-space: nowrap; cursor: pointer; transition: all .18s var(--ease); }
-.btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); background: var(--gold-soft); transform: translateY(-1px); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn-primary { background: linear-gradient(135deg, var(--gold-light), var(--gold) 55%, var(--gold-dark)); color: #1a1408; border-color: var(--gold); box-shadow: 0 2px 14px var(--gold-glow); }
-.btn-primary:hover:not(:disabled) { color: #1a1408; background: linear-gradient(135deg, #f3d77a, var(--gold-light)); }
-.check { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
-input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--gold); cursor: pointer; }
-.dropzone { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 38px 20px; cursor: pointer; border: 2px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface-2); color: var(--text-muted); transition: all .2s var(--ease); }
-.dropzone:hover, .dropzone.over { border-color: var(--gold); background: var(--gold-soft); color: var(--text); }
-.dropzone i { font-size: 2.1rem; color: var(--gold); }
-.deck { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: 14px 16px; margin-bottom: 12px; }
+/* Seulement ce qui est propre à cette page (les couleurs viennent des variables communes) */
+.deck { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: 14px 16px; margin-top: 12px; }
 .deck h3 { margin: 0 0 4px; font-size: 1.02rem; }
-.deck .stats { color: var(--text-muted); font-size: 13px; margin-bottom: 8px; }
-.deck .ok { color: var(--success); font-weight: 600; } .deck .ko { color: var(--danger); font-weight: 600; }
-.miss { font: 12.5px var(--font-mono); color: var(--text-muted); background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
-.toasts { position: fixed; bottom: 22px; right: 22px; z-index: 200; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-.toast { display: flex; align-items: center; gap: 10px; max-width: min(380px, calc(100vw - 44px)); padding: 12px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 600; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--success); box-shadow: var(--shadow-lg); pointer-events: auto; animation: toastIn .3s var(--ease); }
-.toast.err { border-left-color: var(--danger); }
-@keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+.deck-stats { color: var(--text-muted); font-size: 13px; margin-bottom: 8px; }
+.deck .ok { color: var(--success); font-weight: 600; }
+.deck .ko { color: var(--danger); font-weight: 600; }
+.miss-list { font: 12.5px var(--font-mono); color: var(--text-muted); background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
 </style>
-<script>
-(function () {
-    const KEY = 'ygo_theme';
-    const root = document.documentElement;
-    function preferred() {
-        try { const saved = localStorage.getItem(KEY); if (saved === 'dark' || saved === 'light') return saved; } catch (e) {}
-        return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-    }
-    function applyTheme(theme) {
-        root.setAttribute('data-theme', theme);
-        const btn = document.getElementById('theme-toggle');
-        if (btn) { btn.innerHTML = theme === 'dark' ? '<i class="fa-solid fa-moon"></i>' : '<i class="fa-solid fa-sun"></i>'; }
-    }
-    applyTheme(preferred());
-    document.addEventListener('DOMContentLoaded', () => {
-        applyTheme(root.getAttribute('data-theme'));
-        const btn = document.getElementById('theme-toggle');
-        if (btn) btn.addEventListener('click', () => {
-            const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-            try { localStorage.setItem(KEY, next); } catch (e) {}
-            applyTheme(next);
-        });
-    });
-    const YGO = {};
-    YGO.$ = (id) => document.getElementById(id);
-    YGO.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    YGO.el = function (tag, props, ...children) {
-        const node = document.createElement(tag);
-        for (const [k, v] of Object.entries(props || {})) {
-            if (v == null || v === false) continue;
-            if (k === 'className') node.className = v;
-            else if (k === 'text') node.textContent = v;
-            else if (k === 'dataset') Object.assign(node.dataset, v);
-            else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v);
-            else node.setAttribute(k, v === true ? '' : v);
-        }
-        for (const c of children.flat()) { if (c != null && c !== false) node.append(c.nodeType ? c : document.createTextNode(String(c))); }
-        return node;
-    };
-    YGO.toast = function (message, type = 'ok') {
-        let box = document.getElementById('toasts');
-        if (!box) { box = YGO.el('div', { className: 'toasts', id: 'toasts' }); document.body.append(box); }
-        const t = YGO.el('div', { className: 'toast ' + type }, YGO.el('i', { className: 'fa-solid ' + (type === 'ok' ? 'fa-circle-check' : 'fa-circle-exclamation') }), YGO.el('span', { text: message }));
-        box.append(t);
-        setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, 3600);
-    };
-    YGO.download = function (data, filename, mime = 'application/octet-stream') {
-        const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
-        const url = URL.createObjectURL(blob);
-        const a = YGO.el('a', { href: url, download: filename });
-        document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
-    };
-    YGO.initSql = () => initSqlJs({ locateFile: (f) => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/' + f });
-    window.YGO = YGO;
-})();
-</script>
 </head>
 <body>
 
-<button class="icon-btn" id="theme-toggle" type="button" style="position:fixed;top:14px;right:14px;z-index:60;"></button>
+<header class="app-header">
+    <div class="app-header-inner">
+        <a class="brand" href="../index.html" title="Tous les outils">
+            <div class="brand-logo"><i class="fa-solid fa-dragon"></i></div>
+            <div>
+                <div class="brand-name">YGO Tools</div>
+                <div class="brand-sub">Boîte à outils Yu-Gi-Oh!</div>
+            </div>
+        </a>
+        <div class="header-actions">
+            <a class="icon-btn" href="../index.html" title="Tous les outils" aria-label="Tous les outils"><i class="fa-solid fa-house"></i></a>
+            <button class="icon-btn" id="theme-toggle" type="button"></button>
+        </div>
+    </div>
+</header>
 
 <main class="container wide">
     <section class="hero">
         <div class="hero-icon"><i class="fa-solid fa-file-export"></i></div>
         <div>
             <h1>Deck vers <span class="grad">YDK</span></h1>
-            <p>Glisse tes decks .xml, .json ou .txt : les cartes sont retrouvées et tu récupères des .ydk prêts pour EDOPro.</p>
+            <p>Glisse tes decks (.xml ou .json) : le script cherche les vrais IDs dans les .cdb du dépôt et te donne des .ydk prêts à jouer.</p>
         </div>
     </section>
 
     <div class="card">
-        <h2 class="card-title"><i class="fa-solid fa-folder-open"></i> 1. Fichiers .cdb <small>(Optionnel pour le JSON/TXT)</small></h2>
+        <h2 class="card-title"><i class="fa-solid fa-database"></i> 1. Cartes (.cdb)</h2>
+        <p class="card-sub">Les .cdb du dépôt (<code>data/cdb</code>) sont chargés tout seuls au premier deck. Rien à faire de ton côté.</p>
+
         <div class="row">
-            <button class="btn btn-primary" id="loadBtn" type="button"><i class="fa-solid fa-bolt"></i> Charger ProjectIgnis</button>
-            <button class="btn" id="changeBtn" type="button"><i class="fa-solid fa-folder-tree"></i> Changer de dossier</button>
-            <button class="btn" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Tout vider</button>
+            <label class="check"><input type="checkbox" id="optUseRepo" checked> Utiliser les .cdb du dépôt</label>
+            <label class="check"><input type="checkbox" id="langEn" checked> Noms anglais</label>
+            <label class="check"><input type="checkbox" id="langFr"> Noms français</label>
+            <label class="check"><input type="checkbox" id="optRush"> Inclure Rush, Skills et Goat</label>
         </div>
-        
-        <div class="row" style="margin-top:10px; margin-bottom: 10px;">
+        <div class="row">
             <label class="check">
                 <input type="checkbox" id="optPreferCustom" checked>
-                <span>Ne garder <strong>que</strong> les cartes custom VAACT (utile pour le XML)</span>
+                <span>Chercher d'abord les cartes custom <span class="hint">(ID à partir de 900 000 000, si une carte existe en custom et en officiel)</span></span>
             </label>
+        </div>
+        <div class="row">
+            <button class="btn btn-primary" id="repoBtn" type="button"><i class="fa-solid fa-cloud-arrow-down"></i> Charger maintenant</button>
+            <button class="btn" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Tout vider</button>
         </div>
 
         <details id="manual" style="margin-bottom:10px;">
-            <summary style="cursor:pointer; color: var(--text-muted); font-size: 12px;">Autre méthode (Firefox)</summary>
+            <summary class="muted" style="cursor:pointer; font-size: 12.5px;">Utiliser mes propres .cdb (ProjectIgnis, extensions en plus…)</summary>
             <div class="row" style="margin-top:8px;">
+                <button class="btn" id="loadBtn" type="button"><i class="fa-solid fa-bolt"></i> Charger ProjectIgnis</button>
+                <button class="btn" id="changeBtn" type="button"><i class="fa-solid fa-folder-tree"></i> Changer de dossier</button>
+                <span class="hint">Chrome ou Edge seulement.</span>
+            </div>
+            <div class="row">
                 <label for="folderInput" class="btn"><i class="fa-solid fa-folder-plus"></i> Ajouter un dossier</label>
                 <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden">
                 <label for="fileInput" class="btn"><i class="fa-solid fa-file-circle-plus"></i> Ajouter des .cdb</label>
                 <input type="file" id="fileInput" accept=".cdb" multiple class="hidden">
+                <span class="hint">Autre méthode, marche aussi sous Firefox.</span>
             </div>
         </details>
-        <div style="font-size: 12px; color: var(--text-dim);" id="status"></div>
+        <div class="hint" id="status" role="status"></div>
     </div>
 
     <div class="card">
-        <h2 class="card-title"><i class="fa-solid fa-file-code"></i> 2. Decks .xml, .json ou .txt</h2>
+        <h2 class="card-title"><i class="fa-solid fa-file-code"></i> 2. Decks .xml ou .json</h2>
         <label class="dropzone" id="drop" for="xmlInput">
             <i class="fa-solid fa-cloud-arrow-up"></i>
-            <span><strong>Glisse tes fichiers ici</strong> (.xml, .json ou .txt)</span>
+            <span><strong>Glisse tes fichiers ici</strong> (.xml ou .json)</span>
         </label>
         <input type="file" id="xmlInput" accept=".xml,.json,.txt" multiple class="hidden">
         <div class="row" style="margin-top:14px;">
@@ -172,16 +100,18 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--gold); c
     </div>
 </main>
 
+<footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
 <div class="toasts" id="toasts"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
 <script>
-const { $ } = YGO;
-const CONFIG = { BASE: 'C:\\ProjectIgnis', SEARCH_PATHS: ['expansions', 'config/languages'], CUSTOM_MIN_ID: 900000000 };
-const EXTRA_MASK = 0x40 | 0x2000 | 0x800000 | 0x4000000;
+const { $, el } = YGO;
+const CONFIG = { SEARCH_PATHS: ['expansions', 'config/languages'], CUSTOM_MIN_ID: 900000000 };
+const EXTRA_MASK = 0x40 | 0x2000 | 0x800000 | 0x4000000;   // Fusion, Synchro, Xyz, Link
+const RUSH_PATTERNS = ['rush', 'skill', 'goat'];
 
 let SQL = null;
-const byName = new Map();
-const types = new Map();
+const byName = new Map();   // nom normalisé -> Set d'IDs
+const types = new Map();    // ID -> type
 const loaded = new Set();
 let nbCdb = 0;
 const results = [];
@@ -189,8 +119,10 @@ const results = [];
 const sqlReady = YGO.initSql().then((s) => { SQL = s; }).catch((e) => setStatus('Impossible de charger sql.js : ' + e.message));
 const setStatus = (t) => { $('status').textContent = t; };
 const norm = (s) => String(s || '').normalize('NFD').toLowerCase().replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]/gu, '');
-const stripTag = (s) => String(s || '').replace(/\s*\((buff|nerf)\)\s*$/i, '');
+const stripTag = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '');
+setStatus('Les .cdb du dépôt seront chargés au premier deck.');
 
+/* ---------- Lecture des .cdb ---------- */
 async function addFiles(items) {
     await sqlReady; if (!SQL) return;
     const files = items.filter((x) => /\.cdb$/i.test(x.file.name));
@@ -216,31 +148,59 @@ async function addFiles(items) {
         } catch (e) { bad++; }
         await YGO.sleep(0);
     }
-    setStatus(`${nbCdb} .cdb lus · ${byName.size.toLocaleString('fr-FR')} noms` + (bad ? ` · ${bad} ignoré(s)` : ''));
-    YGO.toast(`${added} .cdb ajoutés.`);
+    setStatus(`${nbCdb} .cdb lus · ${byName.size.toLocaleString('fr-FR')} noms de cartes` + (bad ? ` · ${bad} ignoré(s)` : ''));
+    if (added) YGO.toast(`${added} .cdb ajoutés.`);
 }
+
+/* ---------- .cdb du dépôt (data/cdb) ---------- */
+let repoLoading = null;
+function loadRepo() {
+    if (!repoLoading) repoLoading = loadRepoNow().finally(() => { repoLoading = null; });
+    return repoLoading;
+}
+async function loadRepoNow() {
+    await sqlReady; if (!SQL) return;
+    const langs = [['en', 'langEn'], ['fr', 'langFr']].filter(([, id]) => $(id).checked).map(([l]) => l);
+    if (!langs.length) return YGO.toast('Coche au moins une langue.', 'err');
+    try {
+        setStatus('Lecture de la liste des .cdb du dépôt…');
+        const ignore = $('optRush').checked ? [] : RUSH_PATTERNS;
+        const items = [];
+        for (const lang of langs) {
+            for (const f of await YGO.data.cdbFiles(lang, { ignore })) items.push({ file: f, rel: `data/cdb/${lang}/${f.name}` });
+        }
+        if (!items.length) throw new Error('aucun .cdb dans data/cdb');
+        setStatus(`Téléchargement de ${items.length} .cdb…`);
+        await YGO.pool(items, 4, async (it) => { try { await it.file.arrayBuffer(); } catch (e) {} });
+        await addFiles(items);
+    } catch (e) {
+        setStatus('Impossible de lire les .cdb du dépôt : ' + e.message);
+        YGO.toast('.cdb du dépôt illisibles : ' + e.message, 'err');
+    }
+}
+$('repoBtn').addEventListener('click', () => { loadRepo(); });
 
 const asItems = (l) => l.map((f) => ({ file: f, rel: f.webkitRelativePath || f.name }));
 $('folderInput').addEventListener('change', (e) => { const l = [...e.target.files]; e.target.value = ''; addFiles(asItems(l)); });
 $('fileInput').addEventListener('change', (e) => { const l = [...e.target.files]; e.target.value = ''; addFiles(asItems(l)); });
 $('clearBtn').addEventListener('click', () => { byName.clear(); types.clear(); loaded.clear(); nbCdb = 0; setStatus('Vidé.'); });
 
-function findId(cardEl, deckAverageId) {
-    const passcode = (cardEl.getAttribute('passcode') || '').trim();
-    const onlyCustom = $('optPreferCustom').checked; 
-    if (!onlyCustom && /^\d+$/.test(passcode) && Number(passcode) > 0) return Number(passcode);
-    const name = (cardEl.textContent || '').trim();
+/* ---------- Recherche d'un ID par le nom ---------- */
+function findId(cardName, deckAverageId) {
+    const name = String(cardName || '').trim();
+    const preferCustom = $('optPreferCustom').checked;
+
     for (const candidate of [name, stripTag(name)]) {
         const set = byName.get(norm(candidate));
         if (!set || !set.size) continue;
-        let ids = [...set];
-        if (onlyCustom) {
-            ids = ids.filter((id) => id >= CONFIG.CUSTOM_MIN_ID);
-            if (!ids.length) continue;
-            if (ids.length > 1 && deckAverageId > 0) return ids.sort((a, b) => Math.abs(a - deckAverageId) - Math.abs(b - deckAverageId))[0];
-            return ids.sort((a, b) => a - b)[0];
+        const all = [...set].sort((a, b) => a - b);
+        if (preferCustom) {
+            // Custom d'abord ; s'il n'y en a pas, on retombe sur la carte officielle
+            const custom = all.filter((id) => id >= CONFIG.CUSTOM_MIN_ID);
+            if (custom.length > 1 && deckAverageId > 0) return custom.sort((a, b) => Math.abs(a - deckAverageId) - Math.abs(b - deckAverageId))[0];
+            if (custom.length) return custom[0];
         }
-        return ids.sort((a, b) => a - b)[0];
+        return all[0];
     }
     return null;
 }
@@ -265,14 +225,14 @@ function convertXml(text, filename) {
         const tag = part.tagName.toLowerCase();
         if (!(tag in sec)) continue;
         for (const c of part.children) {
-            const id = findId(c, deckAverageId);
+            const id = findId(c.textContent, deckAverageId);
             if (id == null) missing.push(`(${tag}) ${(c.textContent || '').trim()}`);
             else sec[tag].push(id);
         }
     }
     const main = [], extra = [...sec.extra];
     for (const id of sec.main) (types.has(id) && (types.get(id) & EXTRA_MASK) ? extra : main).push(id);
-    
+
     const lines = ['#created by xml_to_ydk', '#main', ...main, '#extra', ...extra, '!side', ...sec.side];
     for (const m of missing) lines.push('# INTROUVABLE ' + m);
     return { name: deck.getAttribute('name') || filename.replace(/\.xml$/i, ''), ydk: lines.join('\n') + '\n', counts: { main: main.length, extra: extra.length, side: sec.side.length }, missing };
@@ -282,19 +242,37 @@ function convertXml(text, filename) {
 function convertJson(text, filename) {
     const data = JSON.parse(text.replace(/^\uFEFF/, ''));
     const sec = { main: [], extra: [], side: [] };
-    
-    // On extrait les IDs directement (pas besoin des .cdb)
-    if (data.main) for (const c of data.main) if (c && c.id) sec.main.push(parseInt(c.id));
-    if (data.extra) for (const c of data.extra) if (c && c.id) sec.extra.push(parseInt(c.id));
-    if (data.side) for (const c of data.side) if (c && c.id) sec.side.push(parseInt(c.id));
+    const missing = [];
+
+    let sum = 0, count = 0;
+    for (const zone of ['main', 'extra', 'side']) {
+        if (data[zone]) for (const c of data[zone]) {
+            if (c && c.name && (c.id || c.serial_number)) {
+                const id = Number(c.id || c.serial_number);
+                if (id > CONFIG.CUSTOM_MIN_ID) { sum += id; count++; }
+            }
+        }
+    }
+    const deckAverageId = count > 0 ? Math.round(sum / count) : 0;
+
+    for (const zone of ['main', 'extra', 'side']) {
+        if (data[zone]) for (const c of data[zone]) {
+            if (!c || !c.name) continue;
+            // On cherche le VRAI ID EDOPro par le nom, pas l'ID DuelingBook
+            const id = findId(c.name, deckAverageId);
+            if (id == null) missing.push(`(${zone}) ${c.name}`);
+            else sec[zone].push(id);
+        }
+    }
 
     const lines = ['#created by json_to_ydk', '#main', ...sec.main, '#extra', ...sec.extra, '!side', ...sec.side];
-    
-    return { 
-        name: data.name || filename.replace(/\.[^.]+$/, ''), 
-        ydk: lines.join('\n') + '\n', 
-        counts: { main: sec.main.length, extra: sec.extra.length, side: sec.side.length }, 
-        missing: [] 
+    for (const m of missing) lines.push('# INTROUVABLE ' + m);
+
+    return {
+        name: data.name || filename.replace(/\.[^.]+$/, ''),
+        ydk: lines.join('\n') + '\n',
+        counts: { main: sec.main.length, extra: sec.extra.length, side: sec.side.length },
+        missing
     };
 }
 
@@ -329,40 +307,50 @@ function makeZip(files) {
     return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
 }
 
+
 const safeName = (s) => s.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'deck';
 
 function renderDeck(r, filename) {
-    const box = document.createElement('div'); box.className = 'deck';
-    box.innerHTML = `<h3>${r.name}</h3>
-        <div class="stats">Main ${r.counts.main} · Extra ${r.counts.extra} · Side ${r.counts.side} — 
-        ${r.missing.length ? `<span class="ko">${r.missing.length} introuvable(s)</span>` : '<span class="ok">tout est là</span>'}</div>
-        ${r.missing.length ? `<div class="miss">${r.missing.join('\n')}</div>` : ''}`;
-    
-    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn btn-primary btn-sm';
-    btn.innerHTML = '<i class="fa-solid fa-download"></i> Télécharger le .ydk';
-    btn.onclick = () => YGO.download(r.ydk, safeName(filename.replace(/\.[^.]+$/, '')) + '.ydk', 'text/plain');
-    box.append(btn);
+    const total = r.counts.main + r.counts.extra + r.counts.side;
+    const stats = el('div', { className: 'deck-stats' },
+        `Main ${r.counts.main} · Extra ${r.counts.extra} · Side ${r.counts.side} — `,
+        r.missing.length
+            ? el('span', { className: 'ko', text: `${r.missing.length} carte(s) introuvable(s)` })
+            : el('span', { className: 'ok', text: 'toutes les cartes trouvées' }));
+    const box = el('div', { className: 'deck' }, el('h3', { text: r.name }), stats);
+    if (r.missing.length) {
+        box.append(
+            el('div', { className: 'miss-list', text: r.missing.join('\n') }),
+            el('div', { className: 'hint', text: "Il manque sûrement le .cdb de cette extension : ajoute-le (« Utiliser mes propres .cdb » ci-dessus), puis re-glisse le fichier." }));
+    }
+    box.append(el('button', {
+        type: 'button', className: 'btn btn-primary btn-sm', disabled: total === 0,
+        onClick: () => YGO.download(r.ydk, safeName(filename.replace(/\.[^.]+$/, '')) + '.ydk', 'text/plain'),
+    }, el('i', { className: 'fa-solid fa-download' }), ' Télécharger le .ydk'));
     $('decks').append(box);
 }
 
+const errorBox = (text) => $('decks').append(el('div', { className: 'deck' }, el('span', { className: 'ko', text })));
+
 async function handleFiles(files) {
-    if (!nbCdb) YGO.toast('Info : Aucun .cdb chargé (le JSON/TXT marchera, le XML risque d\'avoir des manques).');
-    $('decks').innerHTML = ''; results.length = 0;
+    $('decks').replaceChildren(); results.length = 0;
+    $('allBtn').disabled = true;
+    if ($('optUseRepo').checked) await loadRepo();
+    if (!nbCdb) YGO.toast('Attention : aucun .cdb chargé. Les cartes ne seront pas reconnues.', 'err');
     for (const f of files) {
         try {
             let r;
             const text = await f.text();
             const isJson = text.trim().startsWith('{');
-            
+
             if (isJson) r = convertJson(text, f.name);
             else if (/\.xml$/i.test(f.name) || text.trim().startsWith('<')) r = convertXml(text, f.name);
-            else continue;
+            else { errorBox(`${f.name} : format non reconnu (un deck .xml ou .json est attendu).`); continue; }
 
             results.push({ filename: safeName(f.name.replace(/\.[^.]+$/, '')) + '.ydk', ydk: r.ydk });
             renderDeck(r, f.name);
         } catch (e) {
-            const box = document.createElement('div'); box.className = 'deck';
-            box.innerHTML = `<span class="ko">${f.name} : ${e.message}</span>`; $('decks').append(box);
+            errorBox(`${f.name} : ${e.message}`);
         }
     }
     $('allBtn').disabled = !results.length;
@@ -387,12 +375,13 @@ $('allBtn').addEventListener('click', () => {
     YGO.toast(files.length + ' deck(s) dans decks_ydk.zip');
 });
 
-// ===== DOSSIER PROJECTIGNIS =====
+// ===== DOSSIER PROJECTIGNIS (option) =====
 const FS = !!window.showDirectoryPicker;
 const kv = (mode, fn) => new Promise((res, rej) => {
     const r = indexedDB.open('ygo-cdb-finder', 1);
     r.onupgradeneeded = () => r.result.createObjectStore('kv');
     r.onsuccess = () => { const tx = r.result.transaction('kv', mode), req = fn(tx.objectStore('kv')); tx.oncomplete = () => res(req.result); tx.onerror = () => rej(tx.error); };
+    r.onerror = () => rej(r.error);
 });
 const saveHandle = (h) => kv('readwrite', (st) => st.put(h, 'base'));
 const getHandle = () => kv('readonly', (st) => st.get('base')).catch(() => null);
@@ -429,10 +418,10 @@ $('loadBtn').addEventListener('click', async () => {
 $('changeBtn').addEventListener('click', pickBase);
 
 (async () => {
-    if (!FS) { $('loadBtn').disabled = $('changeBtn').disabled = true; $('manual').open = true; return; }
+    if (!FS) { $('loadBtn').disabled = $('changeBtn').disabled = true; return; }
     const h = await getHandle();
-    if (h && (await h.queryPermission({ mode: 'read' })) === 'granted') return loadFromHandle(h);
-    setStatus(h ? 'Clique sur "Charger" (autorisation à redonner).' : 'Clique sur "Charger" pour choisir ton dossier ProjectIgnis.');
+    // Si tu as déjà autorisé ton dossier ProjectIgnis, ses .cdb sont ajoutés en plus de ceux du dépôt
+    if (h && (await h.queryPermission({ mode: 'read' })) === 'granted') loadFromHandle(h);
 })();
 </script>
 </body>
