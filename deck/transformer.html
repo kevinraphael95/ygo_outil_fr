@@ -159,11 +159,30 @@ async function loadDb() {
 loadDb();
 YGO.initSql().then((s) => { SQL = s; }).catch((e) => out.log('sql.js indisponible : ' + e.message, 'err'));
 
+// ART : illustrations custom (data/YUGIOH CUSTOM ART), utilisées en dernier recours
+let ART = new Map();
+const ARTP = YGO.data.customArt()
+    .then((m) => { ART = m; out.log(`${m.size} illustration(s) custom trouvée(s).`, 'ok'); })
+    .catch((e) => out.log('Illustrations custom indisponibles : ' + e.message, 'warn'));
+const customArt = (...names) => {
+    for (const n of names) {
+        if (!n) continue;
+        const a = ART.get(nk(n)) || ART.get(nk(String(n).replace(/\s*\([^)]*\)\s*$/, '')));
+        if (a) return a;
+    }
+    return '';
+};
+const withArt = (c) => {
+    if (!c || c.art) return c;
+    const a = customArt(c.en, c.name);
+    return a ? { ...c, art: a } : c;
+};
+
 // Carte YGOPRODeck -> objet commun
 function fromDb(id, lang) {
     const c = DB.cards.get(id);
     const en = lang === 'en';
-    return { id: +id, name: (en ? c.en : c.fr || c.en) || c.en, desc: (en ? c.desc_en : c.desc_fr || c.desc_en) || '',
+    return { id: +id, en: c.en, name: (en ? c.en : c.fr || c.en) || c.en, desc: (en ? c.desc_en : c.desc_fr || c.desc_en) || '',
         type: c.type, frameType: c.frameType, atk: c.atk, def: c.def, level: c.level, race: c.race, attribute: c.attribute,
         linkval: c.linkval, linkmarkers: c.linkmarkers, scale: c.scale, art: c.img_cropped || '' };
 }
@@ -182,7 +201,7 @@ function fromYugi(key, y, lang) {
     for (const k of art ? [] : scanKeys(raw)) if (DB.crop.has(k)) { art = DB.crop.get(k); break; }
     const desc = (en ? y.desc_en : y.desc_fr || y.desc_en) || '';
     const typeline = t === 'Effect Monster' && y.type ? String(y.type).split('/').map((s) => s.trim()).filter(Boolean) : undefined;
-    return { id: y.id || '', name: (en ? y.en : y.fr || y.en) || y.en, desc, monster_desc: desc,
+    return { id: y.id || '', en: y.en, name: (en ? y.en : y.fr || y.en) || y.en, desc, monster_desc: desc,
         pend_desc: (en ? y.pendulum_desc_en : y.pendulum_desc_fr || y.pendulum_desc_en) || '',
         type: t, frameType, typeline, atk: y.atk, def: y.def, level: y.level ?? y.rank,
         race: t === 'Effect Monster' ? y.race : (y.property || 'Normal'), attribute: y.attribute,
@@ -191,12 +210,12 @@ function fromYugi(key, y, lang) {
 // Recherche par nom FR/EN ou code -> objet commun | null
 function find(q, lang) {
     q = String(q).trim();
-    if (/^\d{4,}$/.test(q) && DB.cards.has(q)) return fromDb(q, lang);
+    if (/^\d{4,}$/.test(q) && DB.cards.has(q)) return withArt(fromDb(q, lang));
     const k = nk(q);
     const id = DB.byFr.get(k) || DB.byEn.get(k);
-    if (id) return fromDb(id, lang);
+    if (id) return withArt(fromDb(id, lang));
     const yk = DB.yugi.has(k) ? k : DB.yugiFr.get(k);
-    return yk ? fromYugi(yk, DB.yugi.get(yk), lang) : null;
+    return yk ? withArt(fromYugi(yk, DB.yugi.get(yk), lang)) : null;
 }
 
 // ============================================================
@@ -436,7 +455,8 @@ async function runCdb() {
             const m = find(name, 'fr') || (tilde && find(tilde.trim(), 'fr'));
             // Tout le reste (nom, effet, stats, type, pendule…) vient du .cdb.
             const st = ty != null ? decodeCdb(ty, race, attr, lvl, atk, def) : DEFAULTS;
-            cards.push({ ...st, id, name, desc: d, art: m ? m.art : '' });
+            // Illustration officielle d'abord, sinon image du dossier YUGIOH CUSTOM ART
+            cards.push({ ...st, id, name, desc: d, art: (m && m.art) || customArt(name, m && m.en, tilde && tilde.trim()) });
             if (i % 200 === 0) { prog.set((i / rows.length) * 100, `Analyse ${i + 1} / ${rows.length}…`); await tick(); }
         }
         prog.set(100, 'Terminé !');
@@ -449,6 +469,7 @@ $('startBtn').addEventListener('click', async () => {
     const btn = $('startBtn');
     btn.disabled = true; cards = []; missing = [];
     try {
+        await ARTP; // attend la liste des illustrations custom
         if (mode === 'deck') runDeck(); else await runCdb();
         finish();
     } catch (err) {
