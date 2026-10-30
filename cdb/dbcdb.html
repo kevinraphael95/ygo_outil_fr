@@ -53,7 +53,7 @@
         </div>
 
         <div class="field">
-            <label for="excludeFile">Fichier d'exclusion <small>(ex: ton VAACT S1.cdb)</small></label>
+            <label for="excludeFile">Fichier d'exclusion <small>(ex : un .cdb de cartes déjà faites)</small></label>
             <input type="file" id="excludeFile" accept=".cdb" multiple>
             <span class="hint">Si une carte de ton deck a le même nom de base et le même effet qu'une carte de ce fichier, elle sera ignorée.</span>
         </div>
@@ -99,6 +99,9 @@ YGO.initSql()
     .catch((e) => out.log('Impossible de charger sql.js : ' + e.message, 'err'));
 
 const { norm, stripParens } = YGO;
+// Effet comparable : seulement les lettres et les chiffres, sans accents ni majuscules.
+// Les tirets, « # », guillemets, espaces et ponctuation sont ignorés.
+const fx = (s) => String(s || '').normalize('NFD').toLowerCase().replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]/gu, '');
 const statSig = (d) => [d.type, d.atk, d.def, d.level, d.race, d.attribute].map((v) => Number(v) || 0).join('/');
 
 const RACE = {};
@@ -288,7 +291,7 @@ btn.addEventListener('click', async () => {
                     if (t.length) for (const [name, desc] of t[0].values) {
                         const k = norm(stripParens(name));
                         if (!exNames.has(k)) exNames.set(k, []);
-                        exNames.get(k).push(String(desc || '').replace(/\s+/g, ' ').trim().toLowerCase());
+                        exNames.get(k).push(fx(desc));
                     }
                 } catch (e) {
                     out.log(`Exclusion ignorée ${f.name} : ${e.message}`, 'warn');
@@ -297,7 +300,7 @@ btn.addEventListener('click', async () => {
 
             list = list.filter(e => {
                 const k = norm(stripParens(e.card.name));
-                const desc = conv(e).desc.replace(/\s+/g, ' ').trim().toLowerCase();
+                const desc = fx(conv(e).desc);
                 if (exNames.has(k) && exNames.get(k).includes(desc)) {
                     out.log(`⏭️ Ignoré : ${e.card.name} (déjà dans l'exclusion)`);
                     return false;
@@ -326,7 +329,7 @@ btn.addEventListener('click', async () => {
             }
 
             // Vérification des doublons internes (même nom de base + même effet + mêmes stats)
-            const key = norm(stripParens(c.name)) + '\u0000' + desc + '\u0000' + statSig(e.datas);
+            const key = norm(stripParens(c.name)) + '\u0000' + fx(desc) + '\u0000' + statSig(e.datas);
             if (seenFx.has(key)) {
                 out.log(`⏭️ Doublon interne ignoré : ${c.name}`);
                 return false;
