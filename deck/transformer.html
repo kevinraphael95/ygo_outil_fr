@@ -188,10 +188,10 @@ const customArt = (...names) => {
     }
     return '';
 };
+// Priorité : illustration recadrée officielle > image du dossier custom > scan Yugipedia
 const withArt = (c) => {
     if (!c || c.art) return c;
-    const a = customArt(c.en, c.name);
-    return a ? { ...c, art: a } : c;
+    return { ...c, art: customArt(c.en, c.name) || c.scan || '' };
 };
 
 // Carte YGOPRODeck -> objet commun
@@ -200,7 +200,7 @@ function fromDb(id, lang) {
     const en = lang === 'en';
     return { id: +id, en: c.en, name: (en ? c.en : c.fr || c.en) || c.en, desc: (en ? c.desc_en : c.desc_fr || c.desc_en) || '',
         type: c.type, frameType: c.frameType, atk: c.atk, def: c.def, level: c.level, race: c.race, attribute: c.attribute,
-        linkval: c.linkval, linkmarkers: c.linkmarkers, scale: c.scale, art: c.img_cropped || '' };
+        linkval: c.linkval, linkmarkers: c.linkmarkers, scale: c.scale, art: c.img_cropped || '', crop: c.img_cropped || '' };
 }
 // Carte Yugipedia -> objet commun (illustration YGOPRODeck préférée au scan)
 function fromYugi(key, y, lang) {
@@ -221,7 +221,7 @@ function fromYugi(key, y, lang) {
         pend_desc: (en ? y.pendulum_desc_en : y.pendulum_desc_fr || y.pendulum_desc_en) || '',
         type: t, frameType, typeline, atk: y.atk, def: y.def, level: y.level ?? y.rank,
         race: t === 'Effect Monster' ? y.race : (y.property || 'Normal'), attribute: y.attribute,
-        linkval: y.link, linkmarkers: y.linkmarkers || [], scale: y.scale, art: art || raw };
+        linkval: y.link, linkmarkers: y.linkmarkers || [], scale: y.scale, art: art || '', crop: art || '', scan: raw };
 }
 // Recherche par nom FR/EN ou code -> objet commun | null
 function find(q, lang) {
@@ -472,7 +472,7 @@ async function runCdb() {
             // Tout le reste (nom, effet, stats, type, pendule…) vient du .cdb.
             const st = ty != null ? decodeCdb(ty, race, attr, lvl, atk, def) : DEFAULTS;
             // Illustration officielle d'abord, sinon image du dossier YUGIOH CUSTOM ART
-            cards.push({ ...st, id, name, desc: d, art: (m && m.art) || customArt(name, m && m.en, tilde && tilde.trim()) });
+            cards.push({ ...st, id, name, desc: d, art: (m && m.crop) || customArt(name, m && m.en, tilde && tilde.trim()) || (m && m.art) || '' });
             if (i % 200 === 0) { prog.set((i / rows.length) * 100, `Analyse ${i + 1} / ${rows.length}…`); await tick(); }
         }
         prog.set(100, 'Terminé !');
