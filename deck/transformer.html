@@ -78,13 +78,6 @@
             </div>
         </div>
 
-        <div class="field">
-            <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
-                <input type="checkbox" id="fullArt" checked style="margin-top:4px">
-                <span>Image entière dans le CSV<small style="display:block;opacity:.7">Ajoute des bandes transparentes pour que l'image ne soit jamais coupée (cadre carré).</small></span>
-            </label>
-        </div>
-
         <div class="actions">
             <button id="startBtn" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> <span id="startLbl">Générer les JSON</span></button>
             <button id="copyBtn" class="btn hidden" type="button"><i class="fa-solid fa-copy"></i> Copier le JSON</button>
@@ -365,7 +358,8 @@ function csvRow(c) {
     const st = c.type === 'Spell Card' || c.type === 'Trap Card';
     const [base, ps] = (c.frameType || '').split('_');
     const pend = ps === 'pendulum', link = base === 'link', L = linkMarkers(c), b = (x) => (x ? 'true' : 'false');
-    const fit = $('fullArt').checked ? '&w=800&h=800&fit=contain&cbg=00000000&output=png' : '';
+    // Images du dossier YUGIOH CUSTOM ART uniquement : entières dans le cadre (carré, 4:3 pour les Pendule), bandes transparentes
+    const fit = c.art && /YUGIOH(%20| )CUSTOM(%20| )ART/i.test(c.art) ? `&w=800&h=${pend ? 600 : 800}&fit=contain&cbg=00000000&output=png` : '';
     const art = c.art ? `https://images.weserv.nl/?url=${encodeURIComponent(c.art.replace(/^https?:\/\//, ''))}${fit}` : PLACEHOLDER;
     const v = {
         Format: 'tcg', Frame: (LAYOUT[base] || 'Effect').toLowerCase(), Name: c.name,
