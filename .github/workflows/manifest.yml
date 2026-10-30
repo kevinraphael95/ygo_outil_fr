@@ -1,4 +1,5 @@
-# Génère data/manifest.json : la liste des CDB (par langue) et des dossiers de scripts.
+# Génère data/manifest.json : la liste des CDB (par langue), des dossiers de scripts
+# et des illustrations custom (data/YUGIOH CUSTOM ART).
 # Les outils en ont besoin car un site statique ne peut pas lister un dossier.
 # Se lance tout seul à chaque modification de data/, ou à la main (onglet Actions → Run workflow).
 name: Générer data/manifest.json
@@ -22,7 +23,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os
-          m = {'cdb': {}, 'script': []}
+          m = {'cdb': {}, 'script': [], 'art': []}
           cdb = 'data/cdb'
           if os.path.isdir(cdb):
               for lang in sorted(os.listdir(cdb)):
@@ -32,6 +33,9 @@ jobs:
           sc = 'data/script'
           if os.path.isdir(sc):
               m['script'] = sorted(d for d in os.listdir(sc) if os.path.isdir(os.path.join(sc, d)))
+          art = 'data/YUGIOH CUSTOM ART'
+          if os.path.isdir(art):
+              m['art'] = sorted(f for f in os.listdir(art) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')))
           with open('data/manifest.json', 'w', encoding='utf-8') as f:
               json.dump(m, f, ensure_ascii=False, indent=1)
               f.write('\n')
