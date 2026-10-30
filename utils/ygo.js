@@ -255,7 +255,8 @@
 
     /* ---------- Liste des fichiers du dépôt (data/manifest.json) ---------- */
     // Un site statique ne peut pas lister un dossier : data/manifest.json (généré par la
-    // GitHub Action) contient la liste des CDB par langue et des dossiers de scripts.
+    // GitHub Action) contient la liste des CDB par langue, des dossiers de scripts
+    // et des illustrations custom.
     function inferRepo() {
         const h = location.hostname;
         if (!h.endsWith('.github.io')) return null;
@@ -273,7 +274,7 @@
                 ? "data/manifest.json introuvable et limite de l'API GitHub atteinte"
                 : 'data/manifest.json introuvable (API GitHub : HTTP ' + resp.status + ')');
         }
-        const m = { cdb: {}, script: [] };
+        const m = { cdb: {}, script: [], art: [] };
         const folders = new Set();
         for (const t of (await resp.json()).tree) {
             if (t.type !== 'blob') continue;
@@ -281,6 +282,8 @@
             if (x) (m.cdb[x[1]] = m.cdb[x[1]] || []).push(x[2]);
             x = /^data\/script\/([^/]+)\//.exec(t.path);
             if (x) folders.add(x[1]);
+            x = /^data\/YUGIOH CUSTOM ART\/([^/]+\.(?:png|jpe?g|webp))$/i.exec(t.path);
+            if (x) m.art.push(x[1]);
         }
         m.script = [...folders].sort();
         return m;
@@ -289,6 +292,19 @@
     YGO.data.manifest = () => once('manifest', async () => {
         try { return await YGO.fetchRepo('data/manifest.json', 'json'); }
         catch (e) { return manifestFromGitHub(); }
+    });
+
+    /** Illustrations custom (data/YUGIOH CUSTOM ART) : Map(nom normalisé → URL). */
+    YGO.data.customArt = () => once('customArt', async () => {
+        let m = await YGO.data.manifest();
+        if (!m.art) m = await manifestFromGitHub(); // manifest.json sans la liste des images
+        const map = new Map();
+        for (const f of m.art || []) {
+            const k = f.replace(/\.[a-z0-9]+$/i, '').toLowerCase().normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+            if (k && !map.has(k)) map.set(k, YGO.url('data/YUGIOH CUSTOM ART/' + f));
+        }
+        return map;
     });
 
     /** Fichier du dépôt présenté comme un File : { name, arrayBuffer() } (téléchargé une seule fois). */
