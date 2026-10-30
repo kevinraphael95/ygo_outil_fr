@@ -358,8 +358,8 @@ function csvRow(c) {
     const st = c.type === 'Spell Card' || c.type === 'Trap Card';
     const [base, ps] = (c.frameType || '').split('_');
     const pend = ps === 'pendulum', link = base === 'link', L = linkMarkers(c), b = (x) => (x ? 'true' : 'false');
-    // Images du dossier YUGIOH CUSTOM ART uniquement : entières dans le cadre (carré, 4:3 pour les Pendule), bandes transparentes
-    const fit = c.art && /YUGIOH(%20| )CUSTOM(%20| )ART/i.test(c.art) ? `&w=800&h=${pend ? 600 : 800}&fit=contain&cbg=00000000&output=png` : '';
+    // Images du dossier YUGIOH CUSTOM ART uniquement : remplissent tout le cadre (carré, 4:3 pour les Pendule), recadrées au centre
+    const fit = c.art && /YUGIOH(%20| )CUSTOM(%20| )ART/i.test(c.art) ? `&w=800&h=${pend ? 600 : 800}&fit=cover&a=center` : '';
     const art = c.art ? `https://images.weserv.nl/?url=${encodeURIComponent(c.art.replace(/^https?:\/\//, ''))}${fit}` : PLACEHOLDER;
     const v = {
         Format: 'tcg', Frame: (LAYOUT[base] || 'Effect').toLowerCase(), Name: c.name,
