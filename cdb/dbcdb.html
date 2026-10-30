@@ -102,6 +102,15 @@ const { norm, stripParens } = YGO;
 // Effet comparable : seulement les lettres et les chiffres, sans accents ni majuscules.
 // Les tirets, « # », guillemets, espaces et ponctuation sont ignorés.
 const fx = (s) => String(s || '').normalize('NFD').toLowerCase().replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]/gu, '');
+// Montre où un effet s'écarte de celui de l'exclusion le plus proche (lettres et chiffres seulement).
+function diffHint(a, candidates) {
+    const common = (x, y) => { let i = 0; while (i < x.length && i < y.length && x[i] === y[i]) i++; return i; };
+    let best = candidates[0];
+    for (const c of candidates) if (common(a, c) > common(a, best)) best = c;
+    const i = common(a, best);
+    const cut = (x) => '« …' + x.slice(Math.max(0, i - 12), i + 28) + (x.length > i + 28 ? '…' : '') + ' »';
+    return `(diffère après ${i} caractères : deck ${cut(a)} / exclusion ${cut(best)})`;
+}
 const statSig = (d) => [d.type, d.atk, d.def, d.level, d.race, d.attribute].map((v) => Number(v) || 0).join('/');
 
 const RACE = {};
@@ -288,11 +297,13 @@ btn.addEventListener('click', async () => {
                 try {
                     db = new SQL.Database(new Uint8Array(await f.arrayBuffer()));
                     const t = db.exec('SELECT name, desc FROM texts');
-                    if (t.length) for (const [name, desc] of t[0].values) {
+                    const rows = t.length ? t[0].values : [];
+                    for (const [name, desc] of rows) {
                         const k = norm(stripParens(name));
                         if (!exNames.has(k)) exNames.set(k, []);
                         exNames.get(k).push(fx(desc));
                     }
+                    out.log(`   ${f.name} : ${rows.length} cartes`);
                 } catch (e) {
                     out.log(`Exclusion ignorée ${f.name} : ${e.message}`, 'warn');
                 } finally { if (db) db.close(); }
@@ -305,6 +316,7 @@ btn.addEventListener('click', async () => {
                     out.log(`⏭️ Ignoré : ${e.card.name} (déjà dans l'exclusion)`);
                     return false;
                 }
+                if (exNames.has(k)) out.log(`≈ Gardé : ${e.card.name} — même nom que dans l'exclusion mais effet différent ${diffHint(desc, exNames.get(k))}`);
                 return true;
             });
         }
