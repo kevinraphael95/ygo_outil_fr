@@ -141,7 +141,7 @@ const fromCard = (c) => ({ en: c.en || '', fr: c.fr || '', dEn: c.desc_en || '',
 
 async function loadDb() {
     try {
-        const r = await fetch('data/cards-db.json');
+        const r = await fetch('../data/cards-db.json');
         if (r.ok) {
             for (const [id, c] of Object.entries(await r.json())) {
                 DB.cards.set(String(id), c);
@@ -151,7 +151,7 @@ async function loadDb() {
         }
     } catch (e) { out.log('cards-db.json indisponible : ' + e.message, 'warn'); }
     try {
-        const r = await fetch('data/yugipedia-db.json');
+        const r = await fetch('../data/yugipedia-db.json');
         if (r.ok) {
             for (const [k, c] of Object.entries(await r.json())) {
                 if (!c.en && !c.fr) continue;
