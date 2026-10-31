@@ -215,7 +215,7 @@
 
     /* ---------- Données du dépôt (dossier data/) ---------- */
     // Racine du dépôt déduite de l'emplacement de ygo.js : marche depuis n'importe quel sous-dossier.
-    const BASE = new URL('../', SCRIPT_SRC || document.baseURI).href;
+    const BASE = 'https://kevinraphael95.github.io/ygo_outil_fr/';
     YGO.url = (path) => new URL(path.split('/').map(encodeURIComponent).join('/'), BASE).href;
 
     /** Charge un fichier du dépôt : type = 'text' | 'json' | 'arrayBuffer'. */
