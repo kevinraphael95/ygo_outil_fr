@@ -1,7 +1,6 @@
 {
  "cdb": {
   "en": [
-   "VAACT S3 patch.cdb",
    "cards-rush.cdb",
    "cards-rush.delta.cdb",
    "cards-skills-unofficial.cdb",
@@ -25,8 +24,6 @@
    "release-betb.cdb"
   ],
   "fr": [
-   "VAACT S1.cdb",
-   "VAACT S3 patch_fr.cdb",
    "cards-rush.cdb",
    "cards-skills-unofficial.cdb",
    "cards-skills.cdb",
@@ -39,6 +36,16 @@
    "prerelease-locr.cdb",
    "prerelease-mzmu.cdb",
    "prerelease-others.cdb"
+  ],
+  "vaact": [
+   "VAACT S1 fr.cdb",
+   "VAACT S1.5.cdb",
+   "VAACT S1.cdb",
+   "VAACT S2.5.cdb",
+   "VAACT S2.cdb",
+   "VAACT S3 patch.cdb",
+   "VAACT S3 patch_fr.cdb",
+   "VAACT S3.cdb"
   ]
  },
  "script": [
