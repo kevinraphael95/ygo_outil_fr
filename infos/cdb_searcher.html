@@ -39,12 +39,27 @@
   </section>
 
   <section class="card">
+    <!-- Barre de recherche principale -->
     <div class="row">
       <input type="text" id="q" class="grow" placeholder="Nom de carte… (=nom pour exact)" autocomplete="off">
-      <button class="btn btn-sm" id="clearBtn" type="button" title="Effacer la recherche"><i class="fa-solid fa-xmark"></i></button>
-      <label class="check"><input type="checkbox" id="exact"> Exact</label>
     </div>
-    <div class="hint" id="status" style="margin-top:10px;">Chargement…</div>
+    
+    <!-- Options sous la barre -->
+    <div class="row" style="margin-top: 12px; align-items: center; justify-content: space-between;">
+      <div class="row" style="gap: 16px; margin: 0;">
+        <button class="btn btn-sm" id="clearBtn" type="button" title="Effacer la recherche">
+          <i class="fa-solid fa-xmark"></i> Effacer
+        </button>
+        <label class="check" style="margin: 0;">
+          <input type="checkbox" id="exact"> Exact
+        </label>
+        <button class="btn btn-sm" id="loadFiles" type="button">
+          <i class="fa-solid fa-file-circle-plus"></i> Ajouter des .cdb locaux
+        </button>
+        <input type="file" id="filesInput" accept=".cdb" multiple class="hidden">
+      </div>
+      <div class="hint" id="status">Chargement…</div>
+    </div>
   </section>
 
   <div class="finder">
@@ -57,11 +72,6 @@
     <section class="card panel">
       <div id="detail"><div class="hint">Clique sur une carte pour voir son détail.</div></div>
     </section>
-  </div>
-
-  <div style="text-align: center; margin-top: 20px; margin-bottom: 20px;">
-    <button class="btn btn-sm" id="loadFiles" type="button"><i class="fa-solid fa-file-circle-plus"></i> Ajouter des .cdb locaux</button>
-    <input type="file" id="filesInput" accept=".cdb" multiple class="hidden">
   </div>
 </main>
 
@@ -180,7 +190,6 @@ function runSearch() {
 
   for (const id of ids.slice(0, MAX_RESULTS)) {
     const arr = entries.get(id);
-    // Affiche le premier nom trouvé pour cette carte
     const nomAffiche = arr[0].name; 
 
     const li = YGO.el('li', {
@@ -206,7 +215,6 @@ function showDetail(id) {
   const arr = entries.get(id) || [];
   det.append(YGO.el('div', { className: 'd-id', text: 'ID ' + id }));
 
-  // Trie pour afficher l'anglais en premier, puis les autres langues
   const shown = arr.slice().sort((a, b) => (a.lang !== 'en') - (b.lang !== 'en') || a.lang.localeCompare(b.lang));
 
   for (const e of shown) {
