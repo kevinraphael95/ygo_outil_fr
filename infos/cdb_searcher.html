@@ -29,7 +29,7 @@
   </div>
 </header>
 
-<main class="container">
+<main class="container wide">
   <section class="hero">
     <div class="hero-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
     <div>
@@ -47,14 +47,18 @@
     <div class="hint" id="status" style="margin-top:10px;">Chargement…</div>
   </section>
 
-  <section class="card" id="resultCard" hidden>
-    <div class="toolbar">
-      <span class="hint" id="count"></span>
-      <button class="btn btn-sm" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Vider</button>
-    </div>
-    <div id="results" class="result-list"></div>
-    <div id="detail" style="margin-top:14px;"></div>
-  </section>
+  <div class="finder">
+    <section class="card panel">
+      <div class="toolbar">
+        <span class="hint" id="count"></span>
+        <button class="btn btn-sm" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Vider</button>
+      </div>
+      <div id="results" class="result-list"></div>
+    </section>
+    <section class="card panel">
+      <div id="detail"><div class="hint">Clique sur une carte pour voir son détail.</div></div>
+    </section>
+  </div>
 
   <details class="card">
     <summary class="card-title" style="cursor:pointer;"><i class="fa-solid fa-folder-open"></i> Utiliser mon propre fichier</summary>
@@ -117,7 +121,6 @@ async function addFiles(items) {
     } catch (e) { bad++; log.log(rel + ' : ' + e.message, 'warn'); }
     await YGO.sleep(0);
   }
-  $('clearBtn').parentElement; // no-op
   setStatus(`${loaded.size} CDB · ${entries.size.toLocaleString('fr-FR')} cartes` + (bad ? ` · ${bad} ignoré(s)` : ''));
   if (added) YGO.toast(`${added} CDB ajouté(s)`);
   refreshLangs();
@@ -235,13 +238,13 @@ function runSearch() {
   if (q.startsWith('=')) { exact = true; q = q.slice(1); }
   const lang = $('lang').value || 'all';
 
-  const card = $('resultCard');
   const box = $('results');
-  const det = $('detail');
-  box.innerHTML = ''; det.innerHTML = '';
+  box.innerHTML = '';
 
-  if (!q) { card.hidden = true; return; }
-  card.hidden = false;
+  if (!q) {
+    $('count').textContent = '';
+    return showDetail(null);
+  }
 
   const ids = search(q, exact, lang);
   $('count').textContent = ids.length
@@ -266,11 +269,13 @@ function runSearch() {
 
 function showDetail(id) {
   const det = $('detail'); det.innerHTML = '';
+  if (id == null) {
+    det.append(YGO.el('div', { className: 'hint', text: 'Clique sur une carte pour voir son détail.' }));
+    return;
+  }
   const arr = entries.get(id) || [];
-  if (!arr.length) return;
   det.append(YGO.el('div', { className: 'd-id', text: 'ID ' + id }));
 
-  // une seule langue affichée : celle du filtre, sinon toutes
   const lang = $('lang').value || 'all';
   const shown = lang === 'all'
     ? arr.slice().sort((a, b) => (a.lang !== 'en') - (b.lang !== 'en') || a.lang.localeCompare(b.lang))
@@ -288,11 +293,8 @@ function showDetail(id) {
 /* ---------- Écouteurs ---------- */
 $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(runSearch, 180); });
 $('exact').addEventListener('change', runSearch);
-$('lang').addEventListener('change', runSearch);
-$('clearBtn').addEventListener('click', () => {
-  $('q').value = '';
-  runSearch();
-});
+$('lang').addEventListener('change', () => { runSearch(); });
+$('clearBtn').addEventListener('click', () => { $('q').value = ''; runSearch(); });
 
 /* ---------- Init ---------- */
 (async () => {
@@ -307,14 +309,21 @@ $('clearBtn').addEventListener('click', () => {
 </script>
 
 <style>
-  /* Petit complément au design system, spécifique à cet outil */
+  /* Deux colonnes : liste à gauche, détail à droite */
+  .finder { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+  .finder > .panel { margin-bottom: 0; height: max(420px, calc(100vh - 380px)); overflow: auto; }
+
+  #results { max-height: none; }
+
   .d-id    { font-family: var(--font-display); color: var(--gold); font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
   .d-lang  { margin-top: 12px; font: 700 .72rem var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--info); }
   .d-name  { font-weight: 700; }
   .d-desc  { white-space: pre-wrap; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
-  #results { max-height: 320px; overflow: auto; }
-  #results li { cursor: pointer; }
-  #results li.sel { border-color: var(--gold); background: var(--gold-soft); }
+
+  @media (max-width: 760px) {
+    .finder { grid-template-columns: 1fr; }
+    .finder > .panel { height: auto; max-height: 60vh; }
+  }
 </style>
 </body>
 </html>
