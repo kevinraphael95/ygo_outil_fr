@@ -39,12 +39,10 @@
   </section>
 
   <section class="card">
-    <!-- Barre de recherche principale -->
     <div class="row">
       <input type="text" id="q" class="grow" placeholder="Nom de carte… (=nom pour exact)" autocomplete="off">
     </div>
     
-    <!-- Options sous la barre -->
     <div class="row" style="margin-top: 12px; align-items: center; justify-content: space-between;">
       <div class="row" style="gap: 16px; margin: 0;">
         <button class="btn btn-sm" id="clearBtn" type="button" title="Effacer la recherche">
@@ -89,14 +87,43 @@ let SQL = null;
 let timer = null;
 
 const MAX_RESULTS = 300;
-const LANG_LABEL = { en: 'Anglais', fr: 'Français', de: 'Allemand', it: 'Italien', pt: 'Portugais', es: 'Espagnol', ja: 'Japonais', ko: 'Coréen', zh: 'Chinois' };
-const LANG_ROOT = 'config/languages';
-const LANG_DIR = LANG_ROOT.split('/').pop().toLowerCase();
+
+// Ajout des nouvelles langues ici
+const LANG_LABEL = { 
+  en: 'Anglais', 
+  fr: 'Français', 
+  de: 'Allemand', 
+  it: 'Italien', 
+  pt: 'Portugais', 
+  po: 'Portugais', // Parfois abrégé "po" au lieu de "pt"
+  es: 'Espagnol', 
+  ja: 'Japonais', 
+  kr: 'Coréen',    // Ajout du coréen
+  ko: 'Coréen', 
+  zh: 'Chinois',
+  vaact: 'VAACT'   // Si tu veux nommer le dossier vaact
+};
 
 const setStatus = (t) => { $('status').textContent = t; };
 const sqlReady = YGO.initSql()
   .then((s) => { SQL = s; })
   .catch((e) => setStatus('sql.js : ' + e.message));
+
+// Reconnaître la langue dans le chemin (ex: "repo/fr/cards.cdb" -> "fr")
+function langOf(rel) {
+  const parts = rel.split('/');
+  for (const p of parts) {
+    const low = p.toLowerCase();
+    if (LANG_LABEL[low]) return low; // "fr", "en", "kr", "vaact", etc.
+    if (low === 'languages') {
+      const idx = parts.indexOf(p);
+      if (idx >= 0 && parts[idx + 1] && LANG_LABEL[parts[idx + 1].toLowerCase()]) {
+        return parts[idx + 1].toLowerCase();
+      }
+    }
+  }
+  return 'nontrad';
+}
 
 async function addFiles(items) {
   await sqlReady;
@@ -127,12 +154,6 @@ async function addFiles(items) {
   setStatus(`${loaded.size} CDB · ${entries.size.toLocaleString('fr-FR')} cartes` + (bad ? ` · ${bad} ignoré(s)` : ''));
   if (added) YGO.toast(`${added} CDB ajouté(s)`);
   runSearch();
-}
-
-function langOf(rel) {
-  const parts = rel.split('/');
-  const i = parts.findIndex((p) => p.toLowerCase() === LANG_DIR);
-  return i >= 0 && parts.length > i + 2 ? parts[i + 1] : 'nontrad';
 }
 
 async function loadFromRepo() {
@@ -188,9 +209,21 @@ function runSearch() {
     ? ids.length + ' résultat(s)' + (ids.length > MAX_RESULTS ? ` — ${MAX_RESULTS} premiers affichés` : '')
     : 'Aucune carte trouvée.';
 
+  const qNorm = YGO.norm(q);
+
   for (const id of ids.slice(0, MAX_RESULTS)) {
     const arr = entries.get(id);
-    const nomAffiche = arr[0].name; 
+    
+    // Trouver le meilleur nom à afficher : celui qui contient la recherche, en priorité le français
+    let best = arr[0];
+    for (const e of arr) {
+      const n = YGO.norm(e.name);
+      if (n.includes(qNorm)) {
+        if (best.lang !== 'fr' && e.lang === 'fr') best = e;
+        else if (best.lang === 'nontrad' && e.lang !== 'nontrad') best = e;
+      }
+    }
+    const nomAffiche = best.name;
 
     const li = YGO.el('li', {
       onClick: () => {
@@ -215,7 +248,14 @@ function showDetail(id) {
   const arr = entries.get(id) || [];
   det.append(YGO.el('div', { className: 'd-id', text: 'ID ' + id }));
 
-  const shown = arr.slice().sort((a, b) => (a.lang !== 'en') - (b.lang !== 'en') || a.lang.localeCompare(b.lang));
+  // Trier : français en premier, puis anglais, puis les autres
+  const shown = arr.slice().sort((a, b) => {
+    if (a.lang === 'fr' && b.lang !== 'fr') return -1;
+    if (a.lang !== 'fr' && b.lang === 'fr') return 1;
+    if (a.lang === 'en' && b.lang !== 'en') return -1;
+    if (a.lang !== 'en' && b.lang === 'en') return 1;
+    return a.lang.localeCompare(b.lang);
+  });
 
   for (const e of shown) {
     det.append(
