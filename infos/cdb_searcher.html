@@ -40,7 +40,7 @@
 
   <section class="card">
     <div class="row">
-      <input type="text" id="q" class="grow" placeholder="Nom de carte…" autocomplete="off">
+      <input type="text" id="q" class="grow" placeholder="Nom de carte… (=nom pour exact)" autocomplete="off">
       <select id="lang" title="Langue"></select>
       <label class="check"><input type="checkbox" id="exact"> Exact</label>
     </div>
@@ -53,7 +53,7 @@
         <span class="hint" id="count"></span>
         <button class="btn btn-sm" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Vider</button>
       </div>
-      <div id="results" class="result-list"></div>
+      <div id="results"></div>
     </section>
     <section class="card panel">
       <div id="detail"><div class="hint">Clique sur une carte pour voir son détail.</div></div>
@@ -253,7 +253,16 @@ function runSearch() {
 
   for (const id of ids.slice(0, MAX_RESULTS)) {
     const arr = entries.get(id);
-    const main = (arr.find((x) => x.lang === 'en') || arr.find((x) => x.lang === 'base') || arr[0]).name;
+    
+    // Affiche le nom dans la langue sélectionnée (ou anglais si "Toutes")
+    let nomAffiche;
+    if (lang !== 'all') {
+      const match = arr.find((x) => x.lang === lang);
+      nomAffiche = match ? match.name : arr[0].name;
+    } else {
+      nomAffiche = (arr.find((x) => x.lang === 'en') || arr.find((x) => x.lang === 'base') || arr[0]).name;
+    }
+
     const li = YGO.el('li', {
       onClick: () => {
         box.querySelectorAll('li.sel').forEach((x) => x.classList.remove('sel'));
@@ -261,7 +270,8 @@ function runSearch() {
         showDetail(id);
       },
     });
-    li.textContent = main;
+    
+    li.textContent = nomAffiche;
     box.append(li);
   }
   if (ids.length === 1) showDetail(ids[0]);
@@ -293,7 +303,7 @@ function showDetail(id) {
 /* ---------- Écouteurs ---------- */
 $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(runSearch, 180); });
 $('exact').addEventListener('change', runSearch);
-$('lang').addEventListener('change', () => { runSearch(); });
+$('lang').addEventListener('change', runSearch);
 $('clearBtn').addEventListener('click', () => { $('q').value = ''; runSearch(); });
 
 /* ---------- Init ---------- */
@@ -310,17 +320,27 @@ $('clearBtn').addEventListener('click', () => { $('q').value = ''; runSearch(); 
 
 <style>
   /* Deux colonnes : liste à gauche, détail à droite */
-  .finder { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px; align-items: stretch; }
-  .finder > .panel { margin-bottom: 0; height: max(420px, calc(100vh - 380px)); overflow: auto; }
+  .finder { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+  .finder > .panel { margin-bottom: 0; height: max(480px, calc(100vh - 340px)); overflow: auto; }
 
-  #results { max-height: none; }
+  /* La liste des résultats */
+  #results { margin: 0; padding: 0; list-style: none; }
+  #results li {
+    display: block; padding: 8px 10px; margin-bottom: 4px; border-radius: 8px; cursor: pointer;
+    background: var(--surface-2); border: 1px solid var(--border); color: inherit; font: inherit;
+    transition: all .15s;
+  }
+  #results li:hover { border-color: var(--gold); }
+  /* La sélection est bien visible (fond doré) */
+  #results li.sel { border-color: var(--gold); background: var(--gold-soft); color: var(--text); }
 
+  /* Le détail */
   .d-id    { font-family: var(--font-display); color: var(--gold); font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
   .d-lang  { margin-top: 12px; font: 700 .72rem var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--info); }
   .d-name  { font-weight: 700; }
-  .d-desc  { white-space: pre-wrap; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
+  .d-desc  { white-space: pre-wrap; color: var(--text-muted); line-height: 1.5; margin-top: 4px; padding: 8px 10px; border-radius: 8px; background: var(--code-bg); border: 1px solid var(--border); }
 
-  @media (max-width: 760px) {
+  @media (max-width: 900px) {
     .finder { grid-template-columns: 1fr; }
     .finder > .panel { height: auto; max-height: 60vh; }
   }
