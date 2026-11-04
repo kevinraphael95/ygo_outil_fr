@@ -34,21 +34,17 @@
     <div class="hero-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
     <div>
       <h1>Chercheur de <span class="grad">cartes</span></h1>
-      <p>Cherche une carte par son nom (toutes langues) dans les CDB du dépôt, ou dans ton propre dossier ProjectIgnis. Officiels, unofficial, prerelease, toutes langues.</p>
+      <p>Cherche une carte par son nom (toutes langues) dans les CDB du dépôt. Les CDB se chargent tout seuls au démarrage ; tu peux aussi utiliser ton propre dossier ProjectIgnis ou ajouter des .cdb à la main.</p>
     </div>
   </section>
 
-  <!-- Sources -->
   <section class="card">
     <h2 class="card-title"><i class="fa-solid fa-database"></i> Sources</h2>
-    <p class="card-sub">Par défaut, l'outil lit les CDB du dépôt (<code>data/cdb/…</code>). Aucun téléchargement, aucun dossier à choisir.</p>
+    <p class="card-sub">Les CDB du dépôt (<code>data/cdb/…</code>) sont lus automatiquement. Aucun téléchargement, aucun dossier à choisir.</p>
 
     <div class="tabs" id="langs" style="margin-bottom:14px;"></div>
 
     <div class="actions">
-      <button class="btn btn-primary" id="loadRepo" type="button">
-        <i class="fa-solid fa-bolt"></i> Charger les CDB du dépôt
-      </button>
       <button class="btn" id="loadLocal" type="button">
         <i class="fa-solid fa-folder-tree"></i> Utiliser mon dossier ProjectIgnis
       </button>
@@ -65,7 +61,6 @@
     <div class="stats" id="status" style="margin-top:14px;"></div>
   </section>
 
-  <!-- Recherche -->
   <section class="card">
     <h2 class="card-title"><i class="fa-solid fa-magnifying-glass"></i> Recherche</h2>
     <div class="row">
@@ -92,7 +87,7 @@
 
 <script>
 const { $ } = YGO;
-const log = YGO.console(YGO.el('div'));   // inutilisé, mais on garde l'API sous la main
+const log = YGO.console(YGO.el('div'));
 
 /* ---------- État ---------- */
 const entries = new Map();   // id -> [{lang, name, desc, rel}]
@@ -101,7 +96,7 @@ const loaded = new Set();    // chemins déjà lus
 let SQL = null;
 let nbCdb = 0;
 let timer = null;
-let langFilter = 'all';      // langue sélectionnée dans les onglets
+let langFilter = 'all';
 
 const MAX_RESULTS = 300;
 const LANG_LABEL = { en: 'Anglais', fr: 'Français', de: 'Allemand', it: 'Italien', pt: 'Portugais', es: 'Espagnol', ja: 'Japonais', ko: 'Coréen', zh: 'Chinois' };
@@ -125,7 +120,6 @@ async function addFiles(items) {
   if (!files.length) return YGO.toast('Aucun .cdb trouvé', 'err');
 
   let added = 0, bad = 0;
-  const prog = YGO.progress(YGO.el('div', { className: 'progress' })); // pas affiché, simple garde
   for (const { file, rel } of files) {
     if (loaded.has(rel)) continue;
     setStatus(`Lecture de ${rel}…`);
@@ -152,7 +146,7 @@ async function addFiles(items) {
     await tick();
   }
   setStatus(`${nbCdb} CDB lus · ${entries.size.toLocaleString('fr-FR')} cartes différentes` + (bad ? ` · ${bad} ignoré(s)` : ''));
-  YGO.toast(`${added} CDB ajouté(s)`);
+  if (added) YGO.toast(`${added} CDB ajouté(s)`);
   rebuildLangTabs();
   runSearch();
 }
@@ -163,25 +157,19 @@ function langOf(rel) {
   return i >= 0 && parts.length > i + 2 ? parts[i + 1] : 'base';
 }
 
-/* ---------- Chargement depuis le dépôt (zéro config) ---------- */
+/* ---------- Chargement automatique depuis le dépôt ---------- */
 async function loadFromRepo() {
-  try {
-    setStatus('Récupération de la liste des CDB…');
-    const manifest = await YGO.data.manifest();
-    const langs = Object.keys(manifest.cdb || {}).filter((l) => (manifest.cdb[l] || []).length);
-    if (!langs.length) throw new Error('Aucun CDB listé dans le manifeste');
+  setStatus('Lecture de la liste des CDB du dépôt…');
+  const manifest = await YGO.data.manifest();
+  const langs = Object.keys(manifest.cdb || {}).filter((l) => (manifest.cdb[l] || []).length);
+  if (!langs.length) throw new Error('data/manifest.json ne liste aucun CDB');
 
-    const wanted = langFilter === 'all' ? langs : [langFilter];
-    const items = [];
-    for (const lang of wanted) {
-      const files = await YGO.data.cdbFiles(lang, { ignore: [] });
-      for (const f of files) items.push({ file: f, rel: `repo/${lang}/${f.name}` });
-    }
-    await addFiles(items);
-  } catch (e) {
-    log.log(e.message, 'err');
-    YGO.toast('Impossible de charger depuis le dépôt : ' + e.message, 'err');
+  const items = [];
+  for (const lang of langs) {
+    const files = await YGO.data.cdbFiles(lang);   // cache + repoFile partagé
+    for (const f of files) items.push({ file: f, rel: `repo/${lang}/${f.name}` });
   }
+  await addFiles(items);
 }
 
 /* ---------- Dossier local (File System Access API) ---------- */
@@ -249,7 +237,6 @@ $('filesInput').addEventListener('change', (e) => {
   addFiles(l.map((f) => ({ file: f, rel: f.name })));
 });
 
-$('loadRepo').addEventListener('click', loadFromRepo);
 $('clearBtn').addEventListener('click', () => {
   entries.clear(); names.length = 0; loaded.clear(); nbCdb = 0;
   setStatus('Tout est vidé'); rebuildLangTabs(); runSearch();
@@ -355,19 +342,14 @@ function showDetail(id) {
 $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(runSearch, 200); });
 $('exact').addEventListener('change', runSearch);
 
-/* ---------- Init ---------- */
+/* ---------- Init : lecture automatique du dépôt ---------- */
 (async () => {
   try {
     if (!FS) $('loadLocal').disabled = true;
-    const h = FS ? await getHandle() : null;
-    if (h && (await h.queryPermission({ mode: 'read' })) === 'granted') {
-      loadFromHandle(h).catch((e) => log.log(e.message, 'err'));
-    } else {
-      setStatus('Prêt. Clique sur « Charger les CDB du dépôt » (aucun dossier à choisir) ou utilise ton ProjectIgnis local.');
-    }
+    await loadFromRepo();
   } catch (e) {
-    log.log(e.message, 'err');
-    setStatus('Init : ' + e.message);
+    log.log('Dépôt : ' + e.message, 'err');
+    setStatus('Lecture du dépôt impossible : ' + e.message);
   }
 })();
 </script>
