@@ -42,7 +42,6 @@
     <div class="row">
       <input type="text" id="q" class="grow" placeholder="Nom de carte… (=nom pour exact)" autocomplete="off">
       <button class="btn btn-sm" id="clearBtn" type="button" title="Effacer la recherche"><i class="fa-solid fa-xmark"></i></button>
-      <select id="lang" title="Langue"></select>
       <label class="check"><input type="checkbox" id="exact"> Exact</label>
     </div>
     <div class="hint" id="status" style="margin-top:10px;">Chargement…</div>
@@ -117,7 +116,6 @@ async function addFiles(items) {
   }
   setStatus(`${loaded.size} CDB · ${entries.size.toLocaleString('fr-FR')} cartes` + (bad ? ` · ${bad} ignoré(s)` : ''));
   if (added) YGO.toast(`${added} CDB ajouté(s)`);
-  refreshLangs();
   runSearch();
 }
 
@@ -147,31 +145,12 @@ $('filesInput').addEventListener('change', (e) => {
   addFiles(l.map((f) => ({ file: f, rel: f.name })));
 });
 
-/* ---------- Filtre langue ---------- */
-function refreshLangs() {
-  const sel = $('lang');
-  const current = sel.value || 'all';
-  const langs = new Set(['all']);
-  for (const arr of entries.values()) {
-    for (const e of arr) {
-      if (e.lang !== 'nontrad') langs.add(e.lang);
-    }
-  }
-  sel.innerHTML = '';
-  for (const l of [...langs].sort((a, b) => (a === 'all' ? -1 : b === 'all' ? 1 : a.localeCompare(b)))) {
-    const label = l === 'all' ? 'Toutes les langues' : (LANG_LABEL[l] || l);
-    sel.append(YGO.el('option', { value: l, text: label }));
-  }
-  sel.value = [...sel.options].some((o) => o.value === current) ? current : 'all';
-}
-
 /* ---------- Recherche ---------- */
-function search(query, exact, lang) {
+function search(query, exact) {
   const q = YGO.norm(query);
   if (!q) return [];
   const best = new Map();
   for (const [n, id] of names) {
-    if (lang !== 'all' && !(entries.get(id) || []).some((e) => e.lang === lang)) continue;
     let score;
     if (exact) { if (n !== q) continue; score = [0, n.length]; }
     else { if (!n.includes(q)) continue; score = [n === q ? 0 : 1, n.length]; }
@@ -185,7 +164,6 @@ function runSearch() {
   let q = $('q').value.trim();
   let exact = $('exact').checked;
   if (q.startsWith('=')) { exact = true; q = q.slice(1); }
-  const lang = $('lang').value || 'all';
 
   const box = $('results');
   box.innerHTML = '';
@@ -195,22 +173,15 @@ function runSearch() {
     return showDetail(null);
   }
 
-  const ids = search(q, exact, lang);
+  const ids = search(q, exact);
   $('count').textContent = ids.length
     ? ids.length + ' résultat(s)' + (ids.length > MAX_RESULTS ? ` — ${MAX_RESULTS} premiers affichés` : '')
     : 'Aucune carte trouvée.';
 
   for (const id of ids.slice(0, MAX_RESULTS)) {
     const arr = entries.get(id);
-    
-    // Affiche le nom dans la langue sélectionnée (ou le premier trouvé si "Toutes")
-    let nomAffiche;
-    if (lang !== 'all') {
-      const match = arr.find((x) => x.lang === lang);
-      nomAffiche = match ? match.name : arr[0].name;
-    } else {
-      nomAffiche = arr[0].name; // Prend le premier disponible (souvent le français si chargé)
-    }
+    // Affiche le premier nom trouvé pour cette carte
+    const nomAffiche = arr[0].name; 
 
     const li = YGO.el('li', {
       onClick: () => {
@@ -235,10 +206,8 @@ function showDetail(id) {
   const arr = entries.get(id) || [];
   det.append(YGO.el('div', { className: 'd-id', text: 'ID ' + id }));
 
-  const lang = $('lang').value || 'all';
-  const shown = lang === 'all'
-    ? arr.slice().sort((a, b) => (a.lang !== 'en') - (b.lang !== 'en') || a.lang.localeCompare(b.lang))
-    : arr.filter((e) => e.lang === lang);
+  // Trie pour afficher l'anglais en premier, puis les autres langues
+  const shown = arr.slice().sort((a, b) => (a.lang !== 'en') - (b.lang !== 'en') || a.lang.localeCompare(b.lang));
 
   for (const e of shown) {
     det.append(
@@ -252,7 +221,6 @@ function showDetail(id) {
 /* ---------- Écouteurs ---------- */
 $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(runSearch, 180); });
 $('exact').addEventListener('change', runSearch);
-$('lang').addEventListener('change', runSearch);
 $('clearBtn').addEventListener('click', () => { $('q').value = ''; runSearch(); $('q').focus(); });
 
 /* ---------- Init ---------- */
