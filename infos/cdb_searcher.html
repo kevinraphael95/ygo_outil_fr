@@ -29,57 +29,42 @@
   </div>
 </header>
 
-<main class="container wide">
+<main class="container">
   <section class="hero">
     <div class="hero-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
     <div>
       <h1>Chercheur de <span class="grad">cartes</span></h1>
-      <p>Cherche une carte par son nom (toutes langues) dans les CDB du dépôt. Les CDB se chargent tout seuls au démarrage ; tu peux aussi utiliser ton propre dossier ProjectIgnis ou ajouter des .cdb à la main.</p>
+      <p>Cherche une carte par son nom dans les CDB du dépôt. Ça se charge tout seul.</p>
     </div>
   </section>
 
   <section class="card">
-    <h2 class="card-title"><i class="fa-solid fa-database"></i> Sources</h2>
-    <p class="card-sub">Les CDB du dépôt (<code>data/cdb/…</code>) sont lus automatiquement. Aucun téléchargement, aucun dossier à choisir.</p>
-
-    <div class="tabs" id="langs" style="margin-bottom:14px;"></div>
-
-    <div class="actions">
-      <button class="btn" id="loadLocal" type="button">
-        <i class="fa-solid fa-folder-tree"></i> Utiliser mon dossier ProjectIgnis
-      </button>
-      <button class="btn" id="loadFiles" type="button">
-        <i class="fa-solid fa-file-circle-plus"></i> Ajouter des .cdb
-      </button>
-      <button class="btn btn-danger" id="clearBtn" type="button">
-        <i class="fa-solid fa-trash"></i> Tout vider
-      </button>
-    </div>
-    <input type="file" id="filesInput" accept=".cdb" multiple class="hidden">
-    <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden">
-
-    <div class="stats" id="status" style="margin-top:14px;"></div>
-  </section>
-
-  <section class="card">
-    <h2 class="card-title"><i class="fa-solid fa-magnifying-glass"></i> Recherche</h2>
     <div class="row">
-      <input type="text" id="q" class="grow" placeholder="Nom de carte… (=nom pour exact)" autocomplete="off">
+      <input type="text" id="q" class="grow" placeholder="Nom de carte…" autocomplete="off">
+      <select id="lang" title="Langue"></select>
       <label class="check"><input type="checkbox" id="exact"> Exact</label>
     </div>
-    <div class="hint" id="count" style="margin-top:10px;"></div>
+    <div class="hint" id="status" style="margin-top:10px;">Chargement…</div>
   </section>
 
-  <div class="grid-2">
-    <section class="card" style="margin-bottom:0;">
-      <h2 class="card-title"><i class="fa-solid fa-list"></i> Résultats</h2>
-      <div id="results" style="max-height:60vh;overflow:auto;"></div>
-    </section>
-    <section class="card" style="margin-bottom:0;">
-      <h2 class="card-title"><i class="fa-solid fa-id-card"></i> Détail</h2>
-      <div id="detail"><div class="hint">Clique sur une carte pour voir son nom et son effet dans chaque CDB.</div></div>
-    </section>
-  </div>
+  <section class="card" id="resultCard" hidden>
+    <div class="toolbar">
+      <span class="hint" id="count"></span>
+      <button class="btn btn-sm" id="clearBtn" type="button"><i class="fa-solid fa-trash"></i> Vider</button>
+    </div>
+    <div id="results" class="result-list"></div>
+    <div id="detail" style="margin-top:14px;"></div>
+  </section>
+
+  <details class="card">
+    <summary class="card-title" style="cursor:pointer;"><i class="fa-solid fa-folder-open"></i> Utiliser mon propre fichier</summary>
+    <p class="card-sub">Si tu as un dossier ProjectIgnis en local, ou des .cdb à part.</p>
+    <div class="actions">
+      <button class="btn" id="loadLocal" type="button"><i class="fa-solid fa-folder-tree"></i> Dossier ProjectIgnis</button>
+      <button class="btn" id="loadFiles" type="button"><i class="fa-solid fa-file-circle-plus"></i> Ajouter des .cdb</button>
+    </div>
+    <input type="file" id="filesInput" accept=".cdb" multiple class="hidden">
+  </details>
 </main>
 
 <footer class="app-footer">YGO Tools · tout s'exécute dans ton navigateur</footer>
@@ -89,14 +74,11 @@
 const { $ } = YGO;
 const log = YGO.console(YGO.el('div'));
 
-/* ---------- État ---------- */
 const entries = new Map();   // id -> [{lang, name, desc, rel}]
 const names = [];            // [nom normalisé, id]
-const loaded = new Set();    // chemins déjà lus
+const loaded = new Set();
 let SQL = null;
-let nbCdb = 0;
 let timer = null;
-let langFilter = 'all';
 
 const MAX_RESULTS = 300;
 const LANG_LABEL = { en: 'Anglais', fr: 'Français', de: 'Allemand', it: 'Italien', pt: 'Portugais', es: 'Espagnol', ja: 'Japonais', ko: 'Coréen', zh: 'Chinois' };
@@ -105,14 +87,10 @@ const LANG_DIR = LANG_ROOT.split('/').pop().toLowerCase();
 const EXCLUDE_DIRS = ['.git', 'node_modules'];
 
 const setStatus = (t) => { $('status').textContent = t; };
-const tick = () => YGO.sleep(0);
-
-/* ---------- Init sql.js ---------- */
 const sqlReady = YGO.initSql()
   .then((s) => { SQL = s; })
-  .catch((e) => setStatus('Impossible de charger sql.js : ' + e.message));
+  .catch((e) => setStatus('sql.js : ' + e.message));
 
-/* ---------- Ajout de fichiers .cdb ---------- */
 async function addFiles(items) {
   await sqlReady;
   if (!SQL) return YGO.toast('sql.js indisponible', 'err');
@@ -124,8 +102,7 @@ async function addFiles(items) {
     if (loaded.has(rel)) continue;
     setStatus(`Lecture de ${rel}…`);
     try {
-      const buf = new Uint8Array(await file.arrayBuffer());
-      const db = new SQL.Database(buf);
+      const db = new SQL.Database(new Uint8Array(await file.arrayBuffer()));
       const res = db.exec('SELECT id, name, "desc" FROM texts');
       db.close();
       const lang = langOf(rel);
@@ -136,18 +113,14 @@ async function addFiles(items) {
         const n = YGO.norm(name);
         if (n) names.push([n, id]);
       }
-      loaded.add(rel);
-      nbCdb++;
-      added++;
-    } catch (e) {
-      bad++;
-      log.log(`${rel} : ${e.message}`, 'warn');
-    }
-    await tick();
+      loaded.add(rel); added++;
+    } catch (e) { bad++; log.log(rel + ' : ' + e.message, 'warn'); }
+    await YGO.sleep(0);
   }
-  setStatus(`${nbCdb} CDB lus · ${entries.size.toLocaleString('fr-FR')} cartes différentes` + (bad ? ` · ${bad} ignoré(s)` : ''));
+  $('clearBtn').parentElement; // no-op
+  setStatus(`${loaded.size} CDB · ${entries.size.toLocaleString('fr-FR')} cartes` + (bad ? ` · ${bad} ignoré(s)` : ''));
   if (added) YGO.toast(`${added} CDB ajouté(s)`);
-  rebuildLangTabs();
+  refreshLangs();
   runSearch();
 }
 
@@ -157,35 +130,31 @@ function langOf(rel) {
   return i >= 0 && parts.length > i + 2 ? parts[i + 1] : 'base';
 }
 
-/* ---------- Chargement automatique depuis le dépôt ---------- */
 async function loadFromRepo() {
-  setStatus('Lecture de la liste des CDB du dépôt…');
   const manifest = await YGO.data.manifest();
   const langs = Object.keys(manifest.cdb || {}).filter((l) => (manifest.cdb[l] || []).length);
   if (!langs.length) throw new Error('data/manifest.json ne liste aucun CDB');
-
   const items = [];
   for (const lang of langs) {
-    const files = await YGO.data.cdbFiles(lang);   // cache + repoFile partagé
-    for (const f of files) items.push({ file: f, rel: `repo/${lang}/${f.name}` });
+    for (const f of await YGO.data.cdbFiles(lang)) {
+      items.push({ file: f, rel: `repo/${lang}/${f.name}` });
+    }
   }
   await addFiles(items);
 }
 
-/* ---------- Dossier local (File System Access API) ---------- */
+/* ---------- Dossier local (option) ---------- */
 const FS = !!window.showDirectoryPicker;
 const kv = (mode, fn) => new Promise((res, rej) => {
   const r = indexedDB.open('ygo-cdb-finder', 1);
   r.onupgradeneeded = () => r.result.createObjectStore('kv');
   r.onerror = () => rej(r.error);
   r.onsuccess = () => {
-    const tx = r.result.transaction('kv', mode);
-    const req = fn(tx.objectStore('kv'));
+    const tx = r.result.transaction('kv', mode), req = fn(tx.objectStore('kv'));
     tx.oncomplete = () => res(req.result);
     tx.onerror = () => rej(tx.error);
   };
 });
-const saveHandle = (h) => kv('readwrite', (st) => st.put(h, 'base'));
 const getHandle = () => kv('readonly', (st) => st.get('base')).catch(() => null);
 
 async function walk(dir, rel, out) {
@@ -198,16 +167,6 @@ async function walk(dir, rel, out) {
   }
 }
 
-async function pickBase() {
-  try {
-    const h = await window.showDirectoryPicker({ id: 'ygo-projectignis', mode: 'read' });
-    await saveHandle(h);
-    await loadFromHandle(h);
-  } catch (e) {
-    if (e.name !== 'AbortError') YGO.toast('Erreur : ' + e.message, 'err');
-  }
-}
-
 async function loadFromHandle(base) {
   setStatus('Recherche des .cdb…');
   const items = [];
@@ -216,17 +175,21 @@ async function loadFromHandle(base) {
       let d = base;
       for (const seg of p.split('/')) d = await d.getDirectoryHandle(seg);
       await walk(d, p, items);
-    } catch (e) {
-      YGO.toast(`Introuvable dans « ${base.name} » : ${p}`, 'err');
-    }
+    } catch (e) { YGO.toast(`Introuvable : ${p}`, 'err'); }
   }
   await addFiles(items);
 }
 
 $('loadLocal').addEventListener('click', async () => {
-  if (!FS) return YGO.toast('Navigateur non compatible (Chrome ou Edge requis)', 'err');
+  if (!FS) return YGO.toast('Navigateur non compatible', 'err');
   const h = await getHandle();
-  if (!h) return pickBase();
+  if (!h) {
+    try {
+      const h2 = await window.showDirectoryPicker({ id: 'ygo-projectignis', mode: 'read' });
+      await kv('readwrite', (st) => st.put(h2, 'base'));
+      return loadFromHandle(h2);
+    } catch (e) { if (e.name !== 'AbortError') YGO.toast(e.message, 'err'); return; }
+  }
   if ((await h.requestPermission({ mode: 'read' })) !== 'granted') return YGO.toast('Autorisation refusée', 'err');
   loadFromHandle(h);
 });
@@ -237,112 +200,101 @@ $('filesInput').addEventListener('change', (e) => {
   addFiles(l.map((f) => ({ file: f, rel: f.name })));
 });
 
-$('clearBtn').addEventListener('click', () => {
-  entries.clear(); names.length = 0; loaded.clear(); nbCdb = 0;
-  setStatus('Tout est vidé'); rebuildLangTabs(); runSearch();
-});
-
-/* ---------- Onglets langues ---------- */
-function rebuildLangTabs() {
-  const box = $('langs'); box.innerHTML = '';
-  const langs = new Set();
+/* ---------- Filtre langue ---------- */
+function refreshLangs() {
+  const sel = $('lang');
+  const current = sel.value || 'all';
+  const langs = new Set(['all']);
   for (const arr of entries.values()) for (const e of arr) langs.add(e.lang);
-  const list = ['all', ...[...langs].sort()];
-  for (const l of list) {
-    const b = YGO.el('button', {
-      className: 'tab' + (l === langFilter ? ' active' : ''),
-      type: 'button',
-      onClick: () => { langFilter = l; rebuildLangTabs(); runSearch(); },
-    });
-    b.textContent = l === 'all' ? 'Toutes' : (LANG_LABEL[l] || l);
-    box.append(b);
+  sel.innerHTML = '';
+  for (const l of [...langs].sort((a, b) => (a === 'all' ? -1 : b === 'all' ? 1 : a.localeCompare(b)))) {
+    sel.append(YGO.el('option', { value: l, text: l === 'all' ? 'Toutes les langues' : (LANG_LABEL[l] || l) }));
   }
+  sel.value = [...sel.options].some((o) => o.value === current) ? current : 'all';
 }
 
 /* ---------- Recherche ---------- */
-function search(query, exact) {
+function search(query, exact, lang) {
   const q = YGO.norm(query);
   if (!q) return [];
   const best = new Map();
   for (const [n, id] of names) {
+    if (lang !== 'all' && !(entries.get(id) || []).some((e) => e.lang === lang)) continue;
     let score;
     if (exact) { if (n !== q) continue; score = [0, n.length]; }
     else { if (!n.includes(q)) continue; score = [n === q ? 0 : 1, n.length]; }
     const old = best.get(id);
     if (!old || score[0] < old[0] || (score[0] === old[0] && score[1] < old[1])) best.set(id, score);
   }
-  return [...best]
-    .sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1] || a[0] - b[0])
-    .map((x) => x[0]);
+  return [...best].sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1] || a[0] - b[0]).map((x) => x[0]);
 }
 
 function runSearch() {
   let q = $('q').value.trim();
   let exact = $('exact').checked;
   if (q.startsWith('=')) { exact = true; q = q.slice(1); }
+  const lang = $('lang').value || 'all';
 
-  const box = $('results'); box.innerHTML = '';
-  if (!q) { $('count').textContent = ''; return showDetail(null); }
+  const card = $('resultCard');
+  const box = $('results');
+  const det = $('detail');
+  box.innerHTML = ''; det.innerHTML = '';
 
-  let ids = search(q, exact);
-  if (langFilter !== 'all') {
-    ids = ids.filter((id) => (entries.get(id) || []).some((e) => e.lang === langFilter));
-  }
+  if (!q) { card.hidden = true; return; }
+  card.hidden = false;
 
+  const ids = search(q, exact, lang);
   $('count').textContent = ids.length
-    ? ids.length + ' résultat(s)' + (ids.length > MAX_RESULTS ? ` (limité à ${MAX_RESULTS})` : '')
+    ? ids.length + ' résultat(s)' + (ids.length > MAX_RESULTS ? ` — ${MAX_RESULTS} premiers affichés` : '')
     : 'Aucune carte trouvée.';
 
   for (const id of ids.slice(0, MAX_RESULTS)) {
     const arr = entries.get(id);
-    const base = (arr.find((x) => x.lang === 'en') || arr.find((x) => x.lang === 'base') || arr[0]).name;
-    const fr = (arr.find((x) => x.lang === 'fr') || {}).name;
-    const b = YGO.el('button', {
-      className: 'item', type: 'button',
+    const main = (arr.find((x) => x.lang === 'en') || arr.find((x) => x.lang === 'base') || arr[0]).name;
+    const li = YGO.el('li', {
       onClick: () => {
-        box.querySelectorAll('.item.sel').forEach((x) => x.classList.remove('sel'));
-        b.classList.add('sel');
+        box.querySelectorAll('li.sel').forEach((x) => x.classList.remove('sel'));
+        li.classList.add('sel');
         showDetail(id);
       },
-      onDblclick: () => YGO.copy(String(id), `ID ${id} copié`),
     });
-    b.append(
-      YGO.el('b', { text: base }),
-      YGO.el('small', { text: (fr ? fr + ' · ' : '') + id })
-    );
-    b.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 10px;margin-bottom:4px;border-radius:8px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);color:inherit;font:inherit;';
-    box.append(b);
+    li.textContent = main;
+    box.append(li);
   }
-
-  showDetail(ids.length === 1 ? ids[0] : null);
+  if (ids.length === 1) showDetail(ids[0]);
 }
 
 function showDetail(id) {
-  const d = $('detail'); d.innerHTML = '';
-  if (id == null) {
-    d.append(YGO.el('div', { className: 'hint', text: 'Clique sur une carte pour voir son nom et son effet dans chaque CDB.' }));
-    return;
-  }
-  d.append(YGO.el('div', { className: 'd-id', text: 'ID ' + id }));
-  const list = entries.get(id).slice().sort((a, b) =>
-    (a.lang !== 'en') - (b.lang !== 'en') || a.lang.localeCompare(b.lang) || a.rel.localeCompare(b.rel));
-  for (const e of list) {
-    d.append(
-      YGO.el('div', { className: 'd-lang', text: (LANG_LABEL[e.lang] || e.lang) }),
+  const det = $('detail'); det.innerHTML = '';
+  const arr = entries.get(id) || [];
+  if (!arr.length) return;
+  det.append(YGO.el('div', { className: 'd-id', text: 'ID ' + id }));
+
+  // une seule langue affichée : celle du filtre, sinon toutes
+  const lang = $('lang').value || 'all';
+  const shown = lang === 'all'
+    ? arr.slice().sort((a, b) => (a.lang !== 'en') - (b.lang !== 'en') || a.lang.localeCompare(b.lang))
+    : arr.filter((e) => e.lang === lang);
+
+  for (const e of shown) {
+    det.append(
+      YGO.el('div', { className: 'd-lang', text: LANG_LABEL[e.lang] || e.lang }),
       YGO.el('div', { className: 'd-name', text: e.name }),
-      YGO.el('div', { className: 'd-path', text: e.rel })
     );
-    if (e.desc.trim()) {
-      d.append(YGO.el('div', { className: 'd-desc', text: e.desc.replace(/\r\n/g, '\n').trim() }));
-    }
+    if (e.desc.trim()) det.append(YGO.el('div', { className: 'd-desc', text: e.desc.replace(/\r\n/g, '\n').trim() }));
   }
 }
 
-/* ---------- Écouteurs UI ---------- */
-$('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(runSearch, 200); });
+/* ---------- Écouteurs ---------- */
+$('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(runSearch, 180); });
 $('exact').addEventListener('change', runSearch);
+$('lang').addEventListener('change', runSearch);
+$('clearBtn').addEventListener('click', () => {
+  $('q').value = '';
+  runSearch();
+});
 
-/* ---------- Init : lecture automatique du dépôt ---------- */
+/* ---------- Init ---------- */
 (async () => {
   try {
     if (!FS) $('loadLocal').disabled = true;
@@ -355,13 +307,14 @@ $('exact').addEventListener('change', runSearch);
 </script>
 
 <style>
-  /* Styles spécifiques à cet outil (le reste vient de ygo.css) */
-  .d-id { font-family: var(--font-display); color: var(--gold); font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
-  .d-lang { margin-top: 14px; font: 700 .72rem var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--info); }
-  .d-name { font-weight: 700; font-size: 1.02rem; }
-  .d-path { font: 11px var(--font-mono); color: var(--text-dim); margin-bottom: 4px; }
-  .d-desc { white-space: pre-wrap; color: var(--text-muted); line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: var(--code-bg); border: 1px solid var(--border); }
-  #results .item.sel { border-color: var(--gold); background: var(--gold-soft); }
+  /* Petit complément au design system, spécifique à cet outil */
+  .d-id    { font-family: var(--font-display); color: var(--gold); font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+  .d-lang  { margin-top: 12px; font: 700 .72rem var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--info); }
+  .d-name  { font-weight: 700; }
+  .d-desc  { white-space: pre-wrap; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
+  #results { max-height: 320px; overflow: auto; }
+  #results li { cursor: pointer; }
+  #results li.sel { border-color: var(--gold); background: var(--gold-soft); }
 </style>
 </body>
 </html>
