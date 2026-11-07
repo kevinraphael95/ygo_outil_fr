@@ -1,5 +1,20 @@
 {
  "cdb": {
+  "de": [
+   "cards-rush.cdb",
+   "cards-skills-unofficial.cdb",
+   "cards-skills.cdb",
+   "cards-unofficial.cdb",
+   "cards.cdb",
+   "goat-entries.cdb",
+   "prerelease-cards-rush.cdb",
+   "prerelease-cori.cdb",
+   "prerelease-loch.cdb",
+   "prerelease-locr.cdb",
+   "prerelease-mzmu.cdb",
+   "prerelease-others.cdb",
+   "release-blzd.cdb"
+  ],
   "en": [
    "cards-rush.cdb",
    "cards-rush.delta.cdb",
@@ -23,6 +38,21 @@
    "prerelease-yac1.cdb",
    "release-betb.cdb"
   ],
+  "es": [
+   "cards-rush.cdb",
+   "cards-skills-unofficial.cdb",
+   "cards-skills.cdb",
+   "cards-unofficial.cdb",
+   "cards.cdb",
+   "goat-entries.cdb",
+   "prerelease-cards-rush.cdb",
+   "prerelease-cori.cdb",
+   "prerelease-loch.cdb",
+   "prerelease-locr.cdb",
+   "prerelease-mzmu.cdb",
+   "prerelease-others.cdb",
+   "release-blzd.cdb"
+  ],
   "fr": [
    "cards-rush.cdb",
    "cards-skills-unofficial.cdb",
@@ -36,6 +66,52 @@
    "prerelease-locr.cdb",
    "prerelease-mzmu.cdb",
    "prerelease-others.cdb"
+  ],
+  "it": [
+   "cards-rush.cdb",
+   "cards-skills-unofficial.cdb",
+   "cards-skills.cdb",
+   "cards-unofficial.cdb",
+   "cards.cdb",
+   "goat-entries.cdb",
+   "prerelease-cards-rush.cdb",
+   "prerelease-cori.cdb",
+   "prerelease-loch.cdb",
+   "prerelease-locr.cdb",
+   "prerelease-mzmu.cdb",
+   "prerelease-others.cdb",
+   "release-blzd.cdb"
+  ],
+  "kr": [
+   "cards-rush.cdb",
+   "cards-skills-unofficial.cdb",
+   "cards-skills.cdb",
+   "cards-unofficial-new.cdb",
+   "cards-unofficial.cdb",
+   "cards.cdb",
+   "goat-entries.cdb",
+   "prerelease-ac03-unofficial.cdb",
+   "prerelease-agov.cdb",
+   "prerelease-cards-rush.cdb",
+   "prerelease-vjump-promos.cdb",
+   "release-ac03.cdb",
+   "release-dp28.cdb",
+   "release-dune.cdb"
+  ],
+  "po": [
+   "cards-rush.cdb",
+   "cards-skills-unofficial.cdb",
+   "cards-skills.cdb",
+   "cards-unofficial.cdb",
+   "cards.cdb",
+   "goat-entries.cdb",
+   "prerelease-cards-rush.cdb",
+   "prerelease-cori.cdb",
+   "prerelease-loch.cdb",
+   "prerelease-locr.cdb",
+   "prerelease-mzmu.cdb",
+   "prerelease-others.cdb",
+   "release-blzd.cdb"
   ],
   "vaact": [
    "VAACT S1 fr.cdb",
